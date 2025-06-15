@@ -1,7 +1,7 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
-admin_bp = Blueprint('admin', __name__)
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
-@admin_bp.route('/admin/dashboard')
+@admin_bp.route('/dashboard')
 def dashboard():
-    return "Admin Dashboard" 
+    return jsonify({"message": "Admin Dashboard"}) 

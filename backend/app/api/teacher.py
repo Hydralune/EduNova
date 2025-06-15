@@ -1,7 +1,7 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
-teacher_bp = Blueprint('teacher', __name__)
+teacher_bp = Blueprint('teacher', __name__, url_prefix='/teacher')
 
-@teacher_bp.route('/teacher/dashboard')
+@teacher_bp.route('/dashboard')
 def dashboard():
-    return "Teacher Dashboard" 
+    return jsonify({"message": "Teacher Dashboard"}) 
