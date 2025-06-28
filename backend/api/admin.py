@@ -4,6 +4,7 @@ from backend.models.user import User, db
 from backend.models.config import SystemConfig
 from werkzeug.security import generate_password_hash
 from datetime import datetime
+from backend.models.course import Course
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -24,6 +25,15 @@ def users_options():
     response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+# 特别为/users/<user_id>添加OPTIONS处理
+@admin_bp.route('/users/<int:user_id>', methods=['OPTIONS'])
+def user_detail_options(user_id):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS')
     return response
 
 # 检查管理员权限的辅助函数
@@ -194,10 +204,35 @@ def delete_user(user_id):
     # if user_id == current_user_id:
     #     return jsonify({"error": "不能删除自己的账户"}), 400
     
+    # 检查用户是否为教师，且是否有关联的课程
+    if user.role == 'teacher':
+        courses = Course.query.filter_by(teacher_id=user.id).all()
+        if courses:
+            # 如果有课程，需要先处理这些课程
+            # 选项1：将课程重新分配给其他教师
+            # 选项2：删除这些课程
+            # 这里我们选择返回错误，提示用户先处理课程
+            return jsonify({
+                "error": "无法删除用户，该教师仍有关联的课程。请先将课程重新分配给其他教师或删除这些课程。",
+                "courses": [course.to_dict() for course in courses]
+            }), 400
+    
+    # 如果用户是学生，从所有已注册的课程中移除
+    if user.role == 'student':
+        for course in user.courses_enrolled:
+            course.students.remove(user)
+    
+    # 现在可以安全地删除用户
     db.session.delete(user)
     db.session.commit()
     
-    return jsonify({"message": "用户删除成功"}), 200
+    response = jsonify({"message": "用户删除成功"})
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS')
+    
+    return response, 200
 
 # 系统统计
 @admin_bp.route('/stats', methods=['GET'])

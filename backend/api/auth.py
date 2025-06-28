@@ -1,7 +1,7 @@
 import jwt as pyjwt
 import functools
 import datetime
-from flask import current_app, request, jsonify, Blueprint
+from flask import current_app, request, jsonify, Blueprint, make_response
 from backend.models.user import User
 from backend.extensions import db, jwt
 from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required, verify_jwt_in_request, get_jwt
@@ -208,6 +208,14 @@ def register():
         }
     }), 201
 
+@auth_bp.route('/profile', methods=['OPTIONS'])
+def profile_options():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS')
+    return response
+
 @auth_bp.route('/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def profile():
@@ -224,7 +232,7 @@ def profile():
         
         if request.method == 'GET':
             print(f"返回用户 {user.username} 的资料")
-            return jsonify({
+            response = jsonify({
                 "user": {
                     "id": user.id,
                     "username": user.username,
@@ -237,6 +245,10 @@ def profile():
                     "updated_at": user.updated_at.isoformat() if user.updated_at else None
                 }
             })
+            # 添加CORS头
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            return response
         
         # 更新个人资料
         if request.method == 'PUT':
@@ -253,9 +265,13 @@ def profile():
                 if 'full_name' in data:
                     user.full_name = data['full_name']
                 
+                # 更新时间戳
+                user.updated_at = datetime.datetime.utcnow()
                 db.session.commit()
                 
-                return jsonify({
+                print(f"用户 {user.username} 资料更新成功: email={user.email}, full_name={user.full_name}")
+                
+                response = jsonify({
                     'message': '个人资料更新成功',
                     'user': {
                         "id": user.id,
@@ -269,6 +285,10 @@ def profile():
                         "updated_at": user.updated_at.isoformat() if user.updated_at else None
                     }
                 })
+                # 添加CORS头
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+                return response
             except Exception as e:
                 db.session.rollback()
                 print(f"更新个人资料时出错: {str(e)}")
@@ -310,13 +330,36 @@ def change_password():
     
     return jsonify({"message": "Password changed successfully"}), 200
 
+@auth_bp.route('/avatar', methods=['OPTIONS'])
+def avatar_options():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+    return response
+
 @auth_bp.route('/avatar', methods=['POST'])
-@jwt_required()
 def upload_avatar():
     """专门用于上传头像的路由"""
     try:
-        # 获取当前用户ID
-        user_id = get_jwt_identity()
+        # 手动获取并验证令牌
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': '未提供有效的认证令牌'}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        # 手动解码令牌
+        try:
+            from flask_jwt_extended import decode_token
+            decoded_token = decode_token(token)
+            user_id = decoded_token['sub']
+            if not user_id:
+                return jsonify({'error': '无效的用户令牌'}), 401
+        except Exception as jwt_err:
+            print(f"JWT解码错误: {str(jwt_err)}")
+            return jsonify({'error': f'令牌验证失败: {str(jwt_err)}'}), 401
+            
         print(f"处理头像上传，用户ID: {user_id}")
         
         user = User.query.get(user_id)
@@ -333,35 +376,45 @@ def upload_avatar():
         os.makedirs(upload_folder, exist_ok=True)
         
         # 处理文件上传
-        if 'avatar' in request.files:
-            file = request.files['avatar']
-            if file.filename == '':
-                return jsonify({'error': '未选择文件'}), 400
-                
-            print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
-            
-            # 生成安全的文件名
-            timestamp = int(time.time())
-            filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
-            file_path = os.path.join(upload_folder, filename)
-            
-            # 保存文件
-            file.save(file_path)
-            print(f"文件已保存到: {file_path}")
-            
-            # 更新用户头像URL
-            avatar_url = f"/uploads/avatars/{filename}"
-            user.avatar_url = avatar_url
-            db.session.commit()
-            print(f"用户头像URL已更新: {avatar_url}")
-            
-            return jsonify({
-                'message': '头像上传成功',
-                'avatar_url': avatar_url
-            })
-        else:
+        if 'avatar' not in request.files:
             print("请求中没有找到'avatar'文件")
             return jsonify({'error': '未找到头像文件'}), 400
+            
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'error': '未选择文件'}), 400
+            
+        print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
+        
+        # 检查文件类型
+        if not allowed_file(file.filename):
+            print(f"不允许的文件类型: {file.filename}")
+            return jsonify({'error': '只允许上传图片文件 (png, jpg, jpeg, gif)'}), 400
+        
+        # 生成安全的文件名
+        timestamp = int(time.time())
+        filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
+        file_path = os.path.join(upload_folder, filename)
+        
+        # 保存文件
+        file.save(file_path)
+        print(f"文件已保存到: {file_path}")
+        
+        # 更新用户头像URL
+        avatar_url = f"/uploads/avatars/{filename}"
+        user.avatar_url = avatar_url
+        db.session.commit()
+        print(f"用户头像URL已更新: {avatar_url}")
+        
+        # 添加CORS头
+        response = jsonify({
+            'message': '头像上传成功',
+            'avatar_url': avatar_url
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
             
     except Exception as e:
         db.session.rollback()
@@ -417,5 +470,147 @@ def test_avatar_upload():
             return jsonify({'error': f'测试头像上传失败: {str(e)}'}), 500
     except Exception as e:
         print(f"处理测试头像上传请求时出错: {str(e)}")
+        return jsonify({'error': f'处理请求时出错: {str(e)}'}), 500
+
+@auth_bp.route('/test-jwt', methods=['GET'])
+@jwt_required()
+def test_jwt():
+    """测试JWT令牌是否有效"""
+    try:
+        # 获取当前用户ID
+        user_id = get_jwt_identity()
+        # 获取JWT声明
+        claims = get_jwt()
+        
+        return jsonify({
+            'message': 'JWT令牌有效',
+            'user_id': user_id,
+            'claims': claims
+        })
+    except Exception as e:
+        print(f"JWT测试错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'JWT测试失败: {str(e)}'}), 500
+
+@auth_bp.route('/simple-avatar-test', methods=['POST'])
+def simple_avatar_test():
+    """最简单的头像上传测试，无需认证"""
+    try:
+        print("开始简单头像上传测试...")
+        
+        # 确保上传目录存在
+        upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'test')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        # 处理文件上传
+        if 'avatar' not in request.files:
+            print("请求中没有找到'avatar'文件")
+            return jsonify({'error': '未找到头像文件'}), 400
+            
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'error': '未选择文件'}), 400
+            
+        print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
+        
+        # 生成安全的文件名
+        timestamp = int(time.time())
+        filename = secure_filename(f"test_simple_{timestamp}.png")
+        file_path = os.path.join(upload_folder, filename)
+        
+        # 保存文件
+        file.save(file_path)
+        print(f"文件已保存到: {file_path}")
+        
+        # 添加CORS头
+        response = jsonify({
+            'message': '简单头像上传测试成功',
+            'avatar_url': f"/uploads/test/{filename}"
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
+            
+    except Exception as e:
+        print(f"简单头像上传测试失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'简单头像上传测试失败: {str(e)}'}), 500
+
+@auth_bp.route('/upload-avatar/<int:user_id>', methods=['OPTIONS'])
+def upload_avatar_options(user_id):
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+    return response
+
+@auth_bp.route('/upload-avatar/<int:user_id>', methods=['POST'])
+def upload_avatar_direct(user_id):
+    """直接通过用户ID上传头像，不使用JWT验证"""
+    try:
+        print(f"处理头像上传，用户ID: {user_id}")
+        
+        user = User.query.get(user_id)
+        if not user:
+            print(f"用户不存在，ID: {user_id}")
+            return jsonify({'error': '用户不存在'}), 404
+            
+        print(f"开始处理用户 {user.username} 的头像上传请求")
+        print(f"请求内容类型: {request.content_type}")
+        print(f"请求文件: {list(request.files.keys()) if request.files else '无文件'}")
+        
+        # 确保上传目录存在
+        upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'avatars')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        # 处理文件上传
+        if 'avatar' not in request.files:
+            print("请求中没有找到'avatar'文件")
+            return jsonify({'error': '未找到头像文件'}), 400
+            
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'error': '未选择文件'}), 400
+            
+        print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
+        
+        # 检查文件类型
+        if not allowed_file(file.filename):
+            print(f"不允许的文件类型: {file.filename}")
+            return jsonify({'error': '只允许上传图片文件 (png, jpg, jpeg, gif)'}), 400
+        
+        # 生成安全的文件名
+        timestamp = int(time.time())
+        filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
+        file_path = os.path.join(upload_folder, filename)
+        
+        # 保存文件
+        file.save(file_path)
+        print(f"文件已保存到: {file_path}")
+        
+        # 更新用户头像URL
+        avatar_url = f"/uploads/avatars/{filename}"
+        user.avatar_url = avatar_url
+        db.session.commit()
+        print(f"用户头像URL已更新: {avatar_url}")
+        
+        # 添加CORS头
+        response = jsonify({
+            'message': '头像上传成功',
+            'avatar_url': avatar_url
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
+            
+    except Exception as e:
+        db.session.rollback()
+        print(f"处理头像上传请求时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'处理请求时出错: {str(e)}'}), 500
 

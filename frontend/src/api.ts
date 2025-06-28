@@ -36,7 +36,8 @@ api.interceptors.response.use(
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
-    return Promise.reject(error.response?.data || error.message)
+    // 返回原始错误对象，保留完整的错误信息
+    return Promise.reject(error)
   }
 )
 

@@ -110,13 +110,36 @@ export const fetchUserProfile = async (): Promise<User> => {
  */
 export const updateUserProfile = async (userData: any) => {
   try {
-    console.log('更新用户资料')
-    const response = await api.put('/auth/profile', userData)
-    console.log('更新用户资料成功')
-    return response
-  } catch (error) {
+    console.log('更新用户资料:', userData)
+    
+    const token = localStorage.getItem('token')
+    if (!token) {
+      throw new Error('未登录，无法更新资料')
+    }
+    
+    // 使用fetch API替代axios
+    const response = await fetch(`${API_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(userData)
+    })
+    
+    if (!response.ok) {
+      // 如果服务器返回错误状态码
+      const errorData = await response.text()
+      console.error('更新资料失败，服务器响应:', response.status, errorData)
+      throw new Error(`服务器错误 ${response.status}: ${errorData}`)
+    }
+    
+    const data = await response.json()
+    console.log('更新用户资料成功，服务器响应:', data)
+    return data
+  } catch (error: any) {
     console.error('更新用户资料失败:', error)
-    throw error
+    throw { error: error.message || '更新用户资料失败', status: error.status || 500 }
   }
 }
 
@@ -138,22 +161,33 @@ export const changeUserPassword = async (data: { old_password: string; new_passw
 /**
  * 上传头像
  */
-export const uploadAvatar = async (file: File): Promise<AvatarResponse> => {
+export const uploadAvatar = async (file: File, userId: number): Promise<AvatarResponse> => {
   try {
-    console.log('上传头像')
+    console.log('上传头像，用户ID:', userId)
     const formData = new FormData()
     formData.append('avatar', file)
     
-    // 创建一个特殊的实例来处理文件上传，不设置Content-Type让浏览器自动设置
-    const response = await axios.post(`${API_URL}/auth/avatar`, formData, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+    // 使用新的直接上传端点，不需要JWT验证
+    const response = await fetch(`${API_URL}/auth/upload-avatar/${userId}`, {
+      method: 'POST',
+      body: formData
+      // 不需要设置任何头部，让浏览器自动处理
     })
-    console.log('头像上传成功')
-    return response.data as AvatarResponse
-  } catch (error) {
+    
+    if (!response.ok) {
+      // 如果服务器返回错误状态码
+      const errorText = await response.text()
+      console.error('头像上传失败，服务器响应:', response.status, errorText)
+      throw new Error(`服务器错误 ${response.status}: ${errorText}`)
+    }
+    
+    const data = await response.json()
+    console.log('头像上传成功，服务器响应:', data)
+    return data as AvatarResponse
+  } catch (error: any) {
     console.error('头像上传失败:', error)
-    throw error
+    // 格式化错误信息
+    const errorMessage = error.message || '上传头像失败'
+    throw { error: errorMessage, status: error.status || 500 }
   }
 } 

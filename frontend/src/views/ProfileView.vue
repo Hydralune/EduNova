@@ -247,66 +247,51 @@ const cancelEditing = () => {
 
 // 保存个人资料
 const saveProfile = async () => {
-  if (!user.value) return;
-  
-  loading.value = true;
   error.value = '';
+  loading.value = true;
   
   try {
-    const profileData: any = {
+    // 更新基本信息
+    const response = await authAPI.updateProfile({
       email: editForm.email,
       full_name: editForm.full_name
-    };
+    });
     
-    console.log('开始更新个人资料，数据:', profileData);
+    console.log('资料更新响应:', response);
     
-    // 先更新基本资料
-    const profileResponse = await authAPI.updateProfile(profileData);
-    console.log('基本资料更新成功，响应:', profileResponse);
+    // 确保用户信息被更新到store中
+    if (response && response.user) {
+      // 直接更新store中的用户信息
+      authStore.setUser(response.user);
+      console.log('用户信息已更新到store:', response.user);
+    } else {
+      // 如果响应中没有用户信息，则重新获取
+      await authStore.fetchProfile();
+      console.log('已重新获取用户资料');
+    }
     
-    // 如果有新头像，单独上传头像
+    // 如果有选择新头像，则上传头像
     if (selectedFile.value) {
       try {
         console.log('准备上传头像...');
-        
-        // 创建FormData对象，直接使用文件对象
-        const formData = new FormData();
-        formData.append('avatar', selectedFile.value);
-        
-        console.log('上传头像...');
         console.log('文件名:', selectedFile.value.name);
         console.log('文件类型:', selectedFile.value.type);
         console.log('文件大小:', selectedFile.value.size, 'bytes');
         
-        // 使用fetch API上传头像，而不是axios
-        console.log('使用fetch上传头像...');
-        const token = localStorage.getItem('token');
-        console.log('使用令牌:', token ? token.substring(0, 10) + '...' : 'null');
-        
-        const response = await fetch('http://localhost:5001/api/auth/avatar', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        });
-        
-        if (!response.ok) {
-          throw new Error(`上传失败: ${response.status} ${response.statusText}`);
+        // 确保用户ID可用
+        if (!authStore.user || !authStore.user.id) {
+          throw new Error('用户ID不可用，无法上传头像');
         }
         
-        const data = await response.json();
-        console.log('头像上传成功，响应:', data);
+        // 使用authStore的uploadUserAvatar方法上传头像
+        const response = await authStore.uploadUserAvatar(selectedFile.value);
+        console.log('头像上传成功，响应:', response);
         
-        // 更新用户头像URL
-        if (data && data.avatar_url) {
-          console.log('更新用户头像URL:', data.avatar_url);
-          // 刷新用户资料
-          await authStore.fetchProfile();
-        }
+        // 更新用户头像URL已经在authStore.uploadUserAvatar中处理
       } catch (uploadErr) {
         console.error('头像上传失败:', uploadErr);
-        alert('头像上传失败，但基本资料已更新');
+        alert('头像上传失败: ' + (uploadErr.error || uploadErr.message || '未知错误'));
+        return; // 如果头像上传失败，不继续后面的操作
       }
     }
     
@@ -315,6 +300,12 @@ const saveProfile = async () => {
     previewAvatar.value = ''; // 清除预览头像
     selectedFile.value = null; // 清除选择的文件
     alert('个人资料更新成功');
+    
+    // 刷新页面显示
+    if (authStore.user) {
+      editForm.email = authStore.user.email || '';
+      editForm.full_name = authStore.user.full_name || '';
+    }
   } catch (err: any) {
     console.error('更新个人资料失败:', err);
     error.value = typeof err === 'string' ? err : (err.error || '更新个人资料失败，请重试');

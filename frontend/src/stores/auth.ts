@@ -181,8 +181,13 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      console.log('开始上传头像')
-      const response = await authAPI.uploadAvatar(file)
+      // 确保用户已登录且有用户ID
+      if (!user.value || !user.value.id) {
+        throw new Error('用户未登录或用户ID不可用')
+      }
+      
+      console.log('开始上传头像，用户ID:', user.value.id)
+      const response = await authAPI.uploadAvatar(file, user.value.id)
       console.log('上传头像成功:', response)
       
       // 更新用户头像URL

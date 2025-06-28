@@ -755,9 +755,19 @@ const deleteUser = async (user: User) => {
       alert('用户删除成功');
       // 重新加载用户列表
       loadUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('删除用户失败:', error);
-      alert('删除用户失败，请重试');
+      
+      // 检查是否是教师有关联课程的错误
+      if (error.response && error.response.data && error.response.data.error) {
+        if (error.response.data.error.includes('该教师仍有关联的课程')) {
+          alert('删除失败: 该教师仍有关联的课程。请先将课程重新分配给其他教师或删除这些课程。');
+        } else {
+          alert(`删除用户失败: ${error.response.data.error}`);
+        }
+      } else {
+        alert('删除用户失败，请重试');
+      }
     }
   }
 };
