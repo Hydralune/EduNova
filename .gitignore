@@ -83,4 +83,19 @@ uploads/*
 
 # Virtual environment
 venv/
-ENV/ 
+ENV/
+
+# RAG Module sensitive content
+RAG/env.md
+RAG/.env
+RAG/data/
+RAG/hirag/api_keys.py
+RAG/hirag/config.json
+RAG/documents/private/
+RAG/*.pkl
+RAG/vector_store/
+RAG/embeddings/
+RAG/__pycache__/
+RAG/hirag/__pycache__/
+RAG/examples/outputs/
+RAG/assignments/private/ 
