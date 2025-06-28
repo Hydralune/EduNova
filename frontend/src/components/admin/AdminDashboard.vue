@@ -307,96 +307,11 @@
       </div>
     </div>
 
-    <!-- 添加用户模态框 -->
-    <div v-if="showAddUserModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-md w-full">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">添加用户</h3>
-          <form @submit.prevent="createUser">
-            <div class="space-y-4">
-              <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">用户名</label>
-                <input 
-                  type="text" 
-                  id="username" 
-                  v-model="newUser.username" 
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label for="email" class="block text-sm font-medium text-gray-700">邮箱</label>
-                <input 
-                  type="email" 
-                  id="email" 
-                  v-model="newUser.email" 
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label for="full-name" class="block text-sm font-medium text-gray-700">全名</label>
-                <input 
-                  type="text" 
-                  id="full-name" 
-                  v-model="newUser.full_name" 
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">密码</label>
-                <input 
-                  type="password" 
-                  id="password" 
-                  v-model="newUser.password" 
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label for="role" class="block text-sm font-medium text-gray-700">角色</label>
-                <select 
-                  id="role" 
-                  v-model="newUser.role" 
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="admin">管理员</option>
-                  <option value="teacher">教师</option>
-                  <option value="student">学生</option>
-                </select>
-              </div>
-              <div class="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="is-active" 
-                  v-model="newUser.is_active" 
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label for="is-active" class="ml-2 block text-sm text-gray-900">激活</label>
-              </div>
-            </div>
-            <div class="mt-5 flex justify-end space-x-3">
-              <button 
-                type="button" 
-                @click="showAddUserModal = false" 
-                class="btn btn-outline"
-              >
-                取消
-              </button>
-              <button type="submit" class="btn btn-primary">
-                创建
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
     <!-- 添加课程模态框 -->
-    <div v-if="showAddCourseModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-md w-full">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">{{ isEditingCourse ? '编辑课程' : '添加课程' }}</h3>
+    <div v-if="showAddCourseModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+        <h3 class="text-xl font-bold mb-4">{{ isEditingCourse ? '编辑课程' : '添加课程' }}</h3>
+        <div class="max-h-[70vh] overflow-y-auto">
           <form @submit.prevent="saveCourse">
             <div class="space-y-4">
               <div>
@@ -507,6 +422,94 @@
         </div>
       </div>
     </div>
+    
+    <!-- 添加/编辑用户模态框 -->
+    <div v-if="showAddUserModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+        <h3 class="text-xl font-bold mb-4">{{ isEditingUser ? '编辑用户' : '添加用户' }}</h3>
+        <div class="max-h-[70vh] overflow-y-auto">
+          <form @submit.prevent="isEditingUser ? updateUserData() : createUser()">
+            <div class="space-y-4">
+              <div>
+                <label for="user-username" class="block text-sm font-medium text-gray-700">用户名</label>
+                <input 
+                  type="text" 
+                  id="user-username" 
+                  v-model="newUser.username" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  :disabled="isEditingUser"
+                  required
+                />
+              </div>
+              <div>
+                <label for="user-email" class="block text-sm font-medium text-gray-700">邮箱</label>
+                <input 
+                  type="email" 
+                  id="user-email" 
+                  v-model="newUser.email" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label for="user-full-name" class="block text-sm font-medium text-gray-700">姓名</label>
+                <input 
+                  type="text" 
+                  id="user-full-name" 
+                  v-model="newUser.full_name" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label for="user-password" class="block text-sm font-medium text-gray-700">
+                  {{ isEditingUser ? '密码（留空表示不修改）' : '密码' }}
+                </label>
+                <input 
+                  type="password" 
+                  id="user-password" 
+                  v-model="newUser.password" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  :required="!isEditingUser"
+                />
+              </div>
+              <div>
+                <label for="user-role" class="block text-sm font-medium text-gray-700">角色</label>
+                <select 
+                  id="user-role" 
+                  v-model="newUser.role" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="admin">管理员</option>
+                  <option value="teacher">教师</option>
+                  <option value="student">学生</option>
+                </select>
+              </div>
+              <div class="flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="user-active" 
+                  v-model="newUser.is_active" 
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label for="user-active" class="ml-2 block text-sm text-gray-900">账户已激活</label>
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end space-x-3">
+              <button 
+                type="button" 
+                @click="closeUserModal" 
+                class="btn btn-outline"
+              >
+                取消
+              </button>
+              <button type="submit" class="btn btn-primary">
+                {{ isEditingUser ? '保存' : '创建' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -572,6 +575,8 @@ const newUser = ref({
   role: 'student',
   is_active: true
 });
+const isEditingUser = ref(false);
+const currentEditingUserId = ref<number | null>(null);
 
 // 课程管理
 const courses = ref<Course[]>([]);
@@ -745,7 +750,81 @@ const loadSettings = async () => {
 const editUser = async (user: User) => {
   // 实现编辑用户的逻辑
   console.log('编辑用户', user);
-  // 这里可以打开一个编辑用户的模态框
+  
+  // 将当前用户数据设置到表单中
+  newUser.value = {
+    username: user.username,
+    email: user.email,
+    password: '', // 密码留空，表示不修改
+    full_name: user.full_name || '',
+    role: user.role,
+    is_active: user.is_active
+  };
+  
+  // 存储当前编辑的用户ID
+  currentEditingUserId.value = user.id;
+  
+  // 打开模态框，使用编辑模式
+  isEditingUser.value = true;
+  showAddUserModal.value = true;
+};
+
+const updateUserData = async () => {
+  try {
+    if (!currentEditingUserId.value) {
+      alert('用户ID无效');
+      return;
+    }
+    
+    // 准备更新数据
+    const updateData: any = {
+      email: newUser.value.email,
+      full_name: newUser.value.full_name,
+      role: newUser.value.role,
+      is_active: newUser.value.is_active
+    };
+    
+    // 如果提供了密码，则更新密码
+    if (newUser.value.password) {
+      updateData.password = newUser.value.password;
+    }
+    
+    // 调用API更新用户
+    await userAPI.updateUser(currentEditingUserId.value, updateData);
+    alert('用户更新成功');
+    
+    // 重置表单和状态
+    resetUserForm();
+    
+    // 关闭模态框
+    showAddUserModal.value = false;
+    
+    // 重新加载用户列表
+    loadUsers();
+  } catch (error) {
+    console.error('更新用户失败:', error);
+    alert('更新用户失败，请重试');
+  }
+};
+
+const closeUserModal = () => {
+  showAddUserModal.value = false;
+  // 重置编辑状态
+  resetUserForm();
+};
+
+const resetUserForm = () => {
+  isEditingUser.value = false;
+  currentEditingUserId.value = null;
+  // 重置表单
+  newUser.value = {
+    username: '',
+    email: '',
+    password: '',
+    full_name: '',
+    role: 'student',
+    is_active: true
+  };
 };
 
 const deleteUser = async (user: User) => {
