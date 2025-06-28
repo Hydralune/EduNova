@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authAPI } from '@/api'
+import * as authAPI from '@/api/auth'
 
 export interface User {
   id: number
@@ -14,15 +14,14 @@ export interface User {
   updated_at?: string
 }
 
-interface LoginResponse {
-  token: string
+interface ProfileUpdateResponse {
+  message: string
   user: User
-  message?: string
 }
 
-interface ProfileResponse {
-  user: User
-  message?: string
+interface AvatarResponse {
+  message: string
+  avatar_url: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -39,10 +38,12 @@ export const useAuthStore = defineStore('auth', () => {
       const parsedAuth = JSON.parse(savedAuth)
       token.value = parsedAuth.token || ''
       user.value = parsedAuth.user || null
+      console.log('从本地存储加载认证状态:', user.value?.username || '无用户')
     }
   } catch (error) {
-    console.error('Failed to load auth from localStorage:', error)
+    console.error('从本地存储加载认证状态失败:', error)
     localStorage.removeItem('auth')
+    localStorage.removeItem('token')
   }
   
   // 计算属性
@@ -53,12 +54,14 @@ export const useAuthStore = defineStore('auth', () => {
   
   // 动作
   const setToken = (newToken: string) => {
+    console.log('设置新令牌')
     token.value = newToken
+    localStorage.setItem('token', newToken)
     saveToLocalStorage()
   }
   
   const setUser = (newUser: User | null) => {
-    console.log('设置用户信息:', newUser);
+    console.log('设置用户信息:', newUser?.username || '无用户');
     if (newUser) {
       // 确保用户信息完整
       if (!newUser.id || !newUser.username || !newUser.role) {
@@ -71,11 +74,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
   
   const saveToLocalStorage = () => {
-    localStorage.setItem('token', token.value)
-    localStorage.setItem('auth', JSON.stringify({
-      token: token.value,
-      user: user.value
-    }))
+    try {
+      localStorage.setItem('token', token.value)
+      localStorage.setItem('auth', JSON.stringify({
+        token: token.value,
+        user: user.value
+      }))
+      console.log('认证状态已保存到本地存储')
+    } catch (e) {
+      console.error('保存认证状态到本地存储失败:', e)
+    }
   }
   
   const loginUser = async (username: string, password: string) => {
@@ -83,12 +91,15 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      const response = await authAPI.login({ username, password })
-      const data = response as unknown as LoginResponse
+      console.log('开始登录流程:', username)
+      const data = await authAPI.login({ username, password })
+      console.log('登录API调用成功:', data.user.username)
+      
       setToken(data.token)
       setUser(data.user)
       return data
     } catch (err: any) {
+      console.error('登录失败:', err)
       error.value = err.error || '登录失败，请检查用户名和密码'
       throw err
     } finally {
@@ -101,9 +112,12 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
+      console.log('开始注册流程')
       const response = await authAPI.register(userData)
+      console.log('注册成功')
       return response
     } catch (err: any) {
+      console.error('注册失败:', err)
       error.value = err.error || '注册失败'
       throw err
     } finally {
@@ -117,20 +131,21 @@ export const useAuthStore = defineStore('auth', () => {
     
     try {
       console.log('开始获取用户资料...')
-      const response = await authAPI.getProfile() as any
-      console.log('获取用户资料响应:', response)
+      const userData = await authAPI.fetchUserProfile()
+      console.log('获取用户资料成功:', userData)
       
-      // 确保响应中包含用户数据
-      if (response && response.user) {
-        console.log('获取用户资料成功:', response.user)
-        setUser(response.user)
-        return response.user
-      } else {
-        console.error('响应中没有用户数据:', response)
-        throw new Error('响应中没有用户数据')
-      }
+      // 更新用户信息
+      setUser(userData)
+      return userData
     } catch (err: any) {
       console.error('获取用户信息失败:', err)
+      
+      // 如果是401错误，清除认证状态
+      if (err.status === 401) {
+        console.error('认证失败，清除认证状态')
+        logout()
+      }
+      
       error.value = err.error || '获取用户信息失败'
       throw err
     } finally {
@@ -143,13 +158,17 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     
     try {
-      const response = await authAPI.updateProfile(userData)
-      const data = response as unknown as ProfileResponse
-      if (data && data.user) {
-        setUser(data.user)
+      console.log('开始更新用户资料')
+      const response = await authAPI.updateUserProfile(userData) as ProfileUpdateResponse
+      console.log('更新用户资料成功')
+      
+      // 更新用户信息
+      if (response && response.user) {
+        setUser(response.user)
       }
-      return data
+      return response
     } catch (err: any) {
+      console.error('更新用户信息失败:', err)
       error.value = err.error || '更新用户信息失败'
       throw err
     } finally {
@@ -157,7 +176,33 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
+  const uploadUserAvatar = async (file: File) => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      console.log('开始上传头像')
+      const response = await authAPI.uploadAvatar(file)
+      console.log('上传头像成功:', response)
+      
+      // 更新用户头像URL
+      if (response && response.avatar_url && user.value) {
+        user.value.avatar_url = response.avatar_url
+        saveToLocalStorage()
+      }
+      
+      return response
+    } catch (err: any) {
+      console.error('上传头像失败:', err)
+      error.value = err.error || '上传头像失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
   const logout = () => {
+    console.log('用户登出')
     token.value = ''
     user.value = null
     localStorage.removeItem('token')
@@ -181,6 +226,7 @@ export const useAuthStore = defineStore('auth', () => {
     registerUser,
     fetchProfile,
     updateProfile,
+    uploadUserAvatar,
     logout,
     clearError,
     setUser,

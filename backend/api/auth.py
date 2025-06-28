@@ -4,7 +4,7 @@ import datetime
 from flask import current_app, request, jsonify, Blueprint
 from backend.models.user import User
 from backend.extensions import db, jwt
-from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required, verify_jwt_in_request
+from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required, verify_jwt_in_request, get_jwt
 from werkzeug.utils import secure_filename
 import os
 import time
@@ -59,17 +59,26 @@ def login_required(f):
     
     return decorated_function
 
+# 角色验证装饰器 - 使用Flask-JWT-Extended
 def role_required(roles):
-    """角色验证装饰器"""
-    def decorator(f):
-        @functools.wraps(f)
-        @login_required
-        def decorated_function(*args, **kwargs):
-            if request.current_user.role not in roles:
+    """角色验证装饰器 - 使用Flask-JWT-Extended"""
+    def wrapper(fn):
+        @functools.wraps(fn)
+        @jwt_required()
+        def decorator(*args, **kwargs):
+            # 获取当前用户ID
+            user_id = get_jwt_identity()
+            # 获取JWT声明
+            claims = get_jwt()
+            # 获取用户角色
+            user_role = claims.get('role')
+            
+            # 检查角色权限
+            if user_role not in roles:
                 return jsonify({'error': '权限不足'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
 
 def admin_required(f):
     """管理员权限装饰器"""
@@ -110,38 +119,50 @@ def login():
         return jsonify({"error": "Account is disabled"}), 403
     
     # 创建访问令牌
-    access_token = create_access_token(
-        identity=user.id,
-        additional_claims={
+    try:
+        # 添加用户信息到JWT声明
+        additional_claims = {
             "username": user.username,
-            "role": user.role
-        },
-        expires_delta=datetime.timedelta(hours=24)  # 延长令牌有效期
-    )
-    
-    # 创建刷新令牌
-    refresh_token = create_refresh_token(
-        identity=user.id,
-        expires_delta=datetime.timedelta(days=30)
-    )
-    
-    print(f"用户 {username} 登录成功")
-    return jsonify({
-        "message": "登录成功",
-        "token": access_token,  # Changed from access_token to token to match frontend expectation
-        "refresh_token": refresh_token,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
             "role": user.role,
-            "full_name": user.full_name,
-            "is_active": user.is_active,
-            "avatar_url": user.avatar_url,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "updated_at": user.updated_at.isoformat() if user.updated_at else None
+            "email": user.email
         }
-    }), 200
+        
+        print(f"为用户 {username} 创建令牌，声明: {additional_claims}")
+        
+        access_token = create_access_token(
+            identity=user.id,
+            additional_claims=additional_claims,
+            expires_delta=datetime.timedelta(days=1)  # 延长令牌有效期到1天
+        )
+        
+        # 创建刷新令牌
+        refresh_token = create_refresh_token(
+            identity=user.id,
+            expires_delta=datetime.timedelta(days=30)
+        )
+        
+        print(f"用户 {username} 登录成功，令牌已创建")
+        
+        # 返回用户信息和令牌
+        return jsonify({
+            "message": "登录成功",
+            "token": access_token,
+            "refresh_token": refresh_token,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "avatar_url": user.avatar_url,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "updated_at": user.updated_at.isoformat() if user.updated_at else None
+            }
+        }), 200
+    except Exception as e:
+        print(f"创建令牌时出错: {str(e)}")
+        return jsonify({"error": f"Authentication error: {str(e)}"}), 500
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -191,45 +212,20 @@ def register():
 @jwt_required()
 def profile():
     """获取或更新用户个人资料"""
-    # 获取当前用户ID
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({'error': '用户不存在'}), 404
-    
-    if request.method == 'GET':
-        return jsonify({
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "full_name": user.full_name,
-                "is_active": user.is_active,
-                "avatar_url": user.avatar_url,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "updated_at": user.updated_at.isoformat() if user.updated_at else None
-            }
-        })
-    
-    # 更新个人资料
-    if request.method == 'PUT':
-        try:
-            data = request.get_json()
-            if not data:
-                return jsonify({'error': '无效的请求数据'}), 400
-            
-            # 更新用户信息
-            if 'email' in data:
-                user.email = data['email']
-            if 'full_name' in data:
-                user.full_name = data['full_name']
-            
-            db.session.commit()
-            
+    try:
+        # 获取当前用户ID
+        user_id = get_jwt_identity()
+        print(f"获取用户资料，用户ID: {user_id}")
+        
+        user = User.query.get(user_id)
+        if not user:
+            print(f"用户不存在，ID: {user_id}")
+            return jsonify({'error': '用户不存在'}), 404
+        
+        if request.method == 'GET':
+            print(f"返回用户 {user.username} 的资料")
             return jsonify({
-                'message': '个人资料更新成功',
-                'user': {
+                "user": {
                     "id": user.id,
                     "username": user.username,
                     "email": user.email,
@@ -241,10 +237,45 @@ def profile():
                     "updated_at": user.updated_at.isoformat() if user.updated_at else None
                 }
             })
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"更新个人资料时出错: {str(e)}")
-            return jsonify({'error': f'更新个人资料时出错: {str(e)}'}), 500
+        
+        # 更新个人资料
+        if request.method == 'PUT':
+            try:
+                data = request.get_json()
+                if not data:
+                    return jsonify({'error': '无效的请求数据'}), 400
+                
+                print(f"更新用户 {user.username} 的资料: {data}")
+                
+                # 更新用户信息
+                if 'email' in data:
+                    user.email = data['email']
+                if 'full_name' in data:
+                    user.full_name = data['full_name']
+                
+                db.session.commit()
+                
+                return jsonify({
+                    'message': '个人资料更新成功',
+                    'user': {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "role": user.role,
+                        "full_name": user.full_name,
+                        "is_active": user.is_active,
+                        "avatar_url": user.avatar_url,
+                        "created_at": user.created_at.isoformat() if user.created_at else None,
+                        "updated_at": user.updated_at.isoformat() if user.updated_at else None
+                    }
+                })
+            except Exception as e:
+                db.session.rollback()
+                print(f"更新个人资料时出错: {str(e)}")
+                return jsonify({'error': f'更新个人资料时出错: {str(e)}'}), 500
+    except Exception as e:
+        print(f"处理个人资料请求时出错: {str(e)}")
+        return jsonify({'error': f'处理请求时出错: {str(e)}'}), 500
 
 @auth_bp.route('/change-password', methods=['POST'])
 @jwt_required()
@@ -286,6 +317,8 @@ def upload_avatar():
     try:
         # 获取当前用户ID
         user_id = get_jwt_identity()
+        print(f"处理头像上传，用户ID: {user_id}")
+        
         user = User.query.get(user_id)
         if not user:
             print(f"用户不存在，ID: {user_id}")
@@ -294,53 +327,42 @@ def upload_avatar():
         print(f"开始处理用户 {user.username} 的头像上传请求")
         print(f"请求内容类型: {request.content_type}")
         print(f"请求文件: {list(request.files.keys()) if request.files else '无文件'}")
-        print(f"请求表单: {list(request.form.keys()) if request.form else '无表单数据'}")
         
         # 确保上传目录存在
         upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'avatars')
         os.makedirs(upload_folder, exist_ok=True)
         
-        # 生成安全的文件名
-        timestamp = int(time.time())
-        filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
-        file_path = os.path.join(upload_folder, filename)
-        
-        # 处理文件上传 - 尝试多种方式
+        # 处理文件上传
         if 'avatar' in request.files:
-            # 标准文件上传
             file = request.files['avatar']
             if file.filename == '':
                 return jsonify({'error': '未选择文件'}), 400
                 
             print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
+            
+            # 生成安全的文件名
+            timestamp = int(time.time())
+            filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
+            file_path = os.path.join(upload_folder, filename)
+            
+            # 保存文件
             file.save(file_path)
             print(f"文件已保存到: {file_path}")
-        elif request.data:
-            # 尝试从请求体获取二进制数据
-            print("从请求体获取数据")
-            with open(file_path, 'wb') as f:
-                f.write(request.data)
-            print(f"数据已保存到: {file_path}")
-        elif len(request.files) > 0:
-            # 尝试使用第一个可用的文件
-            file_key = list(request.files.keys())[0]
-            file = request.files[file_key]
-            print(f"使用第一个可用文件: {file_key}, 文件名: {file.filename}")
-            file.save(file_path)
-            print(f"文件已保存到: {file_path}")
+            
+            # 更新用户头像URL
+            avatar_url = f"/uploads/avatars/{filename}"
+            user.avatar_url = avatar_url
+            db.session.commit()
+            print(f"用户头像URL已更新: {avatar_url}")
+            
+            return jsonify({
+                'message': '头像上传成功',
+                'avatar_url': avatar_url
+            })
         else:
+            print("请求中没有找到'avatar'文件")
             return jsonify({'error': '未找到头像文件'}), 400
-        
-        # 更新用户头像URL
-        avatar_url = f"/uploads/avatars/{filename}"
-        user.avatar_url = avatar_url
-        db.session.commit()
-        print(f"用户头像URL已更新: {avatar_url}")
-        
-        return jsonify({
-            'message': '头像上传成功',
-            'avatar_url': avatar_url
-        })
+            
     except Exception as e:
         db.session.rollback()
         print(f"处理头像上传请求时出错: {str(e)}")

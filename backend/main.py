@@ -24,8 +24,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制上传文件大小为16MB
 
-# JWT配置
-app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
+# JWT配置 - 使用与SECRET_KEY相同的密钥以确保一致性
+app.config['JWT_SECRET_KEY'] = app.config['SECRET_KEY']
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600  # 令牌过期时间1小时
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 604800  # 刷新令牌过期时间7天
 
