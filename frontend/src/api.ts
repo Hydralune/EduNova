@@ -7,8 +7,6 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // 使用凭证，确保与后端CORS配置匹配
-  withCredentials: true,
 })
 
 // 请求拦截器

@@ -24,12 +24,12 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 
 项目采用前后端分离的现代 Web 架构，确保了系统的高内聚、低耦合和可扩展性。
 
-- **前端 (Frontend)**：基于现代 Web 框架构建，为不同角色提供直观、易用的用户界面。
+- **前端 (Frontend)**：基于Vue 3和Tailwind CSS构建，为不同角色提供直观、易用的用户界面。
 - **后端 (Backend)**：使用 Flask 框架，通过统一的 RESTful API 提供服务。
 - **核心引擎 (Core Engine)**：
-  - **LLM 服务模块**: 封装了对大语言模型（如 DeepSeek）的调用。
+  - **LLM 服务模块**: 封装了对大语言模型的调用。
   - **知识库与 RAG 模块**: 负责知识的存储、向量化和检索，为 LLM 提供生成所需的核心上下文。
-- **数据库 (Database)**：持久化存储所有关键数据，如用户信息、课程资料、考核结果等。
+- **数据库 (Database)**：使用SQLite持久化存储所有关键数据，如用户信息、课程资料、考核结果等。
 
 ## 🚀 本地开发指南
 
@@ -38,7 +38,7 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 ### 1. 环境准备
 - **Git**: 用于克隆项目代码。
 - **Node.js**: 用于运行前端项目 (推荐 v18 或更高版本)。
-- **Conda**: 用于管理后端的 Python 环境。
+- **Python**: 用于运行后端项目 (推荐 v3.9 或更高版本)。
 
 ### 2. 后端设置 (Backend)
 
@@ -47,61 +47,19 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 cd backend
 ```
 
-#### a. 创建并激活 Conda 环境
-我们推荐使用 Conda 创建一个独立的环境，以避免与其他项目的依赖冲突。
-```bash
-# 创建一个名为 edunova 的新环境 (使用 Python 3.9)
-conda create --name edunova python=3.9 -y
-
-# 激活环境
-conda activate edunova
-```
-
-#### b. 安装 Python 依赖
+#### a. 安装 Python 依赖
 ```bash
 pip install -r requirements.txt
 ```
 
-#### c. 配置环境变量
-在 `backend` 目录下，创建一个名为 `.env` 的文件。这个文件用于存放敏感信息，如 API 密钥。复制以下内容到 `.env` 文件中，并根据需要修改。
-```
-# .env 文件内容
-
-# Flask 和 JWT 的安全密钥，推荐修改为随机字符串
-SECRET_KEY='a-hard-to-guess-string'
-JWT_SECRET_KEY='another-super-secret-key'
-
-# DeepSeek 大模型的 API Key
-DEEPSEEK_API_KEY='your-deepseek-api-key'
-
-# 数据库连接URI，默认使用 backend 目录下的 app.db 文件
-DATABASE_URL='sqlite:///app.db'
-```
-
-#### d. 初始化数据库
-这是项目首次运行时**必须执行**的步骤。
+#### b. 初始化数据库
 ```bash
-# 1. 设置 FLASK_APP 环境变量，告诉 Flask 应用的入口在哪里
-#    (Windows PowerShell)
-$env:FLASK_APP = "run.py"
-#    (Windows CMD)
-#    set FLASK_APP=run.py
-#    (macOS / Linux)
-#    export FLASK_APP=run.py
-
-# 2. 初始化数据库迁移功能 (只需在项目开始时运行一次)
-flask db init
-
-# 3. 生成数据库迁移脚本
-flask db migrate -m "Initial migration"
-
-# 4. 将迁移应用到数据库，创建数据表
-flask db upgrade
+python init_db.py
 ```
 
-#### e. 运行后端服务器
+#### c. 运行后端服务器
 ```bash
-python run.py
+python main.py
 ```
 后端服务将会在 `http://127.0.0.1:5001` 上运行。
 
@@ -114,7 +72,7 @@ python run.py
 cd frontend
 ```
 
-#### a. 安装 Node.js 依赖（已安装则不需要）
+#### a. 安装 Node.js 依赖
 ```bash
 npm install
 ```
@@ -129,41 +87,68 @@ npm run dev
 
 当后端和前端服务都成功运行后，在您的浏览器中打开前端应用的地址 (如 `http://localhost:5173/`)，即可开始使用 EduNova。
 
+### 5. 默认用户账户
+
+系统已预设以下默认用户，可用于测试：
+
+- **管理员**：用户名 `admin`，密码 `admin123`
+- **教师**：用户名 `teacher`，密码 `teacher123`
+- **学生**：用户名 `student`，密码 `student123`
+
 ## 📁 项目结构
 
 ```
 EduNova/
-├── backend/
-│   ├── app/
-│   │   ├── api/          # API 蓝图 (按功能划分)
-│   │   │   ├── auth.py   # 认证 API
-│   │   │   ├── admin.py
-│   │   │   ├── student.py
-│   │   │   └── teacher.py
-│   │   ├── models/       # SQLAlchemy 数据模型
-│   │   │   └── user.py
-│   │   ├── services/     # 核心服务 (如 LLM 调用)
-│   │   ├── __init__.py   # 应用工厂
-│   │   ├── config.py     # 配置文件
-│   │   └── extensions.py # Flask 扩展实例化
-│   ├── migrations/       # 数据库迁移脚本
-│   ├── tests/            # 测试目录
-│   ├── .env.example      # 环境变量示例 (可选)
-│   ├── requirements.txt  # Python 依赖
-│   └── run.py            # 应用启动脚本
+├── backend/               # 后端项目目录
+│   ├── api/               # API 路由和控制器
+│   │   ├── admin.py       # 管理员相关API
+│   │   ├── auth.py        # 认证相关API
+│   │   ├── learning.py    # 学习相关API
+│   │   ├── rag_ai.py      # RAG AI相关API
+│   │   └── user.py        # 用户相关API
+│   ├── config/            # 配置文件
+│   ├── database/          # 数据库文件
+│   ├── models/            # 数据模型
+│   │   ├── assessment.py  # 评估模型
+│   │   ├── course.py      # 课程模型
+│   │   ├── learning.py    # 学习记录模型
+│   │   ├── material.py    # 课程资料模型
+│   │   └── user.py        # 用户模型
+│   ├── utils/             # 工具函数
+│   ├── extensions.py      # Flask扩展初始化
+│   ├── init_db.py         # 数据库初始化脚本
+│   ├── main.py            # 应用主入口
+│   ├── requirements.txt   # Python依赖
+│   └── run_server.py      # 服务器启动脚本
 │
-├── frontend/
-│   ├── src/
-│   │   ├── assets/       # 静态资源
-│   │   ├── components/   # 可复用组件
-│   │   ├── router/       # Vue Router 配置
-│   │   ├── services/     # API 服务
-│   │   ├── stores/       # Pinia 状态管理
-│   │   └── views/        # 页面视图
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
+├── frontend/              # 前端项目目录
+│   ├── public/            # 静态资源
+│   ├── src/               # 源代码
+│   │   ├── api/           # API调用
+│   │   ├── assets/        # 静态资源
+│   │   ├── components/    # Vue组件
+│   │   │   ├── admin/     # 管理员组件
+│   │   │   ├── ai/        # AI助手组件
+│   │   │   ├── analytics/ # 数据分析组件
+│   │   │   ├── assessment/# 评估组件
+│   │   │   ├── course/    # 课程组件
+│   │   │   └── rag/       # RAG相关组件
+│   │   ├── router/        # 路由配置
+│   │   ├── stores/        # 状态管理
+│   │   └── views/         # 页面视图
+│   ├── index.html         # HTML入口
+│   ├── package.json       # Node.js依赖
+│   ├── tailwind.config.js # Tailwind CSS配置
+│   └── vite.config.ts     # Vite配置
 │
-├── documents/            # 项目文档
-└── README.md             # 本文档
+├── docs/                  # 项目文档
+│   ├── 智能教学系统 - 完整项目文档.md
+│   ├── RAG_AI_Integration_Guide.md
+│   └── 需求分析.md
+│
+└── README.md              # 本文档
 ```
+
+## 📝 许可证
+
+本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。

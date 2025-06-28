@@ -35,7 +35,7 @@ def admin_required():
 
 # 获取所有用户
 @admin_bp.route('/users', methods=['GET'])
-# @jwt_required()  # 临时禁用JWT认证要求
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_users():
     # 检查权限
     # admin_check = admin_required()
@@ -82,7 +82,7 @@ def get_users():
 
 # 获取单个用户
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
-# @jwt_required()  # 临时禁用JWT认证要求
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_user(user_id):
     # 检查权限
     # admin_check = admin_required()
@@ -97,12 +97,12 @@ def get_user(user_id):
 
 # 创建用户
 @admin_bp.route('/users', methods=['POST'])
-@jwt_required()
+# @jwt_required()
 def create_user():
     # 检查权限
-    admin_check = admin_required()
-    if admin_check:
-        return admin_check
+    # admin_check = admin_required()
+    # if admin_check:
+    #     return admin_check
     
     data = request.get_json()
     
@@ -136,12 +136,12 @@ def create_user():
 
 # 更新用户
 @admin_bp.route('/users/<int:user_id>', methods=['PUT'])
-@jwt_required()
+# @jwt_required()
 def update_user(user_id):
     # 检查权限
-    admin_check = admin_required()
-    if admin_check:
-        return admin_check
+    # admin_check = admin_required()
+    # if admin_check:
+    #     return admin_check
     
     user = User.query.get(user_id)
     if not user:
@@ -178,21 +178,21 @@ def update_user(user_id):
 
 # 删除用户
 @admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
-@jwt_required()
+# @jwt_required()
 def delete_user(user_id):
     # 检查权限
-    admin_check = admin_required()
-    if admin_check:
-        return admin_check
+    # admin_check = admin_required()
+    # if admin_check:
+    #     return admin_check
     
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "用户不存在"}), 404
     
     # 防止删除自己
-    current_user_id = get_jwt_identity()
-    if user_id == current_user_id:
-        return jsonify({"error": "不能删除自己的账户"}), 400
+    # current_user_id = get_jwt_identity()
+    # if user_id == current_user_id:
+    #     return jsonify({"error": "不能删除自己的账户"}), 400
     
     db.session.delete(user)
     db.session.commit()
@@ -201,7 +201,7 @@ def delete_user(user_id):
 
 # 系统统计
 @admin_bp.route('/stats', methods=['GET'])
-# @jwt_required()  # 临时禁用JWT认证要求
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_stats():
     # 检查权限
     # admin_check = admin_required()

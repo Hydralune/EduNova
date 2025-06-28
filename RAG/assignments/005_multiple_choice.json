@@ -1,0 +1,127 @@
+{
+  "type": "multiple_choice",
+  "description": "选择题：请在每小题给出的选项中选出一个正确答案。",
+  "score_per_question": 4,
+  "questions": [
+    {
+      "id": 1,
+      "stem": "在使用迁移学习进行花卉识别时，为什么要冻结预训练模型的基础部分？",
+      "options": [
+        "A. 为了加快训练速度",
+        "B. 为了防止模型参数丢失",
+        "C. 为了保留大规模训练中学到的通用特征",
+        "D. 为了增加输出层的参数数量"
+      ],
+      "answer": "C",
+      "explanation": "迁移学习中冻结预训练模型的基础部分是为了保留其在大规模数据（如ImageNet）上训练时学到的通用特征，这样只需训练顶部用于具体任务的分类器。"
+    },
+    {
+      "id": 2,
+      "stem": "在花卉识别的模型中，瓶颈层的作用是什么？",
+      "options": [
+        "A. 提取图像的原始像素信息",
+        "B. 对图像进行降维处理",
+        "C. 将低级特征转换为高级特征",
+        "D. 作为图像的输入层"
+      ],
+      "answer": "C",
+      "explanation": "瓶颈层通常位于预训练模型的最后卷积层，是提取高级通用特征的关键部分，在迁移学习中用于生成用于分类的特征向量。"
+    },
+    {
+      "id": 3,
+      "stem": "在代码中通过哪一行冻结了基础模型？",
+      "options": [
+        "A. model = tf.keras.Sequential([base_model, ...])",
+        "B. ImageProcessor imageProcessor = new ImageProcessor.Builder()...",
+        "C. base_model.trainable = False",
+        "D. epochs = 10"
+      ],
+      "answer": "C",
+      "explanation": "通过设置 base_model.trainable = False，可以冻结基础模型的参数，使其在训练过程中不会被更新。"
+    },
+    {
+      "id": 4,
+      "stem": "花卉识别应用中，使用GlobalAveragePooling2D层的主要目的是什么？",
+      "options": [
+        "A. 对图像进行旋转处理",
+        "B. 在展平前对特征图进行平均降维",
+        "C. 将卷积层转换为全连接层",
+        "D. 提取图像边缘信息"
+      ],
+      "answer": "B",
+      "explanation": "GlobalAveragePooling2D层用于在展平操作之前对特征图进行空间平均降维，从而生成一个固定长度的特征向量，便于后续分类操作。"
+    },
+    {
+      "id": 5,
+      "stem": "在构建花卉识别模型时，输出层应该有多少个节点？",
+      "options": [
+        "A. 512",
+        "B. 1000",
+        "C. 5",
+        "D. 1280"
+      ],
+      "answer": "C",
+      "explanation": "输出层应与目标类别数量一致，因此在花卉识别任务中，输出层有5个节点，对应5种花卉类别。"
+    },
+    {
+      "id": 6,
+      "stem": "下面哪个代码片段用于对输入图片进行预处理？",
+      "options": [
+        "A. model.fit(train_generator, steps_per_epoch=len(train_generator), ...)",
+        "B. ImageProcessor imageProcessor = new ImageProcessor.Builder().add(new ResizeWithCropOrPadOp(cropSize, cropSize))",
+        "C. base_model.trainable = False",
+        "D. GlobalAveragePooling2D"
+      ],
+      "answer": "B",
+      "explanation": "ImageProcessor.Builder() 构建的代码片段用于对输入图像进行预处理，例如调整图像大小以适应模型输入需求。"
+    },
+    {
+      "id": 7,
+      "stem": "在运行花卉识别模型时，‘执行推理’阶段主要包含以下哪项操作？",
+      "options": [
+        "A. 更新模型权重",
+        "B. 训练全连接层",
+        "C. 创建解释器并分配张量",
+        "D. 导出模型为SavedModel格式"
+      ],
+      "answer": "C",
+      "explanation": "执行推理阶段需要使用API来创建TensorFlow Lite解释器，并分配相关的张量，以便在设备上运行模型。"
+    },
+    {
+      "id": 8,
+      "stem": "TensorFlow Lite转换器的主要作用是什么？",
+      "options": [
+        "A. 用于数据预处理",
+        "B. 用于将Keras模型转换为TFLite格式",
+        "C. 用于微调模型的权重",
+        "D. 用于训练模型"
+      ],
+      "answer": "B",
+      "explanation": "TensorFlow Lite转换器可以将训练好的Keras模型转换为TensorFlow Lite模型（.tflite文件），以便在移动端部署。"
+    },
+    {
+      "id": 9,
+      "stem": "在Android应用中部署TensorFlow Lite模型，通常需要配置哪个构建文件？",
+      "options": [
+        "A. AndroidManifest.xml",
+        "B. build.gradle",
+        "C. settings.gradle",
+        "D. project.properties"
+      ],
+      "answer": "B",
+      "explanation": "Android应用中使用TensorFlow Lite模型需要在build.gradle文件中添加相关依赖，例如TFLite支持库和模型文件。"
+    },
+    {
+      "id": 10,
+      "stem": "以下哪一项不是TensorFlow Lite解释执行器的特点？",
+      "options": [
+        "A. 低内存占用",
+        "B. 支持多平台部署",
+        "C. 需要模型被转换为FlatBuffers格式",
+        "D. 提供无限训练功能"
+      ],
+      "answer": "D",
+      "explanation": "TensorFlow Lite解释执行器适用于在边缘设备上运行模型，具有低内存和高效执行的特点，但它不能用于模型的训练。"
+    }
+  ]
+}

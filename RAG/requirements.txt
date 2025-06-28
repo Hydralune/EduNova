@@ -1,0 +1,14 @@
+python-dotenv
+requests
+numpy
+pymupdf
+unstructured
+langchain
+langchain-community
+langchain-chroma
+langchain-openai
+chromadb
+tiktoken
+sentence-transformers
+tqdm
+networkx 

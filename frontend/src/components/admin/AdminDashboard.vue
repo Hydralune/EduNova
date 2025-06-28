@@ -133,7 +133,7 @@
                 </svg>
               </div>
             </div>
-            <button class="btn btn-primary">
+            <button @click="showAddCourseModal = true" class="btn btn-primary">
               添加课程
             </button>
           </div>
@@ -160,12 +160,12 @@
                   </span>
                 </div>
                 <div class="flex space-x-2">
-                  <button class="text-blue-600 hover:text-blue-900">
+                  <button @click="editCourse(course)" class="text-blue-600 hover:text-blue-900">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                   </button>
-                  <button class="text-red-600 hover:text-red-900">
+                  <button @click="deleteCourse(course)" class="text-red-600 hover:text-red-900">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -305,6 +305,165 @@
         </form>
       </div>
     </div>
+
+    <!-- 添加用户模态框 -->
+    <div v-if="showAddUserModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-md w-full">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">添加用户</h3>
+          <form @submit.prevent="createUser">
+            <div class="space-y-4">
+              <div>
+                <label for="username" class="block text-sm font-medium text-gray-700">用户名</label>
+                <input 
+                  type="text" 
+                  id="username" 
+                  v-model="newUser.username" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">邮箱</label>
+                <input 
+                  type="email" 
+                  id="email" 
+                  v-model="newUser.email" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label for="full-name" class="block text-sm font-medium text-gray-700">全名</label>
+                <input 
+                  type="text" 
+                  id="full-name" 
+                  v-model="newUser.full_name" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label for="role" class="block text-sm font-medium text-gray-700">角色</label>
+                <select 
+                  id="role" 
+                  v-model="newUser.role" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="admin">管理员</option>
+                  <option value="teacher">教师</option>
+                  <option value="student">学生</option>
+                </select>
+              </div>
+              <div class="flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="is-active" 
+                  v-model="newUser.is_active" 
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label for="is-active" class="ml-2 block text-sm text-gray-900">激活</label>
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end space-x-3">
+              <button 
+                type="button" 
+                @click="showAddUserModal = false" 
+                class="btn btn-outline"
+              >
+                取消
+              </button>
+              <button type="submit" class="btn btn-primary">
+                创建
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加课程模态框 -->
+    <div v-if="showAddCourseModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-md w-full">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">添加课程</h3>
+          <form @submit.prevent="createCourse">
+            <div class="space-y-4">
+              <div>
+                <label for="course-name" class="block text-sm font-medium text-gray-700">课程名称</label>
+                <input 
+                  type="text" 
+                  id="course-name" 
+                  v-model="newCourse.name" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label for="course-description" class="block text-sm font-medium text-gray-700">课程描述</label>
+                <textarea 
+                  id="course-description" 
+                  v-model="newCourse.description" 
+                  rows="3"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                ></textarea>
+              </div>
+              <div>
+                <label for="course-category" class="block text-sm font-medium text-gray-700">课程类别</label>
+                <select 
+                  id="course-category" 
+                  v-model="newCourse.category" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="计算机科学">计算机科学</option>
+                  <option value="数学">数学</option>
+                  <option value="物理">物理</option>
+                  <option value="化学">化学</option>
+                  <option value="生物">生物</option>
+                  <option value="语言">语言</option>
+                  <option value="人文">人文</option>
+                  <option value="艺术">艺术</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+              <div>
+                <label for="course-difficulty" class="block text-sm font-medium text-gray-700">难度级别</label>
+                <select 
+                  id="course-difficulty" 
+                  v-model="newCourse.difficulty" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="beginner">初级</option>
+                  <option value="intermediate">中级</option>
+                  <option value="advanced">高级</option>
+                </select>
+              </div>
+              <div class="flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="course-public" 
+                  v-model="newCourse.is_public" 
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label for="course-public" class="ml-2 block text-sm text-gray-900">公开课程</label>
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end space-x-3">
+              <button 
+                type="button" 
+                @click="showAddCourseModal = false" 
+                class="btn btn-outline"
+              >
+                取消
+              </button>
+              <button type="submit" class="btn btn-primary">
+                创建
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -362,11 +521,26 @@ const pageSize = ref(10);
 const totalUsers = ref(0);
 const loading = ref(false);
 const showAddUserModal = ref(false);
+const newUser = ref({
+  username: '',
+  email: '',
+  full_name: '',
+  role: 'student',
+  is_active: true
+});
 
 // 课程管理
 const courses = ref<Course[]>([]);
 const courseSearchQuery = ref('');
 const courseLoading = ref(false);
+const showAddCourseModal = ref(false);
+const newCourse = ref({
+  name: '',
+  description: '',
+  category: '计算机科学',
+  difficulty: 'beginner',
+  is_public: true
+});
 
 // 系统设置
 const settings = ref({
@@ -553,6 +727,98 @@ const deleteUser = async (user: User) => {
       console.error('删除用户失败:', error);
       alert('删除用户失败，请重试');
     }
+  }
+};
+
+const createUser = async () => {
+  try {
+    if (!newUser.value.username || !newUser.value.email) {
+      alert('用户名和邮箱为必填项');
+      return;
+    }
+    
+    await userAPI.createUser(newUser.value);
+    alert('用户创建成功');
+    
+    // 重置表单
+    newUser.value = {
+      username: '',
+      email: '',
+      full_name: '',
+      role: 'student',
+      is_active: true
+    };
+    
+    // 关闭模态框
+    showAddUserModal.value = false;
+    
+    // 重新加载用户列表
+    loadUsers();
+  } catch (error) {
+    console.error('创建用户失败:', error);
+    alert('创建用户失败，请重试');
+  }
+};
+
+const editCourse = async (course: Course) => {
+  // 实现编辑课程的逻辑
+  console.log('编辑课程', course);
+  // 这里可以打开一个编辑课程的模态框
+  const newName = prompt('请输入新的课程名称', course.name);
+  if (newName && newName !== course.name) {
+    try {
+      await courseAPI.updateCourse(course.id, { ...course, name: newName });
+      alert('课程更新成功');
+      // 重新加载课程列表
+      loadCourses();
+    } catch (error) {
+      console.error('更新课程失败:', error);
+      alert('更新课程失败，请重试');
+    }
+  }
+};
+
+const deleteCourse = async (course: Course) => {
+  if (confirm(`确定要删除课程 "${course.name}" 吗？`)) {
+    try {
+      await courseAPI.deleteCourse(course.id);
+      alert('课程删除成功');
+      // 重新加载课程列表
+      loadCourses();
+    } catch (error) {
+      console.error('删除课程失败:', error);
+      alert('删除课程失败，请重试');
+    }
+  }
+};
+
+const createCourse = async () => {
+  try {
+    if (!newCourse.value.name || !newCourse.value.description) {
+      alert('课程名称和描述为必填项');
+      return;
+    }
+    
+    await courseAPI.createCourse(newCourse.value);
+    alert('课程创建成功');
+    
+    // 重置表单
+    newCourse.value = {
+      name: '',
+      description: '',
+      category: '计算机科学',
+      difficulty: 'beginner',
+      is_public: true
+    };
+    
+    // 关闭模态框
+    showAddCourseModal.value = false;
+    
+    // 重新加载课程列表
+    loadCourses();
+  } catch (error) {
+    console.error('创建课程失败:', error);
+    alert('创建课程失败，请重试');
   }
 };
 

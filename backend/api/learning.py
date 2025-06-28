@@ -132,7 +132,7 @@ course_chapters = {
 
 # 课程路由
 @learning_bp.route('/courses', methods=['GET'])
-@jwt_required()
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_courses():
     # 获取查询参数
     page = request.args.get('page', 1, type=int)
@@ -161,7 +161,7 @@ def get_courses():
     })
 
 @learning_bp.route('/courses/<int:course_id>', methods=['GET'])
-@jwt_required()
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_course(course_id):
     # 查找课程
     course = next((c for c in courses if c['id'] == course_id), None)
@@ -175,7 +175,7 @@ def get_course(course_id):
     return jsonify(course_data)
 
 @learning_bp.route('/courses', methods=['POST'])
-@jwt_required()
+# @jwt_required()  # 暂时禁用JWT认证要求
 def create_course():
     data = request.json
     if not data:
@@ -188,7 +188,8 @@ def create_course():
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
     # 创建新课程
-    user_id = get_jwt_identity()
+    # user_id = get_jwt_identity()  # 暂时注释掉
+    user_id = 1  # 使用默认ID
     new_course = {
         'id': len(courses) + 1,
         'name': data['name'],
@@ -209,10 +210,63 @@ def create_course():
     
     return jsonify(new_course), 201
 
+@learning_bp.route('/courses/<int:course_id>', methods=['PUT'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def update_course(course_id):
+    # 查找课程
+    course_index = next((i for i, c in enumerate(courses) if c['id'] == course_id), None)
+    if course_index is None:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取数据
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    # 检查权限 - 暂时注释掉
+    # user_id = get_jwt_identity()
+    # claims = get_jwt()
+    # role = claims.get('role')
+    
+    # if role != 'admin' and courses[course_index]['teacher_id'] != user_id:
+    #     return jsonify({'error': 'Permission denied'}), 403
+    
+    # 更新课程信息
+    for key in ['name', 'description', 'category', 'difficulty', 'is_public']:
+        if key in data:
+            courses[course_index][key] = data[key]
+    
+    # 更新时间戳
+    courses[course_index]['updated_at'] = datetime.utcnow().isoformat()
+    
+    return jsonify(courses[course_index])
+
+@learning_bp.route('/courses/<int:course_id>', methods=['DELETE'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def delete_course(course_id):
+    # 查找课程
+    course_index = next((i for i, c in enumerate(courses) if c['id'] == course_id), None)
+    if course_index is None:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 检查权限 - 暂时注释掉
+    # user_id = get_jwt_identity()
+    # claims = get_jwt()
+    # role = claims.get('role')
+    
+    # if role != 'admin' and courses[course_index]['teacher_id'] != user_id:
+    #     return jsonify({'error': 'Permission denied'}), 403
+    
+    # 删除课程
+    deleted_course = courses.pop(course_index)
+    
+    return jsonify({'message': 'Course deleted successfully', 'course': deleted_course})
+
 @learning_bp.route('/my-courses', methods=['GET'])
-@jwt_required()
+# @jwt_required()  # 暂时禁用JWT认证要求
 def get_my_courses():
-    user_id = get_jwt_identity()
+    # user_id = get_jwt_identity()  # 暂时注释掉
+    user_id = 1  # 使用默认ID
     
     # 模拟获取用户的课程
     # 在实际应用中，这应该从数据库查询

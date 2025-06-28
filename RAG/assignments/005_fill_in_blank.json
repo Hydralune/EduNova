@@ -1,0 +1,37 @@
+{
+  "type": "fill_in_blank",
+  "description": "填空题：请在横线上填写正确的内容。",
+  "score_per_question": 4,
+  "questions": [
+    {
+      "id": 1,
+      "stem": "TensorFlow Lite的解释执行器在内存规划方面采用的是_____, 这样可以避免运行时的动态内存分配。",
+      "answer": "静态内存分配",
+      "explanation": "TensorFlow Lite的解释执行器在运行模型时，每个算子会执行prepare函数并分配一个单一的内存块，以便提高内存效率。"
+    },
+    {
+      "id": 2,
+      "stem": "TensorFlow Lite支持库中的getTopKProbability（..）方法用于从_____, 提取前几名最可能的标签。",
+      "answer": "labeledProbability",
+      "explanation": "labeledProbability是将每个类别映射到其概率的对象，getTopKProbability方法通过解析该对象来提取最可能的标签。"
+    },
+    {
+      "id": 3,
+      "stem": "在使用TensorFlow Lite模型进行推理之前，通常需要对输入数据进行处理，例如调整图像大小或更改图像格式，以完成_____, 的过程。",
+      "answer": "数据转换",
+      "explanation": "由于模型的输入格式可能与原始数据不一致，因此需要对数据进行转换，以确保模型能够正确运行。"
+    },
+    {
+      "id": 4,
+      "stem": "TensorFlow Lite模型文件使用的数据格式是_____,，这是一种高效的二进制序列化格式。",
+      "answer": "FlatBuffers",
+      "explanation": "FlatBuffers是一种高效的二进制序列化格式，用于存储TensorFlow Lite模型文件。"
+    },
+    {
+      "id": 5,
+      "stem": "在TensorFlow Lite的执行过程中，算子之间没有_____,，但算子内部可以多线程执行以提高效率。",
+      "answer": "并行执行",
+      "explanation": "TensorFlow Lite的快速启动特性意味着算子之间没有并行执行，但算子内部可使用多线程执行提高效率。"
+    }
+  ]
+}

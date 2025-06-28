@@ -34,7 +34,7 @@ cors.init_app(app, resources={r"/*": {
 @app.route('/<path:path>', methods=['OPTIONS'])
 def options_handler(path):
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
@@ -75,11 +75,88 @@ app.register_blueprint(auth_bp, url_prefix='/api/auth')
 def health_check():
     return jsonify({'status': 'ok', 'message': '教育管理系统后端运行正常'})
 
-# Create database tables
-# For Flask 2.0+, use app context instead of before_first_request
+# Create database tables and initialize with sample data
 def create_tables():
     with app.app_context():
+        # 创建数据库表
         db.create_all()
+        
+        # 如果没有管理员账户，创建默认用户
+        admin = User.query.filter_by(username='admin').first()
+        if not admin:
+            print("创建默认用户...")
+            # 创建管理员
+            admin = User(
+                username='admin',
+                email='admin@example.com',
+                full_name='系统管理员',
+                role='admin',
+                is_active=True
+            )
+            admin.set_password('admin123')
+            db.session.add(admin)
+            
+            # 创建教师
+            teacher = User(
+                username='teacher',
+                email='teacher@example.com',
+                full_name='示例教师',
+                role='teacher',
+                is_active=True
+            )
+            teacher.set_password('teacher123')
+            db.session.add(teacher)
+            
+            # 创建学生
+            student = User(
+                username='student',
+                email='student@example.com',
+                full_name='示例学生',
+                role='student',
+                is_active=True
+            )
+            student.set_password('student123')
+            db.session.add(student)
+            
+            db.session.commit()
+            print("默认用户创建成功！")
+        
+        # 如果没有课程，创建示例课程
+        if Course.query.count() == 0:
+            print("创建示例课程...")
+            # 创建示例课程
+            course1 = Course(
+                name="Python编程基础",
+                description="学习Python编程的基本概念和语法",
+                category="计算机科学",
+                difficulty="beginner",
+                teacher_id=2,  # 教师ID
+                is_public=True
+            )
+            db.session.add(course1)
+            
+            course2 = Course(
+                name="数据结构与算法",
+                description="掌握常见数据结构和算法",
+                category="计算机科学",
+                difficulty="intermediate",
+                teacher_id=2,
+                is_public=True
+            )
+            db.session.add(course2)
+            
+            course3 = Course(
+                name="机器学习入门",
+                description="了解机器学习的基本原理和应用",
+                category="人工智能",
+                difficulty="advanced",
+                teacher_id=2,
+                is_public=True
+            )
+            db.session.add(course3)
+            
+            db.session.commit()
+            print("示例课程创建成功！")
 
 if __name__ == '__main__':
     create_tables()

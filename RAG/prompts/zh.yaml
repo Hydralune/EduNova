@@ -1,0 +1,88 @@
+# prompts/zh.yml  ---------------------------------------------
+
+# ──── 考试多选题模板 ────
+multiple_choice: |
+  你是一名专业的考试命题老师，请基于以下材料为学生设计 {num_questions} 道选择题。
+  选项应该有干扰性且合理，难度适中。以 **JSON** 输出，字段说明：
+    { "questions": [
+      { 
+        "id": <int>,
+        "stem": <str>,          # 题干
+        "options": ["A. ...","B. ...","C. ...","D. ..."],
+        "answer": <str>,        # 正确选项，如 "A" 或 "B"
+        "explanation": <str>    # 解析
+      }
+    ] }
+  
+  仅返回上述JSON格式内容，不要输出任何额外内容，不要添加额外字段，确保JSON格式的规范性和完整性。
+  ----
+  {context}
+
+# ──── 考试填空题模板 ────
+fill_in_blank: |
+  你是一名专业的考试命题老师，请基于以下材料为学生设计 {num_questions} 道填空题。
+  填空题应该针对重要概念、关键术语或核心公式，难度适中。以 **JSON** 输出，字段说明：
+    { "questions": [
+      {
+        "id": <int>,
+        "stem": <str>,          # 题干，使用 "_____" 表示空白处
+        "answer": <str>,        # 正确答案
+        "explanation": <str>    # 解析
+      }
+    ] }
+  
+  仅返回上述JSON格式内容，不要输出任何额外内容，不要添加额外字段，确保JSON格式的规范性和完整性。
+  ----
+  {context}
+
+# ──── 考试大题/论述题模板 ────
+essay_questions: |
+  你是一名专业的考试命题老师，请基于以下材料为学生设计 {num_questions} 道论述题/分析题/计算题。
+  题目应该能全面考查学生对关键知识点的掌握和应用能力，难度适中且有深度。以 **JSON** 输出，字段说明：
+    { "questions": [
+      {
+        "id": <int>,
+        "stem": <str>,          # 题干
+        "reference_answer": <str>, # 参考答案
+        "grading_criteria": <str> # 评分标准
+      }
+    ] }
+  
+  仅返回上述JSON格式内容，不要输出任何额外内容，不要添加额外字段，确保JSON格式的规范性和完整性。
+  ----
+  {context}
+
+# ──── 完整考试模板 ────
+complete_exam: |
+  你是一名专业的考试命题老师，请基于以下材料为 **{course_name}** 设计一份完整考试，包含选择题、填空题和论述题。
+  以 **JSON** 输出，字段说明：
+    { 
+      "title": <str>,           # 考试标题
+      "course": <str>,          # 课程名称
+      "duration": <str>,        # 考试时长（如 "120分钟"）
+      "total_score": <int>,     # 总分（通常为100分）
+      "sections": [
+        {
+          "type": "multiple_choice", # 题型
+          "description": <str>,      # 题型说明
+          "score_per_question": <int>, # 每题分值
+          "questions": [...]         # 同上述选择题格式
+        },
+        {
+          "type": "fill_in_blank",
+          "description": <str>,
+          "score_per_question": <int>,
+          "questions": [...]
+        },
+        {
+          "type": "essay",
+          "description": <str>,
+          "score_per_question": <int>,
+          "questions": [...]
+        }
+      ]
+    }
+  
+  仅返回上述JSON格式内容，不要输出任何额外内容，不要添加额外字段，确保JSON格式的规范性和完整性。
+  ----
+  {context}
