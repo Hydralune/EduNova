@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Avatar Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+        }
+        .login-form {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f0f8ff;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px;
+            width: 100%;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Avatar Upload</h1>
+    
+    <div class="login-form">
+        <h3>登录获取新令牌</h3>
+        <div class="form-group">
+            <label for="username">用户名:</label>
+            <input type="text" id="username" placeholder="输入用户名">
+        </div>
+        <div class="form-group">
+            <label for="password">密码:</label>
+            <input type="password" id="password" placeholder="输入密码">
+        </div>
+        <button id="loginBtn">登录获取令牌</button>
+    </div>
+    
+    <div class="form-group">
+        <label for="token">JWT Token:</label>
+        <input type="text" id="token" style="width: 100%;" placeholder="Paste your JWT token here">
+    </div>
+    
+    <div class="form-group">
+        <label for="avatar">Select Avatar:</label>
+        <input type="file" id="avatar" accept="image/*">
+    </div>
+    
+    <div class="form-group">
+        <button id="uploadBtn">Upload Avatar</button>
+        <button id="testUploadBtn">Test Upload (No Auth)</button>
+        <button id="checkTokenBtn">Check Token</button>
+    </div>
+    
+    <div id="result">
+        <p>Results will appear here...</p>
+    </div>
+    
+    <div class="debug-info">
+        <h3>调试信息</h3>
+        <p>1. 确保你已经登录并复制了正确的JWT令牌</p>
+        <p>2. 如果上传失败，请检查控制台日志</p>
+        <p>3. 测试上传按钮使用不需要认证的测试端点</p>
+        <p>4. 如果令牌验证失败，请使用登录表单获取新令牌</p>
+    </div>
+    
+    <script>
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            const tokenInput = document.getElementById('token');
+            
+            if (!username || !password) {
+                resultDiv.innerHTML = '<p style="color: red;">请输入用户名和密码</p>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<p>登录中...</p>';
+                
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">登录成功!</p>
+                        <p>用户: ${data.user.username}</p>
+                        <p>角色: ${data.user.role}</p>
+                    `;
+                    tokenInput.value = data.token;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p style="color: red;">登录失败: ${data.error || '未知错误'}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                resultDiv.innerHTML = `
+                    <p style="color: red;">登录出错</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        });
+        
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const token = document.getElementById('token').value;
+            const fileInput = document.getElementById('avatar');
+            const resultDiv = document.getElementById('result');
+            
+            if (!token) {
+                resultDiv.innerHTML = '<p style="color: red;">Please enter a JWT token</p>';
+                return;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            try {
+                resultDiv.innerHTML = '<p>Uploading...</p>';
+                
+                const formData = new FormData();
+                formData.append('avatar', file);
+                
+                // Log the FormData contents
+                console.log('FormData contents:');
+                for (let pair of formData.entries()) {
+                    console.log(pair[0] + ': ' + pair[1]);
+                }
+                
+                console.log('Starting upload with token:', token.substring(0, 10) + '...');
+                
+                const response = await fetch('http://localhost:5001/api/auth/avatar', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">Upload successful!</p>
+                        <p>Message: ${data.message}</p>
+                        <p>Avatar URL: ${data.avatar_url}</p>
+                        <img src="http://localhost:5001${data.avatar_url}" style="max-width: 200px; max-height: 200px;">
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p style="color: red;">Upload failed with status: ${response.status}</p>
+                        <p>Error: ${data.error || 'Unknown error'}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error uploading avatar:', error);
+                resultDiv.innerHTML = `
+                    <p style="color: red;">Error uploading avatar</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        });
+        
+        document.getElementById('testUploadBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('avatar');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file</p>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            try {
+                resultDiv.innerHTML = '<p>Testing upload (no auth)...</p>';
+                
+                const formData = new FormData();
+                formData.append('avatar', file);
+                
+                const response = await fetch('http://localhost:5001/api/auth/test-avatar-upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">Test upload successful!</p>
+                        <p>Message: ${data.message}</p>
+                        <p>Avatar URL: ${data.avatar_url}</p>
+                        <img src="http://localhost:5001${data.avatar_url}" style="max-width: 200px; max-height: 200px;">
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p style="color: red;">Test upload failed with status: ${response.status}</p>
+                        <p>Error: ${data.error || 'Unknown error'}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error in test upload:', error);
+                resultDiv.innerHTML = `
+                    <p style="color: red;">Error in test upload</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        });
+        
+        document.getElementById('checkTokenBtn').addEventListener('click', async () => {
+            const token = document.getElementById('token').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!token) {
+                resultDiv.innerHTML = '<p style="color: red;">Please enter a JWT token</p>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<p>Checking token...</p>';
+                
+                const response = await fetch('http://localhost:5001/api/auth/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">Token is valid!</p>
+                        <p>User: ${data.user.username}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p style="color: red;">Token is invalid with status: ${response.status}</p>
+                        <p>Error: ${data.error || 'Unknown error'}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error checking token:', error);
+                resultDiv.innerHTML = `
+                    <p style="color: red;">Error checking token</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html> 

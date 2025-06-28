@@ -55,7 +55,52 @@ export const authAPI = {
   
   getProfile: () => api.get('/auth/profile'),
   
-  updateProfile: (data: any) => api.put('/auth/profile', data),
+  updateProfile: (data: any) => {
+    console.log('调用updateProfile API，数据类型:', typeof data, data instanceof FormData);
+    
+    // 检查是否是FormData类型（包含头像上传）
+    if (data instanceof FormData) {
+      // 使用axios直接发送请求，绕过拦截器的Content-Type设置
+      const token = localStorage.getItem('token');
+      console.log('发送FormData请求');
+      
+      // 发送请求
+      return fetch('http://localhost:5001/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+          // 注意：不要设置 Content-Type，让浏览器自动设置
+        },
+        body: data // 直接使用原始FormData
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(text => {
+            console.error('FormData请求失败:', text);
+            throw new Error(text);
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('FormData请求成功:', data);
+        return data;
+      })
+      .catch(error => {
+        console.error('FormData请求失败:', error);
+        throw error;
+      });
+    }
+    
+    console.log('发送JSON请求');
+    return api.put('/auth/profile', data).then(response => {
+      console.log('JSON请求响应:', response);
+      return response;
+    }).catch(error => {
+      console.error('JSON请求失败:', error);
+      throw error;
+    });
+  },
   
   changePassword: (data: { old_password: string; new_password: string }) =>
     api.post('/auth/change-password', data),

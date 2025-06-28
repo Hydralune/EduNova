@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import json
 from datetime import datetime
@@ -6,7 +6,7 @@ from backend.models.user import User, db
 from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
 
-learning_bp = Blueprint('learning', __name__, url_prefix='/api/learning')
+learning_bp = Blueprint('learning', __name__)
 
 # 检查是否为教师或管理员的辅助函数
 def teacher_or_admin_required():
@@ -130,8 +130,17 @@ course_chapters = {
     ]
 }
 
+# 添加OPTIONS请求处理
+@learning_bp.route('/learning/courses', methods=['OPTIONS'])
+def courses_options():
+    response = make_response()
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 # 课程路由
-@learning_bp.route('/courses', methods=['GET'])
+@learning_bp.route('/learning/courses', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_courses():
     # 获取查询参数
@@ -152,15 +161,23 @@ def get_courses():
     end = start + per_page
     paginated_courses = filtered_courses[start:end]
     
-    return jsonify({
+    # 构建响应
+    response = jsonify({
         'courses': paginated_courses,
         'total': len(filtered_courses),
         'page': page,
         'per_page': per_page,
         'pages': (len(filtered_courses) + per_page - 1) // per_page
     })
+    
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    
+    return response
 
-@learning_bp.route('/courses/<int:course_id>', methods=['GET'])
+@learning_bp.route('/learning/courses/<int:course_id>', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_course(course_id):
     # 查找课程
@@ -174,25 +191,48 @@ def get_course(course_id):
     
     return jsonify(course_data)
 
-@learning_bp.route('/courses', methods=['POST'])
+@learning_bp.route('/learning/courses', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def create_course():
+    print("收到创建课程请求")
+    print("Content-Type:", request.content_type)
+    print("请求数据:", request.get_data())
+    
     # 检查是否是multipart/form-data请求
     if request.content_type and 'multipart/form-data' in request.content_type:
-        data = json.loads(request.form.get('data', '{}'))
+        print("处理multipart/form-data请求")
+        data_str = request.form.get('data', '{}')
+        print("表单数据:", data_str)
+        try:
+            data = json.loads(data_str)
+            print("解析后的JSON数据:", data)
+        except Exception as e:
+            print("JSON解析错误:", str(e))
+            data = {}
         cover_image = request.files.get('cover_image')
+        print("上传的图片:", cover_image.filename if cover_image else None)
     else:
-        data = request.json
+        print("处理JSON请求")
+        try:
+            data = request.json
+            print("JSON数据:", data)
+        except Exception as e:
+            print("JSON解析错误:", str(e))
+            data = None
         cover_image = None
     
     if not data:
-        return jsonify({'error': 'No data provided'}), 400
+        error_response = jsonify({'error': 'No data provided'})
+        error_response.headers.add('Access-Control-Allow-Origin', '*')
+        return error_response, 400
     
     # 验证必要字段
     required_fields = ['name', 'description', 'category', 'difficulty']
     for field in required_fields:
         if field not in data:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
+            error_response = jsonify({'error': f'Missing required field: {field}'})
+            error_response.headers.add('Access-Control-Allow-Origin', '*')
+            return error_response, 400
     
     # 处理图片上传
     cover_image_path = None
@@ -231,10 +271,19 @@ def create_course():
     }
     
     courses.append(new_course)
+    print("课程创建成功:", new_course)
     
-    return jsonify(new_course), 201
+    # 构建响应
+    response = jsonify(new_course)
+    
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    
+    return response, 201
 
-@learning_bp.route('/courses/<int:course_id>', methods=['PUT'])
+@learning_bp.route('/learning/courses/<int:course_id>', methods=['PUT'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def update_course(course_id):
     # 查找课程
@@ -242,8 +291,14 @@ def update_course(course_id):
     if course_index is None:
         return jsonify({'error': 'Course not found'}), 404
     
-    # 获取数据
-    data = request.json
+    # 检查是否是multipart/form-data请求
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        data = json.loads(request.form.get('data', '{}'))
+        cover_image = request.files.get('cover_image')
+    else:
+        data = request.json
+        cover_image = None
+    
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
@@ -255,8 +310,23 @@ def update_course(course_id):
     # if role != 'admin' and courses[course_index]['teacher_id'] != user_id:
     #     return jsonify({'error': 'Permission denied'}), 403
     
+    # 处理图片上传
+    if cover_image:
+        # 确保文件名安全
+        import os
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(cover_image.filename)
+        # 创建上传目录
+        upload_folder = os.path.join(current_app.root_path, 'uploads', 'course_covers')
+        os.makedirs(upload_folder, exist_ok=True)
+        # 保存文件
+        file_path = os.path.join(upload_folder, filename)
+        cover_image.save(file_path)
+        # 设置相对路径用于访问
+        data['cover_image'] = f'/uploads/course_covers/{filename}'
+    
     # 更新课程信息
-    for key in ['name', 'description', 'category', 'difficulty', 'is_public']:
+    for key in ['name', 'description', 'category', 'difficulty', 'is_public', 'cover_image']:
         if key in data:
             courses[course_index][key] = data[key]
     
@@ -265,7 +335,7 @@ def update_course(course_id):
     
     return jsonify(courses[course_index])
 
-@learning_bp.route('/courses/<int:course_id>', methods=['DELETE'])
+@learning_bp.route('/learning/courses/<int:course_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def delete_course(course_id):
     # 查找课程

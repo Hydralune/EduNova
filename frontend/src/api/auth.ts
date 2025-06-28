@@ -70,12 +70,9 @@ export const register = async (userData: any) => {
 /**
  * 获取用户资料
  */
-export const fetchUserProfile = async (token: string): Promise<User> => {
+export const fetchUserProfile = async (): Promise<User> => {
   try {
-    const response = await api.get('/users/profile', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    // The backend returns the user object directly
+    const response = await api.get('/auth/profile')
     return response as unknown as User
   } catch (error) {
     throw error
@@ -85,11 +82,9 @@ export const fetchUserProfile = async (token: string): Promise<User> => {
 /**
  * 更新用户资料
  */
-export const updateUserProfile = async (token: string, userData: any) => {
+export const updateUserProfile = async (userData: any) => {
   try {
-    const response = await api.put('/users/profile', userData, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const response = await api.put('/auth/profile', userData)
     return response
   } catch (error) {
     throw error
@@ -99,12 +94,9 @@ export const updateUserProfile = async (token: string, userData: any) => {
 /**
  * 修改密码
  */
-export const changeUserPassword = async (token: string, oldPassword: string, newPassword: string) => {
+export const changeUserPassword = async (data: { old_password: string; new_password: string }) => {
   try {
-    const response = await api.post('/users/change-password', 
-      { old_password: oldPassword, new_password: newPassword },
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
+    const response = await api.post('/auth/change-password', data)
     return response
   } catch (error) {
     throw error

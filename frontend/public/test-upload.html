@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>头像上传测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .preview {
+            width: 200px;
+            height: 200px;
+            border: 1px dashed #ccc;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .preview img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            display: none;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>头像上传测试</h1>
+    
+    <div class="container">
+        <h2>测试1: 直接上传文件</h2>
+        <form id="uploadForm">
+            <div>
+                <label for="avatarFile">选择头像文件:</label>
+                <input type="file" id="avatarFile" name="avatar" accept="image/*">
+            </div>
+            
+            <div class="preview" id="imagePreview">
+                <span>预览区域</span>
+            </div>
+            
+            <button type="button" id="uploadButton">上传头像</button>
+        </form>
+        
+        <div class="result" id="uploadResult"></div>
+    </div>
+    
+    <script>
+        // 预览图片
+        document.getElementById('avatarFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = document.createElement('img');
+                img.src = event.target.result;
+                
+                const preview = document.getElementById('imagePreview');
+                preview.innerHTML = '';
+                preview.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // 上传头像
+        document.getElementById('uploadButton').addEventListener('click', async function() {
+            const fileInput = document.getElementById('avatarFile');
+            const resultDiv = document.getElementById('uploadResult');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.textContent = '请先选择文件';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('avatar', file);
+            
+            try {
+                resultDiv.textContent = '上传中...';
+                resultDiv.style.display = 'block';
+                
+                const response = await fetch('http://localhost:5001/api/auth/test-avatar-upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent = '上传成功!\n' + JSON.stringify(result, null, 2);
+                } else {
+                    resultDiv.textContent = '上传失败:\n' + JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                resultDiv.textContent = '上传出错:\n' + error.message;
+            }
+        });
+    </script>
+</body>
+</html> 

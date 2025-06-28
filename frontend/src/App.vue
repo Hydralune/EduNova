@@ -30,12 +30,20 @@
                     @click="showUserMenu = !showUserMenu"
                     class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
-                    <div class="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center">
-                      <span class="text-white text-sm font-medium">
-                        {{ authStore.user?.full_name?.charAt(0) || 'U' }}
-                      </span>
+                    <div class="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center">
+                      <img 
+                        v-if="authStore.user?.avatar_url" 
+                        :src="`http://localhost:5001${authStore.user.avatar_url}`" 
+                        alt="用户头像" 
+                        class="h-full w-full object-cover"
+                      />
+                      <div v-else class="h-full w-full bg-primary-600 flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">
+                          {{ authStore.user?.full_name?.charAt(0) || authStore.user?.username?.charAt(0) || 'U' }}
+                        </span>
+                      </div>
                     </div>
-                    <span class="ml-2 text-gray-700">{{ authStore.user?.full_name }}</span>
+                    <span class="ml-2 text-gray-700">{{ authStore.user?.full_name || authStore.user?.username }}</span>
                   </button>
 
                   <!-- 下拉菜单 -->

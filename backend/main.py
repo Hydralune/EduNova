@@ -3,7 +3,7 @@ import sys
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory
 from backend.extensions import db, jwt, cors
 from flask_cors import CORS
 
@@ -11,20 +11,29 @@ from flask_cors import CORS
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
+# 确保数据库目录存在
+db_dir = os.path.join(os.path.dirname(__file__), 'database')
+os.makedirs(db_dir, exist_ok=True)
+db_path = os.path.join(db_dir, 'eduNova.sqlite')
+
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# 文件上传配置
+app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制上传文件大小为16MB
+
 # JWT配置
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600  # 令牌过期时间1小时
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 604800  # 刷新令牌过期时间7天
 
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 # Initialize extensions with app
 db.init_app(app)
 jwt.init_app(app)
 cors.init_app(app, resources={r"/*": {
-    "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
     "supports_credentials": True,
     "allow_headers": ["Content-Type", "Authorization"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -42,13 +51,11 @@ def options_handler(path):
     return response
 
 # Create upload directory
-upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads')
-os.makedirs(upload_dir, exist_ok=True)
-os.makedirs(os.path.join(upload_dir, 'materials'), exist_ok=True)
-
-# Create database directory
-db_dir = os.path.join(os.path.dirname(__file__), 'database')
-os.makedirs(db_dir, exist_ok=True)
+uploads_folder = os.path.join(app.root_path, 'uploads')
+os.makedirs(uploads_folder, exist_ok=True)
+# 创建头像上传目录
+avatars_folder = os.path.join(uploads_folder, 'avatars')
+os.makedirs(avatars_folder, exist_ok=True)
 
 # Import models - Fix import order to prevent circular imports
 from backend.models.user import User
@@ -67,7 +74,7 @@ from backend.api.auth import auth_bp
 # Register blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
-app.register_blueprint(learning_bp)  # url_prefix already defined in blueprint
+app.register_blueprint(learning_bp, url_prefix='/api')  # Make sure prefix matches with frontend API calls
 app.register_blueprint(rag_ai_bp, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
@@ -162,7 +169,18 @@ def create_tables():
 # 配置静态文件路由
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    return app.send_static_file(os.path.join('uploads', filename))
+    print(f"请求上传文件: {filename}")
+    return send_from_directory(os.path.join(app.root_path, 'uploads'), filename)
+
+# 配置头像访问路由
+@app.route('/uploads/avatars/<path:filename>')
+def avatar_file(filename):
+    print(f"请求头像文件: {filename}")
+    try:
+        return send_from_directory(os.path.join(app.root_path, 'uploads', 'avatars'), filename)
+    except Exception as e:
+        print(f"访问头像文件失败: {str(e)}")
+        return jsonify({"error": f"Failed to access avatar: {str(e)}"}), 404
 
 if __name__ == '__main__':
     create_tables()

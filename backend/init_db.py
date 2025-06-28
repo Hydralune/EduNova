@@ -3,113 +3,105 @@ import sys
 # Add the parent directory to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash
-from datetime import datetime
-
-# Initialize Flask app
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-
-# Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Initialize SQLAlchemy
-db = SQLAlchemy(app)
-
-# Import models after initializing db
-from backend.models.user import User
-from backend.models.course import Course
+from backend.main import app, db
 
 def init_db():
-    """Initialize the database with sample data"""
+    """初始化数据库，删除旧数据库并创建新的"""
     with app.app_context():
-        # Create tables
+        # 删除数据库文件
+        db_dir = os.path.join(os.path.dirname(__file__), 'database')
+        db_path = os.path.join(db_dir, 'eduNova.sqlite')
+        if os.path.exists(db_path):
+            print(f"删除旧数据库文件: {db_path}")
+            os.remove(db_path)
+        else:
+            print(f"数据库文件不存在: {db_path}")
+            # 确保数据库目录存在
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # 创建新的数据库表
+        print("创建新的数据库表...")
         db.create_all()
         
-        print("Creating sample users...")
-        # Check if admin exists
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
-            # Create admin user
-            admin = User(
-                username='admin',
-                email='admin@example.com',
-                full_name='System Administrator',
-                role='admin',
-                is_active=True
-            )
-            admin.set_password('admin123')
-            db.session.add(admin)
-            
-            # Create teacher user
-            teacher = User(
-                username='teacher',
-                email='teacher@example.com',
-                full_name='Sample Teacher',
-                role='teacher',
-                is_active=True
-            )
-            teacher.set_password('teacher123')
-            db.session.add(teacher)
-            
-            # Create student user
-            student = User(
-                username='student',
-                email='student@example.com',
-                full_name='Sample Student',
-                role='student',
-                is_active=True
-            )
-            student.set_password('student123')
-            db.session.add(student)
-            
-            db.session.commit()
-            print("Sample users created successfully.")
-        else:
-            print("Admin user already exists, skipping user creation.")
+        # 初始化示例数据
+        from backend.models.user import User
         
-        print("Creating sample courses...")
-        # Check if courses exist
-        if Course.query.count() == 0:
-            # Create sample courses
-            course1 = Course(
-                name="Python Programming",
-                description="Learn Python programming from scratch",
-                category="Programming",
-                difficulty="beginner",
-                teacher_id=2,  # Teacher's ID
-                is_public=True
-            )
-            db.session.add(course1)
-            
-            course2 = Course(
-                name="Machine Learning Basics",
-                description="Introduction to machine learning concepts",
-                category="Data Science",
-                difficulty="intermediate",
-                teacher_id=2,  # Teacher's ID
-                is_public=True
-            )
-            db.session.add(course2)
-            
-            course3 = Course(
-                name="Web Development",
-                description="Learn HTML, CSS, and JavaScript",
-                category="Web",
-                difficulty="beginner",
-                teacher_id=2,  # Teacher's ID
-                is_public=True
-            )
-            db.session.add(course3)
-            
-            db.session.commit()
-            print("Sample courses created successfully.")
-        else:
-            print("Courses already exist, skipping course creation.")
+        print("创建默认用户...")
+        # 创建管理员
+        admin = User(
+            username='admin',
+            email='admin@example.com',
+            full_name='系统管理员',
+            role='admin',
+            is_active=True
+        )
+        admin.set_password('admin123')
+        db.session.add(admin)
+        
+        # 创建教师
+        teacher = User(
+            username='teacher',
+            email='teacher@example.com',
+            full_name='示例教师',
+            role='teacher',
+            is_active=True
+        )
+        teacher.set_password('teacher123')
+        db.session.add(teacher)
+        
+        # 创建学生
+        student = User(
+            username='student',
+            email='student@example.com',
+            full_name='示例学生',
+            role='student',
+            is_active=True
+        )
+        student.set_password('student123')
+        db.session.add(student)
+        
+        db.session.commit()
+        print("默认用户创建成功！")
+        
+        # 创建示例课程
+        from backend.models.course import Course
+        
+        print("创建示例课程...")
+        # 创建示例课程
+        course1 = Course(
+            name="Python编程基础",
+            description="学习Python编程的基本概念和语法",
+            category="计算机科学",
+            difficulty="beginner",
+            teacher_id=2,  # 教师ID
+            is_public=True
+        )
+        db.session.add(course1)
+        
+        course2 = Course(
+            name="数据结构与算法",
+            description="掌握常见数据结构和算法",
+            category="计算机科学",
+            difficulty="intermediate",
+            teacher_id=2,
+            is_public=True
+        )
+        db.session.add(course2)
+        
+        course3 = Course(
+            name="机器学习入门",
+            description="了解机器学习的基本原理和应用",
+            category="人工智能",
+            difficulty="advanced",
+            teacher_id=2,
+            is_public=True
+        )
+        db.session.add(course3)
+        
+        db.session.commit()
+        print("示例课程创建成功！")
+        
+        print("数据库初始化完成!")
 
 if __name__ == "__main__":
-    init_db()
-    print("Database initialized successfully!") 
+    init_db() 

@@ -3,8 +3,8 @@
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold">课程列表</h2>
       <button 
-        v-if="userRole === 'teacher' || userRole === 'admin'"
-        @click="showCreateModal = true" 
+        v-if="userRole === 'teacher' || userRole === 'admin' || true"
+        @click="openCreateModal()" 
         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
       >
         创建课程
@@ -52,7 +52,12 @@
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div v-for="course in courses" :key="course.id" class="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-        <div class="h-40 bg-gray-200"></div>
+        <div class="h-40 bg-gray-200 relative">
+          <img v-if="course.cover_image" :src="`http://localhost:5001${course.cover_image}`" alt="课程封面" class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600">
+            <h3 class="text-xl font-bold text-white">{{ course.name }}</h3>
+          </div>
+        </div>
         <div class="p-4">
           <div class="flex justify-between items-start">
             <h3 class="text-lg font-semibold">{{ course.name }}</h3>
@@ -63,7 +68,13 @@
           <p class="text-gray-600 text-sm mt-2 line-clamp-2">{{ course.description }}</p>
           <div class="mt-4 flex justify-between items-center">
             <span class="text-sm text-gray-500">{{ course.teacher_name }}</span>
-            <router-link :to="`/course/${course.id}`" class="text-blue-600 hover:text-blue-800">查看详情</router-link>
+            <div class="flex space-x-2">
+              <router-link :to="`/course/${course.id}`" class="text-blue-600 hover:text-blue-800">查看详情</router-link>
+              <div v-if="userRole === 'teacher' || userRole === 'admin'" class="flex space-x-2">
+                <button @click="openEditModal(course)" class="text-green-600 hover:text-green-800">编辑</button>
+                <button @click="confirmDeleteCourse(course)" class="text-red-600 hover:text-red-800">删除</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -91,31 +102,32 @@
       </nav>
     </div>
 
-    <!-- 创建课程模态框 -->
+    <!-- 创建/编辑课程模态框 -->
     <div v-if="showCreateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 w-full max-w-lg">
-        <h3 class="text-xl font-bold mb-4">创建新课程</h3>
-        <form @submit.prevent="createCourse">
+        <h3 class="text-xl font-bold mb-4">{{ isEditing ? '编辑课程' : '创建新课程' }}</h3>
+        <form @submit.prevent="saveCourse">
           <div class="mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2">课程名称</label>
+            <label class="block text-gray-700 text-sm font-bold mb-2">课程名称 <span class="text-red-500">*</span></label>
             <input v-model="newCourse.name" type="text" required class="w-full px-3 py-2 border rounded-md" />
           </div>
           <div class="mb-4">
-            <label class="block text-gray-700 text-sm font-bold mb-2">课程描述</label>
+            <label class="block text-gray-700 text-sm font-bold mb-2">课程描述 <span class="text-red-500">*</span></label>
             <textarea v-model="newCourse.description" required class="w-full px-3 py-2 border rounded-md" rows="3"></textarea>
           </div>
           <div class="mb-4 grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-gray-700 text-sm font-bold mb-2">分类</label>
+              <label class="block text-gray-700 text-sm font-bold mb-2">分类 <span class="text-red-500">*</span></label>
               <select v-model="newCourse.category" required class="w-full px-3 py-2 border rounded-md">
                 <option value="计算机科学">计算机科学</option>
                 <option value="数学">数学</option>
                 <option value="语言">语言</option>
                 <option value="自然科学">自然科学</option>
+                <option value="测试分类">测试分类</option>
               </select>
             </div>
             <div>
-              <label class="block text-gray-700 text-sm font-bold mb-2">难度</label>
+              <label class="block text-gray-700 text-sm font-bold mb-2">难度 <span class="text-red-500">*</span></label>
               <select v-model="newCourse.difficulty" required class="w-full px-3 py-2 border rounded-md">
                 <option value="beginner">初级</option>
                 <option value="intermediate">中级</option>
@@ -123,9 +135,17 @@
               </select>
             </div>
           </div>
+          <div class="mb-4">
+            <div class="flex items-center">
+              <input type="checkbox" id="is-public" v-model="newCourse.is_public" class="mr-2" />
+              <label for="is-public" class="text-gray-700 text-sm font-bold">公开课程</label>
+            </div>
+          </div>
           <div class="flex justify-end gap-2 mt-6">
             <button type="button" @click="showCreateModal = false" class="px-4 py-2 border rounded-md">取消</button>
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md">创建</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md">
+              {{ isEditing ? '保存' : '创建' }}
+            </button>
           </div>
         </form>
       </div>
@@ -136,15 +156,33 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useAuthStore } from '../../stores/auth';
+import { courseAPI } from '../../api';
+
+// 定义Course接口
+interface Course {
+  id: number;
+  name: string;
+  description: string;
+  category?: string;
+  difficulty?: string;
+  teacher_name?: string;
+  student_count?: number;
+  is_public?: boolean;
+  cover_image?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 const authStore = useAuthStore();
 const userRole = computed(() => authStore.user?.role || '');
 
-const courses = ref([]);
+const courses = ref<Course[]>([]);
 const loading = ref(true);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const showCreateModal = ref(false);
+const isEditing = ref(false);
+const currentCourseId = ref<number | null>(null);
 
 const filters = reactive({
   search: '',
@@ -167,59 +205,40 @@ onMounted(async () => {
 async function fetchCourses() {
   loading.value = true;
   try {
-    // 这里应该调用API获取课程列表
-    // const response = await api.getCourses({
-    //   page: currentPage.value,
-    //   per_page: 9,
-    //   search: filters.search,
-    //   category: filters.category,
-    //   difficulty: filters.difficulty
-    // });
+    // 调用API获取课程列表
+    const response = await courseAPI.getCourses({
+      page: currentPage.value,
+      per_page: 9,
+      search: filters.search,
+      category: filters.category,
+      difficulty: filters.difficulty
+    });
     
-    // 模拟API响应
-    setTimeout(() => {
-      courses.value = [
-        {
-          id: 1,
-          name: '人工智能基础',
-          description: '介绍人工智能的基本概念和应用',
-          category: '计算机科学',
-          difficulty: 'beginner',
-          teacher_name: '张教授'
-        },
-        {
-          id: 2,
-          name: '高等数学',
-          description: '微积分和线性代数基础',
-          category: '数学',
-          difficulty: 'intermediate',
-          teacher_name: '李教授'
-        },
-        {
-          id: 3,
-          name: '英语写作',
-          description: '学术英语写作技巧和方法',
-          category: '语言',
-          difficulty: 'advanced',
-          teacher_name: '王教授'
-        }
-      ];
-      totalPages.value = 3;
-      loading.value = false;
-    }, 500);
+    // 处理API响应数据
+    const responseData = response as any; // 类型断言为any以避免TypeScript错误
+    if (responseData && responseData.courses) {
+      courses.value = responseData.courses;
+      totalPages.value = responseData.pages || 1;
+      currentPage.value = responseData.page || 1;
+    } else {
+      console.warn('API返回格式不符合预期:', response);
+      courses.value = [];
+      totalPages.value = 1;
+    }
+    loading.value = false;
   } catch (error) {
     console.error('获取课程失败:', error);
     loading.value = false;
   }
 }
 
-function changePage(page) {
+function changePage(page: number) {
   if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
   fetchCourses();
 }
 
-function difficultyClass(difficulty) {
+function difficultyClass(difficulty: string | undefined) {
   switch (difficulty) {
     case 'beginner': return 'bg-green-100 text-green-800';
     case 'intermediate': return 'bg-yellow-100 text-yellow-800';
@@ -228,7 +247,7 @@ function difficultyClass(difficulty) {
   }
 }
 
-function difficultyText(difficulty) {
+function difficultyText(difficulty: string | undefined) {
   switch (difficulty) {
     case 'beginner': return '初级';
     case 'intermediate': return '中级';
@@ -237,28 +256,91 @@ function difficultyText(difficulty) {
   }
 }
 
-async function createCourse() {
+function openCreateModal() {
+  // 重置表单
+  Object.assign(newCourse, {
+    name: '',
+    description: '',
+    category: '计算机科学',
+    difficulty: 'beginner',
+    is_public: true
+  });
+  isEditing.value = false;
+  currentCourseId.value = null;
+  showCreateModal.value = true;
+}
+
+function openEditModal(course: Course) {
+  // 填充表单数据
+  Object.assign(newCourse, {
+    name: course.name,
+    description: course.description,
+    category: course.category || '计算机科学',
+    difficulty: course.difficulty || 'beginner',
+    is_public: course.is_public !== false
+  });
+  isEditing.value = true;
+  currentCourseId.value = course.id;
+  showCreateModal.value = true;
+}
+
+async function saveCourse() {
   try {
-    // 这里应该调用API创建课程
-    // await api.createCourse(newCourse);
+    // 验证表单
+    if (!newCourse.name || !newCourse.description || !newCourse.category || !newCourse.difficulty) {
+      alert('请填写所有必填字段');
+      return;
+    }
     
-    // 模拟API调用
-    console.log('创建课程:', newCourse);
+    // 准备提交的数据
+    const courseData = {
+      name: newCourse.name,
+      description: newCourse.description,
+      category: newCourse.category,
+      difficulty: newCourse.difficulty,
+      is_public: newCourse.is_public
+    };
     
-    // 重置表单和关闭模态框
-    Object.assign(newCourse, {
-      name: '',
-      description: '',
-      category: '计算机科学',
-      difficulty: 'beginner',
-      is_public: true
-    });
+    console.log('准备提交的课程数据:', courseData);
+    
+    let response;
+    
+    if (isEditing.value && currentCourseId.value) {
+      // 更新现有课程
+      console.log('更新课程:', currentCourseId.value);
+      response = await courseAPI.updateCourse(currentCourseId.value, courseData);
+      console.log('课程更新成功:', response);
+      alert('课程更新成功');
+    } else {
+      // 创建新课程
+      console.log('创建新课程');
+      response = await courseAPI.createCourse(courseData);
+      console.log('课程创建成功:', response);
+      alert('课程创建成功');
+    }
+    
+    // 关闭模态框
     showCreateModal.value = false;
     
-    // 刷新课程列表
+    // 重新加载课程列表
     await fetchCourses();
   } catch (error) {
-    console.error('创建课程失败:', error);
+    console.error(isEditing.value ? '更新课程失败:' : '创建课程失败:', error);
+    alert(isEditing.value ? '更新课程失败，请重试' : '创建课程失败，请重试');
+  }
+}
+
+async function confirmDeleteCourse(course: Course) {
+  if (confirm(`确定要删除课程"${course.name}"吗？此操作不可恢复。`)) {
+    try {
+      await courseAPI.deleteCourse(course.id);
+      alert('课程删除成功');
+      // 重新加载课程列表
+      await fetchCourses();
+    } catch (error) {
+      console.error('删除课程失败:', error);
+      alert('删除课程失败，请重试');
+    }
   }
 }
 </script> 

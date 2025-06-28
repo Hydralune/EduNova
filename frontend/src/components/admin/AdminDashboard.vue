@@ -142,10 +142,11 @@
         <!-- 课程列表 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div v-for="course in filteredCourses" :key="course.id" class="bg-white overflow-hidden shadow rounded-lg border border-gray-200">
-            <div class="h-40 bg-blue-100 flex items-center justify-center">
-              <svg class="h-20 w-20 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+            <div class="h-40 bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center relative">
+              <img v-if="course.cover_image" :src="'http://localhost:5001' + course.cover_image" alt="课程封面" class="h-full w-full object-cover" />
+              <div v-else class="absolute inset-0 flex items-center justify-center bg-opacity-80 bg-gradient-to-r from-blue-500 to-indigo-600">
+                <h3 class="text-xl font-bold text-white text-center px-4">{{ course.name }}</h3>
+              </div>
             </div>
             <div class="px-4 py-4">
               <h3 class="text-lg font-medium text-gray-900">{{ course.name }}</h3>
@@ -395,8 +396,8 @@
     <div v-if="showAddCourseModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg overflow-hidden shadow-xl max-w-md w-full">
         <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">添加课程</h3>
-          <form @submit.prevent="createCourse">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">{{ isEditingCourse ? '编辑课程' : '添加课程' }}</h3>
+          <form @submit.prevent="saveCourse">
             <div class="space-y-4">
               <div>
                 <label for="course-name" class="block text-sm font-medium text-gray-700">课程名称</label>
@@ -417,6 +418,38 @@
                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   required
                 ></textarea>
+              </div>
+              <div>
+                <label for="course-cover" class="block text-sm font-medium text-gray-700">课程封面图片</label>
+                <div class="mt-1 flex items-center">
+                  <div v-if="coverImagePreview" class="relative w-full h-32 mb-2">
+                    <img :src="coverImagePreview" alt="封面预览" class="w-full h-full object-cover rounded-md" />
+                    <button 
+                      type="button" 
+                      @click="removeCoverImage" 
+                      class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                    >
+                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <input 
+                    type="file" 
+                    id="course-cover" 
+                    @change="handleCoverImageChange" 
+                    accept="image/*"
+                    class="hidden"
+                    ref="coverImageInput"
+                  />
+                  <button 
+                    type="button" 
+                    @click="triggerFileInput()" 
+                    class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    {{ coverImagePreview ? '更换图片' : '上传封面图片' }}
+                  </button>
+                </div>
               </div>
               <div>
                 <label for="course-category" class="block text-sm font-medium text-gray-700">课程类别</label>
@@ -461,13 +494,13 @@
             <div class="mt-5 flex justify-end space-x-3">
               <button 
                 type="button" 
-                @click="showAddCourseModal = false" 
+                @click="closeModal" 
                 class="btn btn-outline"
               >
                 取消
               </button>
               <button type="submit" class="btn btn-primary">
-                创建
+                {{ isEditingCourse ? '保存' : '创建' }}
               </button>
             </div>
           </form>
@@ -552,6 +585,8 @@ const newCourse = ref({
   difficulty: 'beginner',
   is_public: true
 });
+const coverImageFile = ref<File | null>(null);
+const coverImagePreview = ref<string | null>(null);
 
 // 系统设置
 const settings = ref({
@@ -565,6 +600,10 @@ const settings = ref({
   aiModel: 'gpt-3.5-turbo',
   apiKey: '********'
 });
+
+// 添加新的状态变量
+const currentEditingCourseId = ref<number | null>(null);
+const isEditingCourse = ref(false);
 
 // 计算属性
 const filteredUsers = computed(() => {
@@ -660,42 +699,24 @@ const loadCourses = async () => {
   courseLoading.value = true;
   try {
     console.log('Fetching courses from API...');
-    const response = await courseAPI.getCourses() as ApiResponse<Course[]>;
+    
+    // 只使用一种API调用方式
+    const response = await courseAPI.getCourses();
     console.log('API response:', response);
-    courses.value = response.courses || [];
+    
+    // 处理API响应数据
+    const responseData = response as any; // 类型断言为any以避免TypeScript错误
+    if (responseData && responseData.courses) {
+      courses.value = responseData.courses;
+      console.log('成功加载课程数据:', courses.value);
+    } else {
+      console.warn('API返回格式不符合预期:', response);
+      courses.value = [];
+    }
   } catch (error) {
     console.error('获取课程列表失败:', error);
-    // 使用模拟数据作为备用
-    console.log('使用模拟数据作为备用');
-    courses.value = [
-      {
-        id: 1,
-        name: 'Python编程基础',
-        description: '学习Python编程的基本概念和语法',
-        category: '计算机科学',
-        difficulty: 'beginner',
-        teacher_id: 2,
-        student_count: 15
-      },
-      {
-        id: 2,
-        name: '数据结构与算法',
-        description: '掌握常见数据结构和算法',
-        category: '计算机科学',
-        difficulty: 'intermediate',
-        teacher_id: 2,
-        student_count: 8
-      },
-      {
-        id: 3,
-        name: '机器学习入门',
-        description: '了解机器学习的基本原理和应用',
-        category: '人工智能',
-        difficulty: 'advanced',
-        teacher_id: 2,
-        student_count: 12
-      }
-    ];
+    courses.value = [];
+    alert('获取课程列表失败，请检查网络连接或联系管理员');
   } finally {
     courseLoading.value = false;
   }
@@ -773,21 +794,29 @@ const createUser = async () => {
 };
 
 const editCourse = async (course: Course) => {
-  // 实现编辑课程的逻辑
-  console.log('编辑课程', course);
-  // 这里可以打开一个编辑课程的模态框
-  const newName = prompt('请输入新的课程名称', course.name);
-  if (newName && newName !== course.name) {
-    try {
-      await courseAPI.updateCourse(course.id, { ...course, name: newName });
-      alert('课程更新成功');
-      // 重新加载课程列表
-      loadCourses();
-    } catch (error) {
-      console.error('更新课程失败:', error);
-      alert('更新课程失败，请重试');
-    }
+  // 将当前课程数据设置到表单中
+  newCourse.value = {
+    name: course.name,
+    description: course.description,
+    category: course.category || '计算机科学',
+    difficulty: course.difficulty || 'beginner',
+    is_public: course.is_public !== false
+  };
+  
+  // 如果有封面图片，设置预览
+  if (course.cover_image) {
+    coverImagePreview.value = 'http://localhost:5001' + course.cover_image;
+  } else {
+    coverImagePreview.value = null;
   }
+  coverImageFile.value = null;
+  
+  // 存储当前编辑的课程ID
+  currentEditingCourseId.value = course.id;
+  
+  // 打开模态框，但使用编辑模式
+  isEditingCourse.value = true;
+  showAddCourseModal.value = true;
 };
 
 const deleteCourse = async (course: Course) => {
@@ -804,15 +833,62 @@ const deleteCourse = async (course: Course) => {
   }
 };
 
-const createCourse = async () => {
+const handleCoverImageChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    coverImageFile.value = target.files[0];
+    coverImagePreview.value = URL.createObjectURL(target.files[0]);
+  }
+};
+
+const removeCoverImage = () => {
+  coverImageFile.value = null;
+  coverImagePreview.value = null;
+  const input = document.getElementById('course-cover') as HTMLInputElement;
+  if (input) {
+    input.value = '';
+  }
+};
+
+const triggerFileInput = () => {
+  const input = document.getElementById('course-cover') as HTMLInputElement;
+  if (input) {
+    input.click();
+  }
+};
+
+const saveCourse = async () => {
+  console.log("saveCourse函数被调用");
   try {
     if (!newCourse.value.name || !newCourse.value.description) {
       alert('课程名称和描述为必填项');
       return;
     }
     
-    await courseAPI.createCourse(newCourse.value);
-    alert('课程创建成功');
+    console.log("准备发送请求，数据:", newCourse.value);
+    console.log("封面图片:", coverImageFile.value);
+    
+    let response: any; // 使用any类型避免TypeScript错误
+    if (isEditingCourse.value && currentEditingCourseId.value) {
+      console.log("更新现有课程, ID:", currentEditingCourseId.value);
+      // 更新现有课程
+      response = await courseAPI.updateCourse(
+        currentEditingCourseId.value, 
+        newCourse.value, 
+        coverImageFile.value || undefined
+      );
+      console.log("课程更新响应:", response);
+      alert('课程更新成功');
+    } else {
+      console.log("创建新课程");
+      // 创建新课程
+      response = await courseAPI.createCourse(
+        newCourse.value, 
+        coverImageFile.value || undefined
+      );
+      console.log("课程创建响应:", response);
+      alert('课程创建成功');
+    }
     
     // 重置表单
     newCourse.value = {
@@ -822,6 +898,10 @@ const createCourse = async () => {
       difficulty: 'beginner',
       is_public: true
     };
+    coverImageFile.value = null;
+    coverImagePreview.value = null;
+    currentEditingCourseId.value = null;
+    isEditingCourse.value = false;
     
     // 关闭模态框
     showAddCourseModal.value = false;
@@ -829,8 +909,8 @@ const createCourse = async () => {
     // 重新加载课程列表
     loadCourses();
   } catch (error) {
-    console.error('创建课程失败:', error);
-    alert('创建课程失败，请重试');
+    console.error('保存课程失败:', error);
+    alert('保存课程失败，请重试');
   }
 };
 
@@ -843,6 +923,23 @@ const saveSettings = async () => {
     console.error('保存设置失败:', error);
     alert('保存设置失败，请重试');
   }
+};
+
+const closeModal = () => {
+  showAddCourseModal.value = false;
+  // 重置编辑状态
+  isEditingCourse.value = false;
+  currentEditingCourseId.value = null;
+  // 重置表单
+  newCourse.value = {
+    name: '',
+    description: '',
+    category: '计算机科学',
+    difficulty: 'beginner',
+    is_public: true
+  };
+  coverImageFile.value = null;
+  coverImagePreview.value = null;
 };
 
 // 监听页码变化，重新加载用户数据
@@ -876,14 +973,38 @@ onMounted(() => {
 
 <style scoped>
 .btn {
-  @apply px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
 .btn-primary {
-  @apply text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
+  color: white;
+  background-color: #2563eb;
+}
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
+.btn-primary:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
 .btn-outline {
-  @apply text-gray-700 bg-white border-gray-300 hover:bg-gray-50 focus:ring-blue-500;
+  color: #374151;
+  background-color: white;
+  border-color: #d1d5db;
+}
+.btn-outline:hover {
+  background-color: #f9fafb;
+}
+.btn-outline:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 </style> 
