@@ -60,345 +60,249 @@ def get_learning_history(student_id):
         'page': page
     }), 200
 
-# 模拟数据
-courses = [
-    {
-        'id': 1,
-        'name': '人工智能基础',
-        'description': '介绍人工智能的基本概念和应用，包括机器学习、深度学习、自然语言处理等内容。本课程适合初学者，不需要特别的数学背景。',
-        'category': '计算机科学',
-        'difficulty': 'beginner',
-        'teacher_id': 1,
-        'teacher_name': '张教授',
-        'student_count': 42,
-        'material_count': 12,
-        'assessment_count': 5,
-        'is_public': True,
-        'created_at': '2025-06-01T10:00:00',
-        'updated_at': '2025-06-15T14:30:00'
-    },
-    {
-        'id': 2,
-        'name': '高等数学',
-        'description': '微积分和线性代数基础，涵盖函数、极限、导数、积分等内容。',
-        'category': '数学',
-        'difficulty': 'intermediate',
-        'teacher_id': 1,
-        'teacher_name': '李教授',
-        'student_count': 35,
-        'material_count': 8,
-        'assessment_count': 4,
-        'is_public': True,
-        'created_at': '2025-05-15T09:00:00',
-        'updated_at': '2025-06-10T11:20:00'
-    },
-    {
-        'id': 3,
-        'name': '英语写作',
-        'description': '学术英语写作技巧和方法，包括论文结构、语法、修辞等内容。',
-        'category': '语言',
-        'difficulty': 'advanced',
-        'teacher_id': 2,
-        'teacher_name': '王教授',
-        'student_count': 28,
-        'material_count': 6,
-        'assessment_count': 3,
-        'is_public': True,
-        'created_at': '2025-05-20T14:00:00',
-        'updated_at': '2025-06-05T16:45:00'
-    }
-]
-
-# 课程章节数据
-course_chapters = {
-    1: [
-        {
-            'title': '第一章：人工智能概述',
-            'duration': 60,
-            'sections': [
-                {'title': '1.1 什么是人工智能', 'duration': 15},
-                {'title': '1.2 人工智能的历史', 'duration': 20},
-                {'title': '1.3 人工智能的应用领域', 'duration': 25}
-            ]
-        },
-        {
-            'title': '第二章：机器学习基础',
-            'duration': 90,
-            'sections': [
-                {'title': '2.1 机器学习概念', 'duration': 20},
-                {'title': '2.2 监督学习', 'duration': 35},
-                {'title': '2.3 无监督学习', 'duration': 35}
-            ]
-        }
-    ]
-}
-
 # 添加OPTIONS请求处理
 @learning_bp.route('/learning/courses', methods=['OPTIONS'])
 def courses_options():
-    response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+    return '', 200
 
-# 课程路由
+# 获取课程列表
 @learning_bp.route('/learning/courses', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_courses():
+    """获取课程列表"""
     # 获取查询参数
+    category = request.args.get('category')
+    difficulty = request.args.get('difficulty')
+    search = request.args.get('search')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
-    category = request.args.get('category')
-    search = request.args.get('search')
     
-    # 过滤课程
-    filtered_courses = courses
+    # 构建查询
+    query = Course.query
+    
+    # 应用过滤条件
     if category:
-        filtered_courses = [c for c in filtered_courses if c['category'] == category]
+        query = query.filter_by(category=category)
+    
+    if difficulty:
+        query = query.filter_by(difficulty=difficulty)
+    
     if search:
-        filtered_courses = [c for c in filtered_courses if search.lower() in c['name'].lower() or search.lower() in c['description'].lower()]
+        search_term = f"%{search}%"
+        query = query.filter(Course.name.ilike(search_term) | Course.description.ilike(search_term))
     
-    # 分页
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_courses = filtered_courses[start:end]
+    # 执行分页查询
+    courses_pagination = query.paginate(page=page, per_page=per_page)
     
-    # 构建响应
-    response = jsonify({
-        'courses': paginated_courses,
-        'total': len(filtered_courses),
-        'page': page,
-        'per_page': per_page,
-        'pages': (len(filtered_courses) + per_page - 1) // per_page
+    # 准备响应数据
+    courses_data = []
+    for course in courses_pagination.items:
+        course_dict = course.to_dict()
+        # 添加额外信息
+        course_dict['material_count'] = Material.query.filter_by(course_id=course.id).count()
+        courses_data.append(course_dict)
+    
+    return jsonify({
+        'courses': courses_data,
+        'total': courses_pagination.total,
+        'pages': courses_pagination.pages,
+        'current_page': page
     })
-    
-    # 添加CORS头
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    
-    return response
 
+# 获取课程详情
 @learning_bp.route('/learning/courses/<int:course_id>', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_course(course_id):
+    """获取课程详情"""
     # 查找课程
-    course = next((c for c in courses if c['id'] == course_id), None)
+    course = Course.query.get(course_id)
     if not course:
         return jsonify({'error': 'Course not found'}), 404
     
-    # 添加章节信息
-    course_data = dict(course)
-    course_data['chapters'] = course_chapters.get(course_id, [])
+    # 获取课程详情
+    course_data = course.to_dict()
+    
+    # 添加额外信息
+    course_data['material_count'] = Material.query.filter_by(course_id=course.id).count()
+    course_data['teacher_name'] = User.query.get(course.teacher_id).full_name if course.teacher_id else None
     
     return jsonify(course_data)
 
+# 创建课程
 @learning_bp.route('/learning/courses', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def create_course():
-    print("收到创建课程请求")
-    print("Content-Type:", request.content_type)
-    print("请求数据:", request.get_data())
-    
-    # 检查是否是multipart/form-data请求
+    """创建新课程"""
+    # 检查是否有表单数据（包含文件上传）或JSON数据
     if request.content_type and 'multipart/form-data' in request.content_type:
-        print("处理multipart/form-data请求")
-        data_str = request.form.get('data', '{}')
-        print("表单数据:", data_str)
+        # 处理表单数据和文件上传
+        if 'data' not in request.form:
+            return jsonify({'error': 'Missing course data'}), 400
+        
         try:
-            data = json.loads(data_str)
-            print("解析后的JSON数据:", data)
-        except Exception as e:
-            print("JSON解析错误:", str(e))
-            data = {}
-        cover_image = request.files.get('cover_image')
-        print("上传的图片:", cover_image.filename if cover_image else None)
+            # 解析JSON字符串
+            data = json.loads(request.form['data'])
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
+        # 处理封面图片
+        cover_image_path = None
+        if 'cover_image' in request.files:
+            file = request.files['cover_image']
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                # 创建课程封面目录
+                upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'courses', 'covers')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # 保存文件
+                file_path = os.path.join(upload_folder, filename)
+                file.save(file_path)
+                
+                # 设置相对路径
+                cover_image_path = f'/uploads/courses/covers/{filename}'
     else:
-        print("处理JSON请求")
-        try:
-            data = request.json
-            print("JSON数据:", data)
-        except Exception as e:
-            print("JSON解析错误:", str(e))
-            data = None
-        cover_image = None
-    
-    if not data:
-        error_response = jsonify({'error': 'No data provided'})
-        error_response.headers.add('Access-Control-Allow-Origin', '*')
-        return error_response, 400
+        # 处理JSON数据
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        cover_image_path = None
     
     # 验证必要字段
-    required_fields = ['name', 'description', 'category', 'difficulty']
-    for field in required_fields:
-        if field not in data:
-            error_response = jsonify({'error': f'Missing required field: {field}'})
-            error_response.headers.add('Access-Control-Allow-Origin', '*')
-            return error_response, 400
+    if 'name' not in data:
+        return jsonify({'error': 'Course name is required'}), 400
     
-    # 处理图片上传
-    cover_image_path = None
-    if cover_image:
-        # 确保文件名安全
-        import os
-        from werkzeug.utils import secure_filename
-        filename = secure_filename(cover_image.filename)
-        # 创建上传目录
-        upload_folder = os.path.join(current_app.root_path, 'uploads', 'course_covers')
-        os.makedirs(upload_folder, exist_ok=True)
-        # 保存文件
-        file_path = os.path.join(upload_folder, filename)
-        cover_image.save(file_path)
-        # 设置相对路径用于访问
-        cover_image_path = f'/uploads/course_covers/{filename}'
+    # 设置教师ID
+    # user_id = get_jwt_identity()  # 暂时注释掉
+    user_id = 2  # 使用默认教师ID
     
     # 创建新课程
-    # user_id = get_jwt_identity()  # 暂时注释掉
-    user_id = 1  # 使用默认ID
-    new_course = {
-        'id': len(courses) + 1,
-        'name': data['name'],
-        'description': data['description'],
-        'category': data['category'],
-        'difficulty': data['difficulty'],
-        'teacher_id': user_id,
-        'teacher_name': '当前教师',  # 实际应用中应该从数据库获取
-        'student_count': 0,
-        'material_count': 0,
-        'assessment_count': 0,
-        'is_public': data.get('is_public', True),
-        'cover_image': cover_image_path,
-        'created_at': datetime.utcnow().isoformat(),
-        'updated_at': datetime.utcnow().isoformat()
-    }
+    new_course = Course(
+        name=data['name'],
+        description=data.get('description', ''),
+        category=data.get('category', ''),
+        difficulty=data.get('difficulty', 'beginner'),
+        is_public=data.get('is_public', True),
+        cover_image=cover_image_path,
+        teacher_id=user_id
+    )
     
-    courses.append(new_course)
-    print("课程创建成功:", new_course)
+    db.session.add(new_course)
+    db.session.commit()
     
-    # 构建响应
-    response = jsonify(new_course)
-    
-    # 添加CORS头
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    
-    return response, 201
+    return jsonify(new_course.to_dict()), 201
 
+# 更新课程
 @learning_bp.route('/learning/courses/<int:course_id>', methods=['PUT'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def update_course(course_id):
+    """更新课程信息"""
     # 查找课程
-    course_index = next((i for i, c in enumerate(courses) if c['id'] == course_id), None)
-    if course_index is None:
+    course = Course.query.get(course_id)
+    if not course:
         return jsonify({'error': 'Course not found'}), 404
     
-    # 检查是否是multipart/form-data请求
-    if request.content_type and 'multipart/form-data' in request.content_type:
-        data = json.loads(request.form.get('data', '{}'))
-        cover_image = request.files.get('cover_image')
-    else:
-        data = request.json
-        cover_image = None
-    
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-    
-    # 检查权限 - 暂时注释掉
+    # 检查权限
     # user_id = get_jwt_identity()
     # claims = get_jwt()
     # role = claims.get('role')
     
-    # if role != 'admin' and courses[course_index]['teacher_id'] != user_id:
+    # if role != 'admin' and course.teacher_id != user_id:
     #     return jsonify({'error': 'Permission denied'}), 403
     
-    # 处理图片上传
-    if cover_image:
-        # 确保文件名安全
-        import os
-        from werkzeug.utils import secure_filename
-        filename = secure_filename(cover_image.filename)
-        # 创建上传目录
-        upload_folder = os.path.join(current_app.root_path, 'uploads', 'course_covers')
-        os.makedirs(upload_folder, exist_ok=True)
-        # 保存文件
-        file_path = os.path.join(upload_folder, filename)
-        cover_image.save(file_path)
-        # 设置相对路径用于访问
-        data['cover_image'] = f'/uploads/course_covers/{filename}'
+    # 检查是否有表单数据（包含文件上传）或JSON数据
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        # 处理表单数据和文件上传
+        if 'data' not in request.form:
+            return jsonify({'error': 'Missing course data'}), 400
+        
+        try:
+            # 解析JSON字符串
+            data = json.loads(request.form['data'])
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
+        # 处理封面图片
+        if 'cover_image' in request.files:
+            file = request.files['cover_image']
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                # 创建课程封面目录
+                upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'courses', 'covers')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # 保存文件
+                file_path = os.path.join(upload_folder, filename)
+                file.save(file_path)
+                
+                # 设置相对路径
+                course.cover_image = f'/uploads/courses/covers/{filename}'
+    else:
+        # 处理JSON数据
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
     
     # 更新课程信息
-    for key in ['name', 'description', 'category', 'difficulty', 'is_public', 'cover_image']:
-        if key in data:
-            courses[course_index][key] = data[key]
+    if 'name' in data:
+        course.name = data['name']
     
-    # 更新时间戳
-    courses[course_index]['updated_at'] = datetime.utcnow().isoformat()
+    if 'description' in data:
+        course.description = data['description']
     
-    return jsonify(courses[course_index])
+    if 'category' in data:
+        course.category = data['category']
+    
+    if 'difficulty' in data:
+        course.difficulty = data['difficulty']
+    
+    if 'is_public' in data:
+        course.is_public = data['is_public']
+    
+    # 保存更改
+    db.session.commit()
+    
+    return jsonify(course.to_dict())
 
+# 删除课程
 @learning_bp.route('/learning/courses/<int:course_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def delete_course(course_id):
+    """删除课程"""
     # 查找课程
-    course_index = next((i for i, c in enumerate(courses) if c['id'] == course_id), None)
-    if course_index is None:
+    course = Course.query.get(course_id)
+    if not course:
         return jsonify({'error': 'Course not found'}), 404
     
-    # 检查权限 - 暂时注释掉
+    # 检查权限
     # user_id = get_jwt_identity()
     # claims = get_jwt()
     # role = claims.get('role')
     
-    # if role != 'admin' and courses[course_index]['teacher_id'] != user_id:
+    # if role != 'admin' and course.teacher_id != user_id:
     #     return jsonify({'error': 'Permission denied'}), 403
     
     # 删除课程
-    deleted_course = courses.pop(course_index)
+    course_data = course.to_dict()
+    db.session.delete(course)
+    db.session.commit()
     
-    return jsonify({'message': 'Course deleted successfully', 'course': deleted_course})
+    return jsonify({'message': 'Course deleted successfully', 'course': course_data})
 
 @learning_bp.route('/my-courses', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_my_courses():
     # user_id = get_jwt_identity()  # 暂时注释掉
-    user_id = 1  # 使用默认ID
+    user_id = 2  # 使用默认ID
     
-    # 模拟获取用户的课程
-    # 在实际应用中，这应该从数据库查询
-    my_courses = [c for c in courses if c['teacher_id'] == user_id]
+    # 查询教师的课程
+    my_courses = Course.query.filter_by(teacher_id=user_id).all()
     
     return jsonify({
-        'courses': my_courses,
+        'courses': [course.to_dict() for course in my_courses],
         'total': len(my_courses)
     })
-
-# 模拟材料数据
-materials_data = {
-    1: [
-        {
-            'id': 1,
-            'title': '第一章PPT',
-            'material_type': 'PowerPoint',
-            'file_path': '/uploads/materials/1/chapter1.pptx',
-            'size': '2.5MB',
-            'course_id': 1,
-            'created_at': '2025-06-01T10:30:00',
-            'updated_at': '2025-06-01T10:30:00'
-        },
-        {
-            'id': 2,
-            'title': '参考资料',
-            'material_type': 'PDF',
-            'file_path': '/uploads/materials/1/reference.pdf',
-            'size': '1.8MB',
-            'course_id': 1,
-            'created_at': '2025-06-02T14:15:00',
-            'updated_at': '2025-06-02T14:15:00'
-        }
-    ]
-}
 
 # 获取课程的所有课件
 @learning_bp.route('/courses/<int:course_id>/materials', methods=['GET'])
@@ -406,16 +310,16 @@ materials_data = {
 def get_course_materials(course_id):
     """获取课程的所有课件资源"""
     # 检查课程是否存在
-    course = next((c for c in courses if c['id'] == course_id), None)
+    course = Course.query.get(course_id)
     if not course:
         return jsonify({'error': 'Course not found'}), 404
     
     # 获取课程的所有课件
-    course_materials = materials_data.get(course_id, [])
+    materials = Material.query.filter_by(course_id=course_id).all()
     
     return jsonify({
-        'materials': course_materials,
-        'total': len(course_materials)
+        'materials': [material.to_dict() for material in materials],
+        'total': len(materials)
     })
 
 # 上传课件
@@ -424,7 +328,7 @@ def get_course_materials(course_id):
 def upload_material(course_id):
     """上传课件资源"""
     # 检查课程是否存在
-    course = next((c for c in courses if c['id'] == course_id), None)
+    course = Course.query.get(course_id)
     if not course:
         return jsonify({'error': 'Course not found'}), 404
     
@@ -463,7 +367,7 @@ def upload_material(course_id):
         material_type = 'Text'
     
     # 创建上传目录
-    upload_folder = os.path.join(current_app.root_path, 'uploads', 'materials', str(course_id))
+    upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'materials', str(course_id))
     os.makedirs(upload_folder, exist_ok=True)
     
     # 保存文件
@@ -483,31 +387,24 @@ def upload_material(course_id):
     # 创建新材料记录
     title = request.form.get('title', filename)
     
-    # 获取当前最大ID
-    max_id = 0
-    for materials_list in materials_data.values():
-        for material in materials_list:
-            max_id = max(max_id, material['id'])
+    # 创建新的Material对象
+    new_material = Material(
+        title=title,
+        material_type=material_type,
+        file_path=f'/uploads/materials/{course_id}/{filename}',
+        content=f'Original filename: {original_filename}',  # 存储原始文件名
+        course_id=course_id
+    )
     
-    new_material = {
-        'id': max_id + 1,
-        'title': title,
-        'material_type': material_type,
-        'original_filename': original_filename,
-        'file_path': f'/uploads/materials/{course_id}/{filename}',
-        'size': size_str,
-        'course_id': course_id,
-        'created_at': datetime.utcnow().isoformat(),
-        'updated_at': datetime.utcnow().isoformat()
-    }
+    # 添加到数据库
+    db.session.add(new_material)
+    db.session.commit()
     
-    # 将新材料添加到模拟数据中
-    if course_id not in materials_data:
-        materials_data[course_id] = []
+    # 返回创建的材料
+    material_dict = new_material.to_dict()
+    material_dict['size'] = size_str  # 添加文件大小信息
     
-    materials_data[course_id].append(new_material)
-    
-    return jsonify(new_material), 201
+    return jsonify(material_dict), 201
 
 # 下载课件
 @learning_bp.route('/materials/<int:material_id>/download', methods=['GET'])
@@ -515,27 +412,24 @@ def upload_material(course_id):
 def download_material(material_id):
     """下载课件资源"""
     # 查找材料
-    material = None
-    for materials_list in materials_data.values():
-        for m in materials_list:
-            if m['id'] == material_id:
-                material = m
-                break
-        if material:
-            break
-    
+    material = Material.query.get(material_id)
     if not material:
         return jsonify({'error': 'Material not found'}), 404
     
     # 获取文件路径
-    file_path = os.path.join(current_app.root_path, material['file_path'].lstrip('/'))
+    file_path = os.path.join(current_app.root_path, material.file_path.lstrip('/'))
     
     # 检查文件是否存在
     if not os.path.exists(file_path):
         return jsonify({'error': 'File not found'}), 404
     
-    # 使用原始文件名作为下载名称
-    download_name = material.get('original_filename', os.path.basename(file_path))
+    # 获取原始文件名
+    original_filename = None
+    if material.content and material.content.startswith('Original filename:'):
+        original_filename = material.content.replace('Original filename:', '').strip()
+    
+    # 如果没有原始文件名，使用路径中的文件名
+    download_name = original_filename or os.path.basename(file_path)
     
     # 发送文件 - 确保以二进制模式发送
     try:
@@ -554,25 +448,12 @@ def download_material(material_id):
 def delete_material(material_id):
     """删除课件资源"""
     # 查找材料
-    material = None
-    course_id = None
-    material_index = None
-    
-    for cid, materials_list in materials_data.items():
-        for i, m in enumerate(materials_list):
-            if m['id'] == material_id:
-                material = m
-                course_id = cid
-                material_index = i
-                break
-        if material:
-            break
-    
+    material = Material.query.get(material_id)
     if not material:
         return jsonify({'error': 'Material not found'}), 404
     
     # 获取文件路径
-    file_path = os.path.join(current_app.root_path, material['file_path'].lstrip('/'))
+    file_path = os.path.join(current_app.root_path, material.file_path.lstrip('/'))
     
     # 尝试删除文件
     try:
@@ -581,11 +462,211 @@ def delete_material(material_id):
     except Exception as e:
         print(f"Warning: Failed to delete file {file_path}: {str(e)}")
     
-    # 从数据中删除材料记录
-    deleted_material = materials_data[course_id].pop(material_index)
+    # 从数据库中删除材料记录
+    material_dict = material.to_dict()
+    db.session.delete(material)
+    db.session.commit()
     
     return jsonify({
         'message': 'Material deleted successfully',
-        'material': deleted_material
+        'material': material_dict
+    })
+
+# 获取课程的所有学生
+@learning_bp.route('/learning/courses/<int:course_id>/students', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_course_students(course_id):
+    """获取课程的所有学生"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取查询参数
+    search = request.args.get('search', '')
+    
+    # 获取课程的所有学生
+    students = course.students
+    
+    # 如果有搜索参数，过滤学生
+    if search:
+        search = search.lower()
+        filtered_students = []
+        for student in students:
+            if search in student.username.lower() or search in student.email.lower() or (student.full_name and search in student.full_name.lower()):
+                filtered_students.append(student)
+        students = filtered_students
+    
+    # 准备响应数据
+    students_data = []
+    for student in students:
+        # 获取学生的学习记录
+        learning_records = LearningRecord.query.filter_by(
+            student_id=student.id, 
+            course_id=course_id
+        ).order_by(LearningRecord.timestamp.desc()).first()
+        
+        # 计算学生进度（这里简化为随机值，实际应用中应该基于完成的材料和评估）
+        progress = 0
+        if learning_records:
+            # 这里可以实现更复杂的进度计算逻辑
+            progress = 50  # 示例值
+        
+        # 获取最后活动时间
+        last_activity = None
+        if learning_records:
+            last_activity = learning_records.timestamp.strftime('%Y-%m-%d %H:%M')
+        
+        # 构建学生数据
+        student_data = {
+            'id': student.id,
+            'name': student.full_name or student.username,
+            'email': student.email,
+            'progress': progress,
+            'last_activity': last_activity or '未活动'
+        }
+        students_data.append(student_data)
+    
+    return jsonify({
+        'students': students_data,
+        'total': len(students_data)
+    })
+
+# 获取可添加到课程的学生
+@learning_bp.route('/learning/courses/<int:course_id>/available-students', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_available_students(course_id):
+    """获取可添加到课程的学生"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取当前课程的所有学生ID
+    current_student_ids = [student.id for student in course.students]
+    
+    # 获取所有学生角色的用户，但不包括已在课程中的学生
+    available_students = User.query.filter(
+        User.role == 'student',
+        ~User.id.in_(current_student_ids) if current_student_ids else True
+    ).all()
+    
+    # 准备响应数据
+    students_data = []
+    for student in available_students:
+        student_data = {
+            'id': student.id,
+            'name': student.full_name or student.username,
+            'email': student.email,
+            'role': student.role
+        }
+        students_data.append(student_data)
+    
+    return jsonify({
+        'students': students_data,
+        'total': len(students_data)
+    })
+
+# 添加学生到课程
+@learning_bp.route('/learning/courses/<int:course_id>/students', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def add_students_to_course(course_id):
+    """添加学生到课程"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取请求数据
+    data = request.json
+    if not data or 'student_ids' not in data:
+        return jsonify({'error': 'Missing student_ids'}), 400
+    
+    student_ids = data['student_ids']
+    if not isinstance(student_ids, list):
+        return jsonify({'error': 'student_ids must be a list'}), 400
+    
+    # 获取当前课程的学生ID
+    current_student_ids = [student.id for student in course.students]
+    
+    # 添加新学生
+    added_students = []
+    for student_id in student_ids:
+        if student_id not in current_student_ids:
+            student = User.query.get(student_id)
+            if student and student.role == 'student':
+                course.students.append(student)
+                
+                # 记录学习活动
+                record = LearningRecord(
+                    student_id=student.id,
+                    course_id=course.id,
+                    activity_type='enrolled',
+                    activity_detail='Enrolled to course'
+                )
+                db.session.add(record)
+                
+                # 构建学生数据
+                student_data = {
+                    'id': student.id,
+                    'name': student.full_name or student.username,
+                    'email': student.email,
+                    'progress': 0,
+                    'last_activity': datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+                }
+                added_students.append(student_data)
+    
+    # 保存更改
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'Added {len(added_students)} students to the course',
+        'students': added_students
+    }), 201
+
+# 从课程中移除学生
+@learning_bp.route('/learning/courses/<int:course_id>/students/<int:student_id>', methods=['DELETE'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def remove_student_from_course(course_id, student_id):
+    """从课程中移除学生"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 查找学生
+    student = User.query.get(student_id)
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+    
+    # 检查学生是否在课程中
+    if student not in course.students:
+        return jsonify({'error': 'Student not enrolled in this course'}), 404
+    
+    # 构建学生数据（用于返回）
+    student_data = {
+        'id': student.id,
+        'name': student.full_name or student.username,
+        'email': student.email
+    }
+    
+    # 从课程中移除学生
+    course.students.remove(student)
+    
+    # 记录学习活动
+    record = LearningRecord(
+        student_id=student.id,
+        course_id=course.id,
+        activity_type='unenrolled',
+        activity_detail='Removed from course'
+    )
+    db.session.add(record)
+    
+    # 保存更改
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Student removed from course successfully',
+        'student': student_data
     })
 

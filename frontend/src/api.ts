@@ -149,6 +149,7 @@ export const courseAPI = {
   enrollCourse: (courseId: number) => api.post(`/learning/enroll/${courseId}`),
   unenrollCourse: (courseId: number) => api.post(`/learning/unenroll/${courseId}`),
   getCourseStudents: (courseId: number) => api.get(`/learning/courses/${courseId}/students`),
+  getAvailableStudents: (courseId: number) => api.get(`/learning/courses/${courseId}/available-students`),
   addStudentsToCourse: (courseId: number, studentIds: number[]) => 
     api.post(`/learning/courses/${courseId}/students`, { student_ids: studentIds }),
   removeStudentFromCourse: (courseId: number, studentId: number) => 

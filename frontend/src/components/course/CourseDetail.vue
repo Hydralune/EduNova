@@ -187,14 +187,7 @@
             <h3 class="text-lg font-semibold">学生管理</h3>
             <div class="flex gap-2">
               <button 
-                v-if="canEdit" 
-                class="px-4 py-2 border rounded-md"
-              >
-                导入学生
-              </button>
-              <button 
-                v-if="canEdit" 
-                @click="showAddStudentModal = true"
+                @click="openAddStudentModal"
                 class="px-4 py-2 bg-blue-600 text-white rounded-md"
               >
                 添加学生
@@ -203,15 +196,33 @@
           </div>
 
           <div class="mb-4">
-            <input 
-              type="text" 
-              v-model="studentSearch" 
-              placeholder="搜索学生..." 
-              class="w-full px-4 py-2 border rounded-md"
-            />
+            <div class="flex">
+              <input 
+                type="text" 
+                v-model="studentSearch" 
+                placeholder="搜索学生..." 
+                class="flex-1 px-4 py-2 border rounded-l-md"
+                @keyup.enter="filterStudents"
+              />
+              <button 
+                @click="filterStudents"
+                class="px-4 py-2 bg-gray-200 border-t border-r border-b rounded-r-md"
+              >
+                搜索
+              </button>
+            </div>
           </div>
 
-          <div v-if="students.length > 0" class="border rounded-md overflow-hidden">
+          <div v-if="isLoadingStudents" class="flex justify-center py-10">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+
+          <div v-else-if="studentError" class="text-center py-10">
+            <p class="text-red-500">{{ studentError }}</p>
+            <button @click="fetchStudents" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">重试</button>
+          </div>
+
+          <div v-else-if="students.length > 0" class="border rounded-md overflow-hidden">
             <table class="min-w-full divide-y divide-gray-200">
               <thead class="bg-gray-50">
                 <tr>
@@ -225,7 +236,9 @@
                 <tr v-for="student in students" :key="student.id">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
-                      <div class="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200"></div>
+                      <div class="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                        {{ student.name.charAt(0) }}
+                      </div>
                       <div class="ml-4">
                         <div class="text-sm font-medium text-gray-900">{{ student.name }}</div>
                         <div class="text-sm text-gray-500">{{ student.email }}</div>
@@ -242,8 +255,7 @@
                     {{ student.last_activity }}
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button class="text-blue-600 hover:text-blue-800">查看</button>
-                    <button v-if="canEdit" class="text-red-600 hover:text-red-800 ml-3">移除</button>
+                    <button @click="removeStudent(student.id)" class="text-red-600 hover:text-red-800">移除</button>
                   </td>
                 </tr>
               </tbody>
@@ -251,6 +263,7 @@
           </div>
           <div v-else class="text-center py-10">
             <p class="text-gray-500">暂无学生</p>
+            <button @click="openAddStudentModal" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">添加学生</button>
           </div>
         </div>
       </div>
@@ -289,6 +302,58 @@
         </form>
       </div>
     </div>
+    
+    <!-- 添加学生模态框 -->
+    <div v-if="showAddStudentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+        <h3 class="text-xl font-bold mb-4">添加学生到课程</h3>
+        
+        <div v-if="availableStudents.length === 0" class="text-center py-10">
+          <p class="text-gray-500">没有可添加的学生</p>
+        </div>
+        
+        <div v-else>
+          <div class="mb-4">
+            <p class="text-sm text-gray-600 mb-2">选择要添加到课程的学生：</p>
+            <div class="max-h-60 overflow-y-auto border rounded-md p-2">
+              <div 
+                v-for="student in availableStudents" 
+                :key="student.id"
+                class="flex items-center p-2 hover:bg-gray-100 rounded-md cursor-pointer"
+                @click="toggleStudentSelection(student.id)"
+              >
+                <input 
+                  type="checkbox" 
+                  :checked="selectedStudents.includes(student.id)" 
+                  class="mr-3"
+                />
+                <div>
+                  <div class="font-medium">{{ student.name }}</div>
+                  <div class="text-sm text-gray-500">{{ student.email }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-between items-center mt-4">
+            <div class="text-sm text-gray-600">已选择 {{ selectedStudents.length }} 名学生</div>
+            <div class="flex gap-2">
+              <button type="button" @click="showAddStudentModal = false" class="px-4 py-2 border rounded-md">取消</button>
+              <button 
+                @click="addStudents" 
+                :disabled="selectedStudents.length === 0"
+                :class="[
+                  'px-4 py-2 text-white rounded-md',
+                  selectedStudents.length === 0 ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                ]"
+              >
+                添加
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -318,6 +383,21 @@ interface Material {
   course_id: number;
   created_at: string;
   updated_at: string;
+}
+
+interface Student {
+  id: number;
+  name: string;
+  email: string;
+  progress: number;
+  last_activity: string;
+}
+
+interface AvailableStudent {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
 }
 
 interface Course {
@@ -391,27 +471,17 @@ const assessments = ref([
   },
 ]);
 
-const students = ref([
-  {
-    id: 1,
-    name: '李明',
-    email: 'liming@example.com',
-    progress: 75,
-    last_activity: '2025-06-23 14:30',
-  },
-  {
-    id: 2,
-    name: '王红',
-    email: 'wanghong@example.com',
-    progress: 45,
-    last_activity: '2025-06-22 09:15',
-  },
-]);
+const students = ref<Student[]>([]);
+const availableStudents = ref<AvailableStudent[]>([]);
+const selectedStudents = ref<number[]>([]);
+const isLoadingStudents = ref(false);
+const studentError = ref('');
 
 onMounted(async () => {
   await fetchCourseDetail();
   if (course.value) {
     await fetchMaterials();
+    await fetchStudents();
   }
 });
 
@@ -569,5 +639,101 @@ function getMaterialIcon(materialType: string) {
         </svg>
       `;
   }
+}
+
+async function fetchStudents() {
+  if (!course.value) return;
+  
+  isLoadingStudents.value = true;
+  studentError.value = '';
+  
+  try {
+    const response = await courseAPI.getCourseStudents(course.value.id);
+    const responseData = response as any;
+    students.value = responseData.students as Student[];
+  } catch (error) {
+    console.error('获取学生列表失败:', error);
+    studentError.value = '获取学生列表失败';
+  } finally {
+    isLoadingStudents.value = false;
+  }
+}
+
+async function fetchAvailableStudents() {
+  if (!course.value) return;
+  
+  try {
+    const response = await courseAPI.getAvailableStudents(course.value.id);
+    const responseData = response as any;
+    availableStudents.value = responseData.students as AvailableStudent[];
+  } catch (error) {
+    console.error('获取可添加学生列表失败:', error);
+  }
+}
+
+async function addStudents() {
+  if (!course.value || selectedStudents.value.length === 0) {
+    return;
+  }
+  
+  try {
+    await courseAPI.addStudentsToCourse(course.value.id, selectedStudents.value);
+    
+    // 清空选择
+    selectedStudents.value = [];
+    
+    // 关闭模态框
+    showAddStudentModal.value = false;
+    
+    // 重新获取学生列表
+    await fetchStudents();
+    
+    // 更新课程信息
+    await fetchCourseDetail();
+  } catch (error) {
+    console.error('添加学生失败:', error);
+    alert('添加学生失败，请重试');
+  }
+}
+
+async function removeStudent(studentId: number) {
+  if (!course.value) return;
+  
+  if (confirm('确定要从课程中移除该学生吗？')) {
+    try {
+      await courseAPI.removeStudentFromCourse(course.value.id, studentId);
+      
+      // 重新获取学生列表
+      await fetchStudents();
+      
+      // 更新课程信息
+      await fetchCourseDetail();
+    } catch (error) {
+      console.error('移除学生失败:', error);
+      alert('移除学生失败，请重试');
+    }
+  }
+}
+
+function toggleStudentSelection(studentId: number) {
+  const index = selectedStudents.value.indexOf(studentId);
+  if (index === -1) {
+    selectedStudents.value.push(studentId);
+  } else {
+    selectedStudents.value.splice(index, 1);
+  }
+}
+
+function openAddStudentModal() {
+  showAddStudentModal.value = true;
+  selectedStudents.value = [];
+  fetchAvailableStudents();
+}
+
+function filterStudents() {
+  if (!course.value) return;
+  
+  // 使用搜索参数重新获取学生列表
+  fetchStudents();
 }
 </script> 
