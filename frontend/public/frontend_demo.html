@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能教学系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            text-align: center;
+            font-size: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+        }
+        
+        .btn:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+        }
+        
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        
+        .user-info {
+            background: #eff6ff;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .nav button {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .nav button.active {
+            background: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>智能教学系统</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 登录界面 -->
+        <div id="loginSection" class="card">
+            <h2>用户登录</h2>
+            <div id="loginAlert"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">用户名</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn">登录</button>
+                <button type="button" class="btn btn-secondary" onclick="showRegister()">注册</button>
+            </form>
+            <div style="margin-top: 1rem; font-size: 0.9rem; color: #6b7280;">
+                <p>测试账户：</p>
+                <p>管理员: admin / admin123</p>
+                <p>教师: teacher1 / teacher123</p>
+                <p>学生: student1 / student123</p>
+            </div>
+        </div>
+
+        <!-- 注册界面 -->
+        <div id="registerSection" class="card hidden">
+            <h2>用户注册</h2>
+            <div id="registerAlert"></div>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="regFullName">姓名</label>
+                    <input type="text" id="regFullName" name="full_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="regUsername">用户名</label>
+                    <input type="text" id="regUsername" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">邮箱</label>
+                    <input type="email" id="regEmail" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="regRole">角色</label>
+                    <select id="regRole" name="role">
+                        <option value="student">学生</option>
+                        <option value="teacher">教师</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">密码</label>
+                    <input type="password" id="regPassword" name="password" required>
+                </div>
+                <button type="submit" class="btn">注册</button>
+                <button type="button" class="btn btn-secondary" onclick="showLogin()">返回登录</button>
+            </form>
+        </div>
+
+        <!-- 主界面 -->
+        <div id="mainSection" class="hidden">
+            <div class="user-info">
+                <p>欢迎，<span id="userFullName"></span> (<span id="userRole"></span>)</p>
+                <button class="btn btn-secondary" onclick="logout()">退出登录</button>
+            </div>
+
+            <div class="nav">
+                <button id="navDashboard" class="active" onclick="showTab('dashboard')">仪表板</button>
+                <button id="navCourses" onclick="showTab('courses')">课程管理</button>
+                <button id="navAssessments" onclick="showTab('assessments')">评估管理</button>
+                <button id="navChat" onclick="showTab('chat')">学习助手</button>
+                <button id="navAdmin" onclick="showTab('admin')" class="hidden">系统管理</button>
+            </div>
+
+            <!-- 仪表板 -->
+            <div id="dashboardTab" class="tab-content">
+                <div class="grid">
+                    <div class="card">
+                        <h3>系统状态</h3>
+                        <button class="btn" onclick="checkHealth()">检查系统健康</button>
+                        <div id="healthResult"></div>
+                    </div>
+                    <div class="card">
+                        <h3>快速操作</h3>
+                        <button class="btn" onclick="loadCourses()">查看课程</button>
+                        <button class="btn" onclick="loadAssessments()">查看评估</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 课程管理 -->
+            <div id="coursesTab" class="tab-content hidden">
+                <div class="card">
+                    <h3>我的课程</h3>
+                    <button class="btn" onclick="loadCourses()">刷新课程列表</button>
+                    <button id="createCourseBtn" class="btn hidden" onclick="showCreateCourse()">创建课程</button>
+                    <div id="coursesList"></div>
+                </div>
+
+                <div id="createCourseForm" class="card hidden">
+                    <h3>创建新课程</h3>
+                    <form id="courseForm">
+                        <div class="form-group">
+                            <label for="courseName">课程名称</label>
+                            <input type="text" id="courseName" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="courseDescription">课程描述</label>
+                            <textarea id="courseDescription" name="description" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn">创建课程</button>
+                        <button type="button" class="btn btn-secondary" onclick="hideCreateCourse()">取消</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 评估管理 -->
+            <div id="assessmentsTab" class="tab-content hidden">
+                <div class="card">
+                    <h3>评估题目</h3>
+                    <button class="btn" onclick="loadAssessments()">刷新评估列表</button>
+                    <div id="assessmentsList"></div>
+                </div>
+            </div>
+
+            <!-- 学习助手 -->
+            <div id="chatTab" class="tab-content hidden">
+                <div class="card">
+                    <h3>AI学习助手</h3>
+                    <div id="chatHistory" style="height: 300px; overflow-y: auto; border: 1px solid #d1d5db; padding: 1rem; margin-bottom: 1rem; background: #f9fafb;"></div>
+                    <form id="chatForm">
+                        <div class="form-group">
+                            <label for="chatQuestion">问题</label>
+                            <textarea id="chatQuestion" name="question" rows="3" placeholder="请输入您的问题..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn">发送</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 系统管理 -->
+            <div id="adminTab" class="tab-content hidden">
+                <div class="card">
+                    <h3>系统统计</h3>
+                    <button class="btn" onclick="loadSystemStats()">加载统计数据</button>
+                    <div id="systemStats"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5001/api';
+        let currentUser = null;
+        let authToken = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查本地存储的token
+            authToken = localStorage.getItem('token');
+            const userData = localStorage.getItem('user');
+            
+            if (authToken && userData) {
+                try {
+                    currentUser = JSON.parse(userData);
+                    showMainInterface();
+                } catch (e) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                }
+            }
+
+            // 绑定表单事件
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('registerForm').addEventListener('submit', handleRegister);
+            document.getElementById('courseForm').addEventListener('submit', handleCreateCourse);
+            document.getElementById('chatForm').addEventListener('submit', handleChat);
+        });
+
+        // API请求函数
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            };
+
+            if (authToken) {
+                config.headers.Authorization = `Bearer ${authToken}`;
+            }
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || '请求失败');
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API请求错误:', error);
+                throw error;
+            }
+        }
+
+        // 登录处理
+        async function handleLogin(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const credentials = Object.fromEntries(formData);
+
+            try {
+                const response = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify(credentials)
+                });
+
+                authToken = response.token;
+                currentUser = response.user;
+                
+                localStorage.setItem('token', authToken);
+                localStorage.setItem('user', JSON.stringify(currentUser));
+                
+                showAlert('loginAlert', 'success', '登录成功！');
+                setTimeout(() => showMainInterface(), 1000);
+            } catch (error) {
+                showAlert('loginAlert', 'error', error.message);
+            }
+        }
+
+        // 注册处理
+        async function handleRegister(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const userData = Object.fromEntries(formData);
+
+            try {
+                await apiRequest('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify(userData)
+                });
+
+                showAlert('registerAlert', 'success', '注册成功！请登录。');
+                setTimeout(() => showLogin(), 2000);
+            } catch (error) {
+                showAlert('registerAlert', 'error', error.message);
+            }
+        }
+
+        // 创建课程处理
+        async function handleCreateCourse(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const courseData = Object.fromEntries(formData);
+
+            try {
+                await apiRequest('/courses', {
+                    method: 'POST',
+                    body: JSON.stringify(courseData)
+                });
+
+                showAlert('coursesTab', 'success', '课程创建成功！');
+                hideCreateCourse();
+                loadCourses();
+            } catch (error) {
+                showAlert('coursesTab', 'error', error.message);
+            }
+        }
+
+        // 聊天处理
+        async function handleChat(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const question = formData.get('question');
+
+            if (!question.trim()) return;
+
+            // 添加用户消息到聊天历史
+            addChatMessage('user', question);
+            document.getElementById('chatQuestion').value = '';
+
+            try {
+                const response = await apiRequest('/chat', {
+                    method: 'POST',
+                    body: JSON.stringify({ question })
+                });
+
+                // 添加AI回复到聊天历史
+                addChatMessage('ai', response.chat.answer);
+            } catch (error) {
+                addChatMessage('system', '抱歉，发生了错误：' + error.message);
+            }
+        }
+
+        // 添加聊天消息
+        function addChatMessage(type, message) {
+            const chatHistory = document.getElementById('chatHistory');
+            const messageDiv = document.createElement('div');
+            messageDiv.style.marginBottom = '1rem';
+            messageDiv.style.padding = '0.5rem';
+            messageDiv.style.borderRadius = '6px';
+            
+            if (type === 'user') {
+                messageDiv.style.backgroundColor = '#dbeafe';
+                messageDiv.innerHTML = `<strong>您:</strong> ${message}`;
+            } else if (type === 'ai') {
+                messageDiv.style.backgroundColor = '#d1fae5';
+                messageDiv.innerHTML = `<strong>AI助手:</strong> ${message}`;
+            } else {
+                messageDiv.style.backgroundColor = '#fee2e2';
+                messageDiv.innerHTML = `<strong>系统:</strong> ${message}`;
+            }
+            
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // 界面切换函数
+        function showLogin() {
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('registerSection').classList.add('hidden');
+            document.getElementById('mainSection').classList.add('hidden');
+        }
+
+        function showRegister() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('registerSection').classList.remove('hidden');
+            document.getElementById('mainSection').classList.add('hidden');
+        }
+
+        function showMainInterface() {
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('registerSection').classList.add('hidden');
+            document.getElementById('mainSection').classList.remove('hidden');
+            
+            // 更新用户信息
+            document.getElementById('userFullName').textContent = currentUser.full_name;
+            document.getElementById('userRole').textContent = getRoleText(currentUser.role);
+            
+            // 根据角色显示相应功能
+            if (currentUser.role === 'admin') {
+                document.getElementById('navAdmin').classList.remove('hidden');
+            }
+            
+            if (currentUser.role === 'teacher' || currentUser.role === 'admin') {
+                document.getElementById('createCourseBtn').classList.remove('hidden');
+            }
+        }
+
+        function showTab(tabName) {
+            // 隐藏所有标签页
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // 移除所有导航按钮的active类
+            document.querySelectorAll('.nav button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 显示选中的标签页
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+            document.getElementById('nav' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+        }
+
+        function showCreateCourse() {
+            document.getElementById('createCourseForm').classList.remove('hidden');
+        }
+
+        function hideCreateCourse() {
+            document.getElementById('createCourseForm').classList.add('hidden');
+            document.getElementById('courseForm').reset();
+        }
+
+        // 工具函数
+        function getRoleText(role) {
+            const roleMap = {
+                'admin': '管理员',
+                'teacher': '教师',
+                'student': '学生'
+            };
+            return roleMap[role] || role;
+        }
+
+        function showAlert(containerId, type, message) {
+            const container = document.getElementById(containerId);
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            // 清除之前的警告
+            const existingAlert = container.querySelector('.alert');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+            
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 3000);
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            showLogin();
+        }
+
+        // 数据加载函数
+        async function checkHealth() {
+            try {
+                const response = await apiRequest('/health');
+                document.getElementById('healthResult').innerHTML = `
+                    <div class="alert alert-success">
+                        系统状态：${response.status} - ${response.message}
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('healthResult').innerHTML = `
+                    <div class="alert alert-error">
+                        系统检查失败：${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function loadCourses() {
+            try {
+                const response = await apiRequest('/my-courses');
+                const coursesList = document.getElementById('coursesList');
+                
+                if (response.courses.length === 0) {
+                    coursesList.innerHTML = '<p>暂无课程</p>';
+                    return;
+                }
+                
+                coursesList.innerHTML = response.courses.map(course => `
+                    <div style="border: 1px solid #d1d5db; padding: 1rem; margin: 0.5rem 0; border-radius: 6px;">
+                        <h4>${course.name}</h4>
+                        <p>${course.description || '无描述'}</p>
+                        <small>教师：${course.teacher_name || '未知'}</small>
+                    </div>
+                `).join('');
+            } catch (error) {
+                document.getElementById('coursesList').innerHTML = `
+                    <div class="alert alert-error">加载课程失败：${error.message}</div>
+                `;
+            }
+        }
+
+        async function loadAssessments() {
+            try {
+                // 这里需要先获取课程列表，然后获取评估
+                const coursesResponse = await apiRequest('/my-courses');
+                if (coursesResponse.courses.length === 0) {
+                    document.getElementById('assessmentsList').innerHTML = '<p>暂无课程，无法加载评估</p>';
+                    return;
+                }
+                
+                // 获取第一个课程的评估作为示例
+                const firstCourse = coursesResponse.courses[0];
+                const assessmentsResponse = await apiRequest(`/courses/${firstCourse.id}/assessments`);
+                
+                const assessmentsList = document.getElementById('assessmentsList');
+                
+                if (assessmentsResponse.assessments.length === 0) {
+                    assessmentsList.innerHTML = '<p>暂无评估题目</p>';
+                    return;
+                }
+                
+                assessmentsList.innerHTML = assessmentsResponse.assessments.map(assessment => `
+                    <div style="border: 1px solid #d1d5db; padding: 1rem; margin: 0.5rem 0; border-radius: 6px;">
+                        <h4>${assessment.title}</h4>
+                        <p><strong>类型：</strong>${assessment.question_type}</p>
+                        <p><strong>难度：</strong>${assessment.difficulty}</p>
+                        <p><strong>分值：</strong>${assessment.points}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                document.getElementById('assessmentsList').innerHTML = `
+                    <div class="alert alert-error">加载评估失败：${error.message}</div>
+                `;
+            }
+        }
+
+        async function loadSystemStats() {
+            try {
+                const response = await apiRequest('/dashboard/overview');
+                const systemStats = document.getElementById('systemStats');
+                
+                systemStats.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        ${Object.entries(response.stats).map(([key, value]) => `
+                            <div style="background: #f3f4f6; padding: 1rem; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${value}</div>
+                                <div style="font-size: 0.9rem; color: #6b7280;">${key}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('systemStats').innerHTML = `
+                    <div class="alert alert-error">加载统计数据失败：${error.message}</div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# Flask
+instance/
+.webassets-cache
+.env
+
+# Database
+*.db
+*.sqlite3
+*.sqlite
+
+# Vue/Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.DS_Store
+dist/
+dist-ssr/
+coverage/
+*.local
+.vite/
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+
+# Logs
+logs/
+*.log
+
+# Uploads and generated content
+backend/uploads/*
+!backend/uploads/materials/.gitkeep
+uploads/*
+!uploads/materials/.gitkeep
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+venv/
+ENV/ 

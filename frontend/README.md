@@ -1,35 +1,39 @@
-# frontend
+# 智能教学系统前端
 
-This template should help get you started developing with Vue 3 in Vite.
+这是智能教学系统的前端部分，使用Vue 3 + TypeScript + Tailwind CSS构建。
 
-## Recommended IDE Setup
+## 开发环境设置
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+### 安装依赖
 
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 启动开发服务器
 
-```sh
+```bash
 npm run dev
 ```
 
-### Compile and Minify for Production
+### 构建生产版本
 
-```sh
+```bash
 npm run build
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## 项目结构
 
-```sh
-npm run lint
-```
+- `src/` - 源代码
+  - `api/` - API请求函数
+  - `assets/` - 静态资源（CSS, 图片等）
+  - `components/` - Vue组件
+  - `router/` - Vue Router配置
+  - `stores/` - Pinia状态管理
+  - `views/` - 页面视图
+  - `App.vue` - 主应用组件
+  - `main.ts` - 应用入口
+
+## 后端接口
+
+前端默认连接到 `http://localhost:5001/api` 的后端接口。你可以在 `vite.config.ts` 文件中修改代理配置。 

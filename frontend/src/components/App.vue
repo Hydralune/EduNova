@@ -250,39 +250,7 @@ window.addEventListener('unhandledrejection', (event) => {
 })
 </script>
 
-<style>
-/* 主色调 */
-:root {
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-200: #c7d2fe;
-  --color-primary-300: #a5b4fc;
-  --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-primary-800: #3730a3;
-  --color-primary-900: #312e81;
-}
+<style scoped>
+/* 组件特定样式 */
+</style>
 
-/* 全局样式 */
-.btn {
-  @apply px-4 py-2 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
-}
-
-.btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
-}
-
-.btn-outline {
-  @apply border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-primary-500;
-}
-
-.text-primary-600 {
-  color: var(--color-primary-600);
-}
-
-.bg-primary-600 {
-  background-color: var(--color-primary-600);
-}
-</style> 
