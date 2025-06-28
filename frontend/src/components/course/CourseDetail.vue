@@ -13,6 +13,10 @@
       <!-- 课程头部信息 -->
       <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 mb-6">
         <div class="h-48 bg-gray-200 relative">
+          <img v-if="course.cover_image" :src="`http://localhost:5001${course.cover_image}`" alt="课程封面" class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600">
+            <h3 class="text-xl font-bold text-white">{{ course.name }}</h3>
+          </div>
           <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
             <div class="flex items-center justify-between">
               <h1 class="text-2xl font-bold text-white">{{ course.name }}</h1>
@@ -113,7 +117,6 @@
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg font-semibold">课件资源</h3>
             <button 
-              v-if="canEdit" 
               @click="showAddMaterialModal = true"
               class="px-4 py-2 bg-blue-600 text-white rounded-md"
             >
@@ -124,17 +127,16 @@
           <div v-if="materials.length > 0" class="space-y-4">
             <div v-for="material in materials" :key="material.id" class="flex items-center justify-between p-4 border rounded-md">
               <div class="flex items-center">
-                <span class="mr-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </span>
+                <span class="mr-3" v-html="getMaterialIcon(material.material_type)"></span>
                 <div>
                   <p class="font-medium">{{ material.title }}</p>
-                  <p class="text-sm text-gray-500">{{ material.type }} · {{ material.size }}</p>
+                  <p class="text-sm text-gray-500">{{ material.material_type }} · {{ material.size }}</p>
                 </div>
               </div>
-              <button class="text-blue-600 hover:text-blue-800">下载</button>
+              <div class="flex space-x-3">
+                <button @click="downloadMaterial(material.id)" class="text-blue-600 hover:text-blue-800">下载</button>
+                <button @click="confirmDeleteMaterial(material)" class="text-red-600 hover:text-red-800">删除</button>
+              </div>
             </div>
           </div>
           <div v-else class="text-center py-10">
@@ -254,13 +256,87 @@
       </div>
     </div>
 
-    <!-- 模态框组件将在这里添加 -->
+    <!-- 添加课件模态框 -->
+    <div v-if="showAddMaterialModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+        <h3 class="text-xl font-bold mb-4">上传课件资源</h3>
+        <form @submit.prevent="uploadMaterial">
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">课件标题</label>
+            <input v-model="materialTitle" type="text" class="w-full px-3 py-2 border rounded-md" placeholder="输入课件标题（可选，默认使用文件名）" />
+          </div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">选择文件 <span class="text-red-500">*</span></label>
+            <input type="file" @change="handleFileChange" class="w-full px-3 py-2 border rounded-md" required />
+            <p v-if="materialFile" class="mt-2 text-sm text-gray-500">
+              已选择: {{ materialFile.name }} ({{ (materialFile.size / 1024).toFixed(1) }}KB)
+            </p>
+          </div>
+          
+          <div v-if="materialUploadProgress > 0 && materialUploadProgress < 100" class="mb-4">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${materialUploadProgress}%`"></div>
+            </div>
+            <p class="text-sm text-gray-500 mt-1">上传中... {{ materialUploadProgress }}%</p>
+          </div>
+          
+          <p v-if="materialUploadError" class="text-red-500 mb-4">{{ materialUploadError }}</p>
+          
+          <div class="flex justify-end gap-2 mt-6">
+            <button type="button" @click="showAddMaterialModal = false" class="px-4 py-2 border rounded-md">取消</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md">上传</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
+import { courseAPI, materialAPI } from '../../api';
+
+// 定义Course接口
+interface CourseSection {
+  title: string;
+  duration: number;
+}
+
+interface CourseChapter {
+  title: string;
+  duration: number;
+  sections: CourseSection[];
+}
+
+interface Material {
+  id: number;
+  title: string;
+  material_type: string;
+  file_path?: string;
+  size: string;
+  course_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Course {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  teacher_id: number;
+  teacher_name: string;
+  student_count: number;
+  material_count: number;
+  assessment_count: number;
+  is_public?: boolean;
+  cover_image?: string;
+  chapters?: CourseChapter[];
+  created_at?: string;
+  updated_at?: string;
+}
 
 const props = defineProps({
   id: {
@@ -274,7 +350,7 @@ const courseId = computed(() => props.id);
 const userRole = computed(() => authStore.user?.role || '');
 
 const loading = ref(true);
-const course = ref(null);
+const course = ref<Course | null>(null);
 const activeTab = ref('chapters');
 const studentSearch = ref('');
 const showAddChapterModal = ref(false);
@@ -294,21 +370,12 @@ const canEdit = computed(() => {
          userRole.value === 'teacher' && course.value?.teacher_id === authStore.user?.id;
 });
 
-// 模拟数据
-const materials = ref([
-  {
-    id: 1,
-    title: '第一章PPT',
-    type: 'PowerPoint',
-    size: '2.5MB',
-  },
-  {
-    id: 2,
-    title: '参考资料',
-    type: 'PDF',
-    size: '1.8MB',
-  },
-]);
+// 材料数据
+const materials = ref<Material[]>([]);
+const materialFile = ref<File | null>(null);
+const materialTitle = ref('');
+const materialUploadProgress = ref(0);
+const materialUploadError = ref('');
 
 const assessments = ref([
   {
@@ -343,57 +410,40 @@ const students = ref([
 
 onMounted(async () => {
   await fetchCourseDetail();
+  if (course.value) {
+    await fetchMaterials();
+  }
 });
 
 async function fetchCourseDetail() {
   loading.value = true;
   try {
-    // 这里应该调用API获取课程详情
-    // const response = await api.getCourseDetail(courseId.value);
+    // 调用API获取课程详情
+    const response = await courseAPI.getCourse(Number(courseId.value));
     
-    // 模拟API响应
-    setTimeout(() => {
-      course.value = {
-        id: Number(courseId.value),
-        name: '人工智能基础',
-        description: '介绍人工智能的基本概念和应用，包括机器学习、深度学习、自然语言处理等内容。本课程适合初学者，不需要特别的数学背景。',
-        category: '计算机科学',
-        difficulty: 'beginner',
-        teacher_id: 1,
-        teacher_name: '张教授',
-        student_count: 42,
-        material_count: 12,
-        assessment_count: 5,
-        chapters: [
-          {
-            title: '第一章：人工智能概述',
-            duration: 60,
-            sections: [
-              { title: '1.1 什么是人工智能', duration: 15 },
-              { title: '1.2 人工智能的历史', duration: 20 },
-              { title: '1.3 人工智能的应用领域', duration: 25 },
-            ]
-          },
-          {
-            title: '第二章：机器学习基础',
-            duration: 90,
-            sections: [
-              { title: '2.1 机器学习概念', duration: 20 },
-              { title: '2.2 监督学习', duration: 35 },
-              { title: '2.3 无监督学习', duration: 35 },
-            ]
-          }
-        ]
-      };
-      loading.value = false;
-    }, 500);
+    // 处理API响应 - 根据API文档，response已经是解析后的数据
+    course.value = response as unknown as Course;
+    loading.value = false;
   } catch (error) {
     console.error('获取课程详情失败:', error);
     loading.value = false;
   }
 }
 
-function difficultyClass(difficulty) {
+async function fetchMaterials() {
+  try {
+    if (!course.value) return;
+    
+    const response = await materialAPI.getMaterials(course.value.id);
+    // 处理API响应
+    const responseData = response as any;
+    materials.value = responseData.materials as Material[];
+  } catch (error) {
+    console.error('获取课件资源失败:', error);
+  }
+}
+
+function difficultyClass(difficulty: string): string {
   switch (difficulty) {
     case 'beginner': return 'bg-green-100 text-green-800';
     case 'intermediate': return 'bg-yellow-100 text-yellow-800';
@@ -402,12 +452,122 @@ function difficultyClass(difficulty) {
   }
 }
 
-function difficultyText(difficulty) {
+function difficultyText(difficulty: string): string {
   switch (difficulty) {
     case 'beginner': return '初级';
     case 'intermediate': return '中级';
     case 'advanced': return '高级';
     default: return '未知';
+  }
+}
+
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    materialFile.value = target.files[0];
+    if (!materialTitle.value) {
+      materialTitle.value = materialFile.value.name;
+    }
+  }
+}
+
+async function uploadMaterial() {
+  if (!materialFile.value || !course.value) {
+    materialUploadError.value = '请选择文件';
+    return;
+  }
+  
+  try {
+    materialUploadProgress.value = 10;
+    materialUploadError.value = '';
+    
+    const formData = new FormData();
+    formData.append('file', materialFile.value);
+    formData.append('title', materialTitle.value || materialFile.value.name);
+    
+    materialUploadProgress.value = 30;
+    
+    const response = await materialAPI.uploadMaterial(course.value.id, formData);
+    
+    materialUploadProgress.value = 100;
+    
+    // 清空表单
+    materialFile.value = null;
+    materialTitle.value = '';
+    
+    // 关闭模态框
+    showAddMaterialModal.value = false;
+    
+    // 重新获取材料列表
+    await fetchMaterials();
+  } catch (error) {
+    console.error('上传课件失败:', error);
+    materialUploadError.value = '上传失败，请重试';
+    materialUploadProgress.value = 0;
+  }
+}
+
+function downloadMaterial(materialId: number) {
+  materialAPI.downloadMaterial(materialId);
+}
+
+async function confirmDeleteMaterial(material: Material) {
+  if (confirm(`确定要删除课件 "${material.title}" 吗？此操作不可恢复。`)) {
+    try {
+      await materialAPI.deleteMaterial(material.id);
+      // 重新获取材料列表
+      await fetchMaterials();
+    } catch (error) {
+      console.error('删除课件失败:', error);
+      alert('删除课件失败，请重试');
+    }
+  }
+}
+
+function getMaterialIcon(materialType: string) {
+  switch (materialType.toLowerCase()) {
+    case 'pdf':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'powerpoint':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'word':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'excel':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'image':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'video':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      `;
+    default:
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
   }
 }
 </script> 

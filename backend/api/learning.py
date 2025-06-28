@@ -1,10 +1,13 @@
-from flask import Blueprint, request, jsonify, current_app, make_response
+from flask import Blueprint, request, jsonify, current_app, make_response, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import json
+import os
 from datetime import datetime
+from werkzeug.utils import secure_filename
 from backend.models.user import User, db
 from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
+from backend.models.material import Material
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -369,5 +372,220 @@ def get_my_courses():
     return jsonify({
         'courses': my_courses,
         'total': len(my_courses)
+    })
+
+# 模拟材料数据
+materials_data = {
+    1: [
+        {
+            'id': 1,
+            'title': '第一章PPT',
+            'material_type': 'PowerPoint',
+            'file_path': '/uploads/materials/1/chapter1.pptx',
+            'size': '2.5MB',
+            'course_id': 1,
+            'created_at': '2025-06-01T10:30:00',
+            'updated_at': '2025-06-01T10:30:00'
+        },
+        {
+            'id': 2,
+            'title': '参考资料',
+            'material_type': 'PDF',
+            'file_path': '/uploads/materials/1/reference.pdf',
+            'size': '1.8MB',
+            'course_id': 1,
+            'created_at': '2025-06-02T14:15:00',
+            'updated_at': '2025-06-02T14:15:00'
+        }
+    ]
+}
+
+# 获取课程的所有课件
+@learning_bp.route('/courses/<int:course_id>/materials', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_course_materials(course_id):
+    """获取课程的所有课件资源"""
+    # 检查课程是否存在
+    course = next((c for c in courses if c['id'] == course_id), None)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取课程的所有课件
+    course_materials = materials_data.get(course_id, [])
+    
+    return jsonify({
+        'materials': course_materials,
+        'total': len(course_materials)
+    })
+
+# 上传课件
+@learning_bp.route('/courses/<int:course_id>/materials', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def upload_material(course_id):
+    """上传课件资源"""
+    # 检查课程是否存在
+    course = next((c for c in courses if c['id'] == course_id), None)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 检查是否有文件上传
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    
+    # 如果用户没有选择文件，浏览器也会提交一个没有文件名的空部分
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # 获取文件信息
+    original_filename = file.filename
+    filename = secure_filename(original_filename)
+    file_ext = os.path.splitext(filename)[1].lower()
+    
+    # 根据文件扩展名确定文件类型
+    material_type = 'Other'
+    if file_ext in ['.pdf']:
+        material_type = 'PDF'
+    elif file_ext in ['.ppt', '.pptx']:
+        material_type = 'PowerPoint'
+    elif file_ext in ['.doc', '.docx']:
+        material_type = 'Word'
+    elif file_ext in ['.xls', '.xlsx']:
+        material_type = 'Excel'
+    elif file_ext in ['.jpg', '.jpeg', '.png', '.gif']:
+        material_type = 'Image'
+    elif file_ext in ['.mp4', '.avi', '.mov']:
+        material_type = 'Video'
+    elif file_ext in ['.zip', '.rar', '.7z']:
+        material_type = 'Archive'
+    elif file_ext in ['.txt', '.md']:
+        material_type = 'Text'
+    
+    # 创建上传目录
+    upload_folder = os.path.join(current_app.root_path, 'uploads', 'materials', str(course_id))
+    os.makedirs(upload_folder, exist_ok=True)
+    
+    # 保存文件
+    file_path = os.path.join(upload_folder, filename)
+    file.save(file_path)
+    
+    # 获取文件大小
+    file_size = os.path.getsize(file_path)
+    size_str = ''
+    if file_size < 1024:
+        size_str = f"{file_size}B"
+    elif file_size < 1024 * 1024:
+        size_str = f"{file_size / 1024:.1f}KB"
+    else:
+        size_str = f"{file_size / (1024 * 1024):.1f}MB"
+    
+    # 创建新材料记录
+    title = request.form.get('title', filename)
+    
+    # 获取当前最大ID
+    max_id = 0
+    for materials_list in materials_data.values():
+        for material in materials_list:
+            max_id = max(max_id, material['id'])
+    
+    new_material = {
+        'id': max_id + 1,
+        'title': title,
+        'material_type': material_type,
+        'original_filename': original_filename,
+        'file_path': f'/uploads/materials/{course_id}/{filename}',
+        'size': size_str,
+        'course_id': course_id,
+        'created_at': datetime.utcnow().isoformat(),
+        'updated_at': datetime.utcnow().isoformat()
+    }
+    
+    # 将新材料添加到模拟数据中
+    if course_id not in materials_data:
+        materials_data[course_id] = []
+    
+    materials_data[course_id].append(new_material)
+    
+    return jsonify(new_material), 201
+
+# 下载课件
+@learning_bp.route('/materials/<int:material_id>/download', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def download_material(material_id):
+    """下载课件资源"""
+    # 查找材料
+    material = None
+    for materials_list in materials_data.values():
+        for m in materials_list:
+            if m['id'] == material_id:
+                material = m
+                break
+        if material:
+            break
+    
+    if not material:
+        return jsonify({'error': 'Material not found'}), 404
+    
+    # 获取文件路径
+    file_path = os.path.join(current_app.root_path, material['file_path'].lstrip('/'))
+    
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        return jsonify({'error': 'File not found'}), 404
+    
+    # 使用原始文件名作为下载名称
+    download_name = material.get('original_filename', os.path.basename(file_path))
+    
+    # 发送文件 - 确保以二进制模式发送
+    try:
+        return send_file(
+            file_path, 
+            as_attachment=True, 
+            download_name=download_name,
+            mimetype='application/octet-stream'  # 使用通用的二进制MIME类型
+        )
+    except Exception as e:
+        return jsonify({'error': f'Download failed: {str(e)}'}), 500
+
+# 删除课件
+@learning_bp.route('/materials/<int:material_id>', methods=['DELETE'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def delete_material(material_id):
+    """删除课件资源"""
+    # 查找材料
+    material = None
+    course_id = None
+    material_index = None
+    
+    for cid, materials_list in materials_data.items():
+        for i, m in enumerate(materials_list):
+            if m['id'] == material_id:
+                material = m
+                course_id = cid
+                material_index = i
+                break
+        if material:
+            break
+    
+    if not material:
+        return jsonify({'error': 'Material not found'}), 404
+    
+    # 获取文件路径
+    file_path = os.path.join(current_app.root_path, material['file_path'].lstrip('/'))
+    
+    # 尝试删除文件
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception as e:
+        print(f"Warning: Failed to delete file {file_path}: {str(e)}")
+    
+    # 从数据中删除材料记录
+    deleted_material = materials_data[course_id].pop(material_index)
+    
+    return jsonify({
+        'message': 'Material deleted successfully',
+        'material': deleted_material
     })
 
