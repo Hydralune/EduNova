@@ -177,7 +177,14 @@ def get_course(course_id):
 @learning_bp.route('/courses', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def create_course():
-    data = request.json
+    # 检查是否是multipart/form-data请求
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        data = json.loads(request.form.get('data', '{}'))
+        cover_image = request.files.get('cover_image')
+    else:
+        data = request.json
+        cover_image = None
+    
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
@@ -186,6 +193,22 @@ def create_course():
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
+    
+    # 处理图片上传
+    cover_image_path = None
+    if cover_image:
+        # 确保文件名安全
+        import os
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(cover_image.filename)
+        # 创建上传目录
+        upload_folder = os.path.join(current_app.root_path, 'uploads', 'course_covers')
+        os.makedirs(upload_folder, exist_ok=True)
+        # 保存文件
+        file_path = os.path.join(upload_folder, filename)
+        cover_image.save(file_path)
+        # 设置相对路径用于访问
+        cover_image_path = f'/uploads/course_covers/{filename}'
     
     # 创建新课程
     # user_id = get_jwt_identity()  # 暂时注释掉
@@ -202,6 +225,7 @@ def create_course():
         'material_count': 0,
         'assessment_count': 0,
         'is_public': data.get('is_public', True),
+        'cover_image': cover_image_path,
         'created_at': datetime.utcnow().isoformat(),
         'updated_at': datetime.utcnow().isoformat()
     }

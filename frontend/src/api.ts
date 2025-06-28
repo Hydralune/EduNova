@@ -74,8 +74,30 @@ export const userAPI = {
 export const courseAPI = {
   getCourses: (params?: any) => api.get('/learning/courses', { params }),
   getCourse: (courseId: number) => api.get(`/learning/courses/${courseId}`),
-  createCourse: (data: any) => api.post('/learning/courses', data),
-  updateCourse: (courseId: number, data: any) => api.put(`/learning/courses/${courseId}`, data),
+  createCourse: (data: any, coverImage?: File) => {
+    if (coverImage) {
+      const formData = new FormData()
+      formData.append('data', JSON.stringify(data))
+      formData.append('cover_image', coverImage)
+      return api.post('/learning/courses', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    } else {
+      return api.post('/learning/courses', data)
+    }
+  },
+  updateCourse: (courseId: number, data: any, coverImage?: File) => {
+    if (coverImage) {
+      const formData = new FormData()
+      formData.append('data', JSON.stringify(data))
+      formData.append('cover_image', coverImage)
+      return api.put(`/learning/courses/${courseId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    } else {
+      return api.put(`/learning/courses/${courseId}`, data)
+    }
+  },
   deleteCourse: (courseId: number) => api.delete(`/learning/courses/${courseId}`),
   getMyCourses: () => api.get('/learning/my-courses'),
   enrollCourse: (courseId: number) => api.post(`/learning/enroll/${courseId}`),

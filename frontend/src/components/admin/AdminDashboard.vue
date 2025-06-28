@@ -343,6 +343,16 @@
                 />
               </div>
               <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">密码</label>
+                <input 
+                  type="password" 
+                  id="password" 
+                  v-model="newUser.password" 
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
                 <label for="role" class="block text-sm font-medium text-gray-700">角色</label>
                 <select 
                   id="role" 
@@ -524,6 +534,7 @@ const showAddUserModal = ref(false);
 const newUser = ref({
   username: '',
   email: '',
+  password: '',
   full_name: '',
   role: 'student',
   is_active: true
@@ -744,6 +755,7 @@ const createUser = async () => {
     newUser.value = {
       username: '',
       email: '',
+      password: '',
       full_name: '',
       role: 'student',
       is_active: true

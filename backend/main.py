@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, jsonify, request, make_response
 from backend.extensions import db, jwt, cors
+from flask_cors import CORS
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -157,6 +158,11 @@ def create_tables():
             
             db.session.commit()
             print("示例课程创建成功！")
+
+# 配置静态文件路由
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return app.send_static_file(os.path.join('uploads', filename))
 
 if __name__ == '__main__':
     create_tables()
