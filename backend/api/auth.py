@@ -1,60 +1,21 @@
-import jwt
 import functools
 import datetime
 from flask import current_app, request, jsonify, Blueprint
 from backend.models.user import User
-from backend.extensions import db, jwt
-from flask_jwt_extended import create_access_token, create_refresh_token
+from backend.extensions import db
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 
-def generate_token(user_id):
-    """生成JWT令牌"""
-    payload = {
-        'user_id': user_id,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # 7天过期
-    }
-    return jwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256')
-
-def verify_token(token):
-    """验证JWT令牌"""
-    try:
-        payload = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
-        return payload['user_id']
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
-def login_required(f):
-    """登录验证装饰器"""
-    @functools.wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': '缺少认证令牌'}), 401
-        
-        if token.startswith('Bearer '):
-            token = token[7:]
-        
-        user_id = verify_token(token)
-        if not user_id:
-            return jsonify({'error': '无效或过期的令牌'}), 401
-        
-        user = User.query.get(user_id)
-        if not user or not user.is_active:
-            return jsonify({'error': '用户不存在或已被禁用'}), 401
-        
-        request.current_user = user
-        return f(*args, **kwargs)
-    
-    return decorated_function
+auth_bp = Blueprint('auth', __name__)
 
 def role_required(roles):
     """角色验证装饰器"""
     def decorator(f):
         @functools.wraps(f)
-        @login_required
+        @jwt_required()
         def decorated_function(*args, **kwargs):
-            if request.current_user.role not in roles:
+            claims = get_jwt()
+            role = claims.get('role')
+            if role not in roles:
                 return jsonify({'error': '权限不足'}), 403
             return f(*args, **kwargs)
         return decorated_function
@@ -67,8 +28,6 @@ def admin_required(f):
 def teacher_required(f):
     """教师权限装饰器"""
     return role_required(['admin', 'teacher'])(f)
-
-auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -93,7 +52,7 @@ def login():
     
     # 创建访问令牌
     access_token = create_access_token(
-        identity=user.id,
+        identity=str(user.id),
         additional_claims={
             "username": user.username,
             "role": user.role
@@ -103,7 +62,7 @@ def login():
     
     # 创建刷新令牌
     refresh_token = create_refresh_token(
-        identity=user.id,
+        identity=str(user.id),
         expires_delta=datetime.timedelta(days=30)
     )
     

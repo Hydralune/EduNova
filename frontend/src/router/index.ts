@@ -57,6 +57,12 @@ const router = createRouter({
       props: true
     },
     {
+      path: '/materials',
+      name: 'materials',
+      component: () => import('../views/MaterialManagementView.vue'),
+      meta: { requiresAuth: true, requiresTeacher: true }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('../views/NotFoundView.vue')

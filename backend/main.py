@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # JWT配置
-app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
+app.config['JWT_SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600  # 令牌过期时间1小时
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 604800  # 刷新令牌过期时间7天
 
@@ -62,6 +62,7 @@ from backend.api.admin import admin_bp
 from backend.api.learning import learning_bp
 from backend.api.rag_ai import rag_ai_bp
 from backend.api.auth import auth_bp
+from backend.api.material import material_bp
 
 # Register blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
@@ -69,6 +70,7 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(learning_bp)  # url_prefix already defined in blueprint
 app.register_blueprint(rag_ai_bp, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(material_bp)  # url_prefix already defined in blueprint
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])

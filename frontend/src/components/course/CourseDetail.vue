@@ -110,36 +110,11 @@
 
         <!-- 课件资源 -->
         <div v-else-if="activeTab === 'materials'" class="p-6">
-          <div class="flex justify-between items-center mb-6">
-            <h3 class="text-lg font-semibold">课件资源</h3>
-            <button 
-              v-if="canEdit" 
-              @click="showAddMaterialModal = true"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md"
-            >
-              上传课件
-            </button>
-          </div>
-
-          <div v-if="materials.length > 0" class="space-y-4">
-            <div v-for="material in materials" :key="material.id" class="flex items-center justify-between p-4 border rounded-md">
-              <div class="flex items-center">
-                <span class="mr-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </span>
-                <div>
-                  <p class="font-medium">{{ material.title }}</p>
-                  <p class="text-sm text-gray-500">{{ material.type }} · {{ material.size }}</p>
-                </div>
-              </div>
-              <button class="text-blue-600 hover:text-blue-800">下载</button>
-            </div>
-          </div>
-          <div v-else class="text-center py-10">
-            <p class="text-gray-500">暂无课件资源</p>
-          </div>
+          <CourseMaterials 
+            :course-id="courseId" 
+            :can-upload="canEdit"
+            @refresh="fetchCourseDetail"
+          />
         </div>
 
         <!-- 评估测验 -->
@@ -261,6 +236,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
+import CourseMaterials from '../material/CourseMaterials.vue';
 
 const props = defineProps({
   id: {
@@ -278,7 +254,6 @@ const course = ref(null);
 const activeTab = ref('chapters');
 const studentSearch = ref('');
 const showAddChapterModal = ref(false);
-const showAddMaterialModal = ref(false);
 const showAddAssessmentModal = ref(false);
 const showAddStudentModal = ref(false);
 
@@ -295,21 +270,6 @@ const canEdit = computed(() => {
 });
 
 // 模拟数据
-const materials = ref([
-  {
-    id: 1,
-    title: '第一章PPT',
-    type: 'PowerPoint',
-    size: '2.5MB',
-  },
-  {
-    id: 2,
-    title: '参考资料',
-    type: 'PDF',
-    size: '1.8MB',
-  },
-]);
-
 const assessments = ref([
   {
     id: 1,
