@@ -110,7 +110,7 @@ def chat_with_ai():
                 *history
             ],
             "temperature": 0.7,
-            "max_tokens": 800,
+            "max_tokens": 4000,
             "stream": stream  # 是否使用流式输出
         }
         

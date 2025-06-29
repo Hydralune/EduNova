@@ -284,7 +284,7 @@
         
         <!-- 智能助手 -->
         <div v-else-if="activeTab === 'ai-assistant'" class="p-6">
-          <AIAssistant :courseId="courseId" :userId="authStore.user?.id || 0" />
+          <AIAssistant :courseId="courseId" />
         </div>
       </div>
     </div>

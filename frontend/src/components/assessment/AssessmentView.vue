@@ -50,35 +50,83 @@
                 <div class="flex">
                   <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
                   <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
+                    <p class="mb-3" v-html="question.stem"></p>
                     
                     <!-- 选择题选项 -->
-                    <div v-if="section.type === 'multiple_choice' || section.type === 'multiple_select'" class="space-y-2">
+                    <div v-if="question.type === 'multiple_choice' || question.type === 'multiple_select'" class="space-y-2">
                       <div v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center">
                         <span class="mr-2">{{ String.fromCharCode(65 + optIndex) }}.</span>
-                        <span>{{ option }}</span>
+                        <span v-html="option"></span>
                       </div>
-                      <p class="text-sm text-gray-600 mt-2">
+                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
                         正确答案: {{ Array.isArray(question.answer) ? question.answer.join(', ') : question.answer }}
                       </p>
                     </div>
                     
                     <!-- 判断题答案 -->
-                    <div v-if="section.type === 'true_false'" class="mt-2">
-                      <p class="text-sm text-gray-600">正确答案: {{ question.answer === 'true' ? '正确' : '错误' }}</p>
+                    <div v-if="question.type === 'true_false'" class="mt-2">
+                      <div class="flex items-center space-x-4">
+                        <div class="flex items-center">
+                          <input 
+                            type="radio" 
+                            :id="`q-${sectionIndex}-${qIndex}-true`" 
+                            :name="`q-${sectionIndex}-${qIndex}`"
+                            value="true"
+                            :checked="answers[sectionIndex]?.[qIndex] === 'true'"
+                            @change="answers[sectionIndex][qIndex] = 'true'"
+                            class="mr-2"
+                          />
+                          <label :for="`q-${sectionIndex}-${qIndex}-true`">正确</label>
+                        </div>
+                        <div class="flex items-center">
+                          <input 
+                            type="radio" 
+                            :id="`q-${sectionIndex}-${qIndex}-false`" 
+                            :name="`q-${sectionIndex}-${qIndex}`"
+                            value="false"
+                            :checked="answers[sectionIndex]?.[qIndex] === 'false'"
+                            @change="answers[sectionIndex][qIndex] = 'false'"
+                            class="mr-2"
+                          />
+                          <label :for="`q-${sectionIndex}-${qIndex}-false`">错误</label>
+                        </div>
+                      </div>
+                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
+                        正确答案: {{ question.answer === 'true' ? '正确' : '错误' }}
+                      </p>
                     </div>
                     
                     <!-- 填空题答案 -->
-                    <div v-if="section.type === 'fill_in_blank'" class="mt-2">
-                      <p class="text-sm text-gray-600">
+                    <div v-if="question.type === 'fill_in_blank'" class="mt-2">
+                      <div 
+                        v-for="(_, blankIndex) in answers[sectionIndex][qIndex]" 
+                        :key="blankIndex"
+                        class="flex items-center mb-2"
+                      >
+                        <input 
+                          type="text" 
+                          :placeholder="`第 ${blankIndex + 1} 空`"
+                          v-model="answers[sectionIndex][qIndex][blankIndex]"
+                          class="border rounded px-2 py-1"
+                        />
+                      </div>
+                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
                         正确答案: {{ Array.isArray(question.answer) ? question.answer.join(' | ') : question.answer }}
                       </p>
                     </div>
                     
-                    <!-- 简答题和论述题参考答案 -->
-                    <div v-if="section.type === 'short_answer' || section.type === 'essay'" class="mt-2">
-                      <p class="text-sm text-gray-600">参考答案:</p>
-                      <p class="text-sm mt-1 pl-4">{{ question.reference_answer }}</p>
+                    <!-- 简答题和论述题 -->
+                    <div v-if="question.type === 'short_answer' || question.type === 'essay'" class="mt-2">
+                      <textarea 
+                        v-model="answers[sectionIndex][qIndex]"
+                        :rows="question.type === 'essay' ? 6 : 3"
+                        class="w-full border rounded px-2 py-1"
+                        :placeholder="'请在此输入答案'"
+                      ></textarea>
+                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
+                        参考答案:
+                        <span v-html="question.reference_answer || question.answer"></span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -135,14 +183,16 @@
             <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
             <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
             
-            <!-- 选择题 -->
-            <div v-if="section.type === 'multiple_choice'" class="space-y-6">
+            <!-- 题目列表 -->
+            <div class="space-y-6">
               <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
                 <div class="flex">
                   <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
                   <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
-                    <div class="space-y-2">
+                    <p class="mb-3" v-html="question.stem"></p>
+                    
+                    <!-- 单选题 -->
+                    <div v-if="question.type === 'multiple_choice'" class="space-y-2">
                       <div 
                         v-for="(option, optIndex) in question.options" 
                         :key="optIndex"
@@ -156,22 +206,14 @@
                           v-model="answers[sectionIndex][qIndex]"
                           class="mr-2"
                         />
-                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">{{ option }}</label>
+                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">
+                          {{ String.fromCharCode(65 + optIndex) }}. {{ option }}
+                        </label>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 多选题 -->
-            <div v-if="section.type === 'multiple_select'" class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
-                    <div class="space-y-2">
+                    
+                    <!-- 多选题 -->
+                    <div v-if="question.type === 'multiple_select'" class="space-y-2">
                       <div 
                         v-for="(option, optIndex) in question.options" 
                         :key="optIndex"
@@ -184,124 +226,76 @@
                           v-model="answers[sectionIndex][qIndex]"
                           class="mr-2"
                         />
-                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">{{ option }}</label>
+                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">
+                          {{ String.fromCharCode(65 + optIndex) }}. {{ option }}
+                        </label>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 填空题 -->
-            <div v-if="section.type === 'fill_in_blank'" class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3" v-html="formatBlankQuestion(question.stem)"></p>
-                    <div v-for="(blank, blankIndex) in countBlanks(question.stem)" :key="blankIndex" class="mb-2">
-                      <input 
-                        type="text" 
-                        :placeholder="`空白 ${blankIndex + 1}`"
-                        v-model="answers[sectionIndex][qIndex][blankIndex]"
-                        class="px-3 py-2 border rounded-md w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 判断题 -->
-            <div v-if="section.type === 'true_false'" class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
-                    <div class="space-y-2">
-                      <div class="flex items-center">
-                        <input 
-                          type="radio" 
-                          :id="`q-${sectionIndex}-${qIndex}-true`" 
-                          :name="`q-${sectionIndex}-${qIndex}`"
-                          value="true"
-                          v-model="answers[sectionIndex][qIndex]"
-                          class="mr-2"
-                        />
-                        <label :for="`q-${sectionIndex}-${qIndex}-true`">正确</label>
-                      </div>
-                      <div class="flex items-center">
-                        <input 
-                          type="radio" 
-                          :id="`q-${sectionIndex}-${qIndex}-false`" 
-                          :name="`q-${sectionIndex}-${qIndex}`"
-                          value="false"
-                          v-model="answers[sectionIndex][qIndex]"
-                          class="mr-2"
-                        />
-                        <label :for="`q-${sectionIndex}-${qIndex}-false`">错误</label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 简答题 -->
-            <div v-if="section.type === 'short_answer'" class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
-                    <textarea 
-                      v-model="answers[sectionIndex][qIndex]" 
-                      rows="4" 
-                      class="w-full px-3 py-2 border rounded-md"
-                      placeholder="请在此输入您的答案..."
-                    ></textarea>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 大题/论述题 -->
-            <div v-if="section.type === 'essay'" class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3">{{ question.stem }}</p>
-                    <textarea 
-                      v-model="answers[sectionIndex][qIndex].text" 
-                      rows="6" 
-                      class="w-full px-3 py-2 border rounded-md mb-3"
-                      placeholder="请在此输入您的答案..."
-                    ></textarea>
                     
-                    <!-- 文件上传 -->
-                    <div class="border-t pt-3">
-                      <p class="text-sm text-gray-600 mb-2">附件上传（可选）：</p>
-                      <input 
-                        type="file" 
-                        @change="handleFileUpload($event, sectionIndex, qIndex)" 
-                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      <div v-if="answers[sectionIndex][qIndex].files.length > 0" class="mt-2">
-                        <p class="text-sm font-medium">已上传文件：</p>
-                        <ul class="text-sm text-gray-600">
-                          <li v-for="(file, fileIndex) in answers[sectionIndex][qIndex].files" :key="fileIndex" class="flex items-center justify-between mt-1">
-                            <span>{{ file.name }}</span>
-                            <button 
-                              @click="removeFile(sectionIndex, qIndex, fileIndex)" 
-                              class="text-red-600 hover:text-red-800"
-                            >
-                              删除
-                            </button>
-                          </li>
-                        </ul>
+                    <!-- 判断题 -->
+                    <div v-if="question.type === 'true_false'" class="space-y-2">
+                      <div class="flex items-center space-x-4">
+                        <div class="flex items-center">
+                          <input 
+                            type="radio" 
+                            :id="`q-${sectionIndex}-${qIndex}-true`" 
+                            :name="`q-${sectionIndex}-${qIndex}`"
+                            value="true"
+                            :checked="answers[sectionIndex]?.[qIndex] === 'true'"
+                            @change="answers[sectionIndex][qIndex] = 'true'"
+                            class="mr-2"
+                          />
+                          <label :for="`q-${sectionIndex}-${qIndex}-true`">正确</label>
+                        </div>
+                        <div class="flex items-center">
+                          <input 
+                            type="radio" 
+                            :id="`q-${sectionIndex}-${qIndex}-false`" 
+                            :name="`q-${sectionIndex}-${qIndex}`"
+                            value="false"
+                            :checked="answers[sectionIndex]?.[qIndex] === 'false'"
+                            @change="answers[sectionIndex][qIndex] = 'false'"
+                            class="mr-2"
+                          />
+                          <label :for="`q-${sectionIndex}-${qIndex}-false`">错误</label>
+                        </div>
                       </div>
+                    </div>
+                    
+                    <!-- 填空题 -->
+                    <div v-if="question.type === 'fill_in_blank'" class="space-y-2">
+                      <div 
+                        v-for="(_, blankIndex) in answers[sectionIndex][qIndex]" 
+                        :key="blankIndex"
+                        class="flex items-center"
+                      >
+                        <input 
+                          type="text" 
+                          :placeholder="`第 ${blankIndex + 1} 空`"
+                          v-model="answers[sectionIndex][qIndex][blankIndex]"
+                          class="border rounded px-2 py-1"
+                        />
+                      </div>
+                    </div>
+                    
+                    <!-- 简答题 -->
+                    <div v-if="question.type === 'short_answer'" class="mt-2">
+                      <textarea 
+                        v-model="answers[sectionIndex][qIndex]"
+                        rows="3"
+                        class="w-full border rounded px-2 py-1"
+                        :placeholder="'请在此输入答案'"
+                      ></textarea>
+                    </div>
+                    
+                    <!-- 论述题 -->
+                    <div v-if="question.type === 'essay'" class="mt-2">
+                      <textarea 
+                        v-model="answers[sectionIndex][qIndex]"
+                        rows="6"
+                        class="w-full border rounded px-2 py-1"
+                        :placeholder="'请在此输入答案'"
+                      ></textarea>
                     </div>
                   </div>
                 </div>
@@ -374,11 +368,16 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import AssessmentEditor from './AssessmentEditor.vue';
+import { assessmentAPI } from '@/api';
 
 const props = defineProps({
   assessmentId: {
     type: [Number, String],
-    required: true
+    required: true,
+    validator: (value) => {
+      const id = typeof value === 'string' ? parseInt(value) : value;
+      return !isNaN(id) && id > 0;
+    }
   },
   previewMode: {
     type: Boolean,
@@ -409,166 +408,104 @@ const timer = ref(null);
 
 // 评估数据
 const assessment = reactive({
-  id: props.assessmentId,
-  title: "第一章测验",
-  description: "测试对第一章内容的理解",
-  total_score: 100,
-  duration: "30分钟",
-  due_date: "2025-07-15",
-  max_attempts: 3,
-  sections: [
-    {
-      type: "multiple_choice",
-      description: "选择题：请在每小题给出的选项中选出一个正确答案。",
-      score_per_question: 4,
-      questions: [
-        {
-          id: 1,
-          stem: "以下哪个是JavaScript的基本数据类型？",
-          options: [
-            "A. Array",
-            "B. Object",
-            "C. String",
-            "D. RegExp"
-          ],
-          answer: "C"
-        },
-        {
-          id: 2,
-          stem: "Vue.js中用于响应式数据的API是？",
-          options: [
-            "A. useState",
-            "B. reactive",
-            "C. useEffect",
-            "D. setState"
-          ],
-          answer: "B"
-        }
-      ]
-    },
-    {
-      type: "multiple_select",
-      description: "多选题：请在每小题给出的选项中选出所有正确答案。",
-      score_per_question: 5,
-      questions: [
-        {
-          id: 1,
-          stem: "以下哪些是JavaScript框架或库？",
-          options: [
-            "A. React",
-            "B. Python",
-            "C. Vue",
-            "D. Angular"
-          ],
-          answer: ["A", "C", "D"]
-        }
-      ]
-    },
-    {
-      type: "fill_in_blank",
-      description: "填空题：请在横线上填写正确的内容。",
-      score_per_question: 4,
-      questions: [
-        {
-          id: 1,
-          stem: "Vue.js中，用于创建组件的API是_____。",
-          answer: "defineComponent"
-        },
-        {
-          id: 2,
-          stem: "在Vue 3中，_____函数用于创建响应式对象，而_____函数用于创建响应式基本类型。",
-          answer: ["reactive", "ref"]
-        }
-      ]
-    },
-    {
-      type: "true_false",
-      description: "判断题：请判断以下说法是否正确。",
-      score_per_question: 3,
-      questions: [
-        {
-          id: 1,
-          stem: "Vue.js是一个前端框架。",
-          answer: "true"
-        },
-        {
-          id: 2,
-          stem: "React使用模板语法而不是JSX。",
-          answer: "false"
-        }
-      ]
-    },
-    {
-      type: "short_answer",
-      description: "简答题：请简要回答以下问题。",
-      score_per_question: 10,
-      questions: [
-        {
-          id: 1,
-          stem: "简述Vue.js的生命周期钩子函数。",
-          reference_answer: "Vue组件的生命周期钩子包括：创建阶段的beforeCreate和created，挂载阶段的beforeMount和mounted，更新阶段的beforeUpdate和updated，卸载阶段的beforeUnmount和unmounted等。"
-        }
-      ]
-    },
-    {
-      type: "essay",
-      description: "论述题：请详细回答以下问题，并上传相关资料。",
-      score_per_question: 20,
-      questions: [
-        {
-          id: 1,
-          stem: "分析Vue.js和React的异同，并结合实际项目经验谈谈你的选择偏好。",
-          reference_answer: "Vue和React都是流行的前端框架，它们有许多相似之处，如组件化架构、虚拟DOM等。不同之处在于Vue使用模板语法和选项式API，而React使用JSX和函数式组件..."
-        }
-      ]
-    }
-  ]
+  id: typeof props.assessmentId === 'string' ? parseInt(props.assessmentId) : props.assessmentId,
+  title: '',
+  description: '',
+  course_id: null,
+  type: 'quiz',
+  total_score: 0,
+  duration: '',
+  due_date: null,
+  start_date: null,
+  max_attempts: 1,
+  is_published: false,
+  is_active: true,
+  sections: []
 });
 
 // 答案数据
-const answers = reactive([]);
+const answers = ref([]);
 
-// 初始化答案数据结构
-const initializeAnswers = () => {
-  assessment.sections.forEach((section, sectionIndex) => {
-    answers[sectionIndex] = [];
-    
-    section.questions.forEach((question, qIndex) => {
-      if (section.type === 'multiple_choice' || section.type === 'true_false') {
-        answers[sectionIndex][qIndex] = '';
-      } else if (section.type === 'multiple_select') {
-        answers[sectionIndex][qIndex] = [];
-      } else if (section.type === 'fill_in_blank') {
-        const blankCount = countBlanks(question.stem);
-        answers[sectionIndex][qIndex] = Array(blankCount).fill('');
-      } else if (section.type === 'short_answer') {
-        answers[sectionIndex][qIndex] = '';
-      } else if (section.type === 'essay') {
-        answers[sectionIndex][qIndex] = {
-          text: '',
-          files: []
-        };
+// 初始化答案
+const initAnswers = () => {
+  answers.value = assessment.sections.map(section => {
+    return section.questions.map(question => {
+      if (question.type === 'multiple_choice' || question.type === 'true_false') {
+        return '';
+      } else if (question.type === 'multiple_select') {
+        return [];
+      } else if (question.type === 'fill_in_blank') {
+        const blankCount = (question.stem.match(/_{3,}/g) || []).length || 1;
+        return Array(blankCount).fill('');
+      } else if (question.type === 'short_answer' || question.type === 'essay') {
+        return '';
       }
+      return null;
     });
   });
+  console.log('Initialized answers:', answers.value);
+};
+
+// 从后端获取评估数据
+const fetchAssessment = async () => {
+  try {
+    loading.value = true;
+    const id = typeof props.assessmentId === 'string' ? parseInt(props.assessmentId) : props.assessmentId;
+    console.log('Fetching assessment with ID:', id);
+    
+    const response = await assessmentAPI.getAssessment(id);
+    console.log('Received assessment data:', response);
+    
+    // 将后端的 questions 转换为前端需要的格式
+    const questions = Array.isArray(response.questions) ? response.questions : [];
+    console.log('Questions from backend:', questions);
+    
+    // 创建一个包含所有题目的 section
+    const sections = [{
+      type: 'all',
+      description: '请回答以下问题',
+      score_per_question: questions.length > 0 ? Math.floor(response.total_score / questions.length) : 0,
+      questions: questions.map(q => ({
+        ...q,
+        stem: q.content || q.stem || '',  // 兼容不同的题目格式
+        options: q.options || [],
+        type: q.type || 'multiple_choice',
+        answer: q.answer || '',
+        // 确保判断题的答案是字符串类型
+        ...(q.type === 'true_false' ? { answer: String(q.answer) } : {})
+      }))
+    }];
+    
+    console.log('Generated sections:', sections);
+    
+    // 更新评估数据
+    Object.assign(assessment, {
+      ...response,
+      sections
+    });
+    
+    // 初始化答案
+    initAnswers();
+    
+    console.log('Updated assessment data:', assessment);
+  } catch (error) {
+    console.error('获取评估数据失败:', error);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+      console.error('Error status:', error.response.status);
+    }
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 开始评估
 const startAssessment = () => {
   started.value = true;
-  
-  // 设置时间限制
+  initAnswers();
   if (assessment.duration) {
-    // 简单解析时间限制，如"30分钟"转换为1800秒
-    const match = assessment.duration.match(/(\d+)/);
-    if (match) {
-      timeLimit.value = parseInt(match[1]) * 60; // 转换为秒
-      remainingTime.value = timeLimit.value;
-      startTimer();
-    }
+    startTimer();
   }
-  
-  initializeAnswers();
 };
 
 // 计时器
@@ -597,13 +534,15 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString();
 };
 
-// 处理填空题
-const countBlanks = (text) => {
-  return (text.match(/_____/g) || []).length;
+// 计算填空题的空格数
+const countBlanks = (stem) => {
+  const matches = stem.match(/_{3,}/g);
+  return matches ? matches.length : 1;
 };
 
-const formatBlankQuestion = (text) => {
-  return text.replace(/_____/g, '<span class="border-b-2 border-gray-400 inline-block min-w-20">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>');
+// 格式化填空题题干
+const formatBlankQuestion = (stem) => {
+  return stem.replace(/_{3,}/g, '<u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u>');
 };
 
 // 处理文件上传
@@ -667,18 +606,18 @@ const calculateScore = () => {
   
   assessment.sections.forEach((section, sectionIndex) => {
     section.questions.forEach((question, qIndex) => {
-      if (section.type === 'multiple_choice') {
+      if (question.type === 'multiple_choice') {
         if (answers[sectionIndex][qIndex] === question.answer) {
           totalScore += section.score_per_question;
         }
-      } else if (section.type === 'multiple_select') {
+      } else if (question.type === 'multiple_select') {
         // 多选题要完全匹配才得分
         const userAnswer = answers[sectionIndex][qIndex].sort();
         const correctAnswer = question.answer.sort();
         if (JSON.stringify(userAnswer) === JSON.stringify(correctAnswer)) {
           totalScore += section.score_per_question;
         }
-      } else if (section.type === 'fill_in_blank') {
+      } else if (question.type === 'fill_in_blank') {
         // 简单处理单个空和多个空的情况
         if (Array.isArray(question.answer)) {
           let correct = true;
@@ -691,7 +630,7 @@ const calculateScore = () => {
         } else if (answers[sectionIndex][qIndex][0]?.toLowerCase() === question.answer.toLowerCase()) {
           totalScore += section.score_per_question;
         }
-      } else if (section.type === 'true_false') {
+      } else if (question.type === 'true_false') {
         if (answers[sectionIndex][qIndex] === question.answer) {
           totalScore += section.score_per_question;
         }
@@ -714,14 +653,9 @@ const saveAssessment = async (updatedAssessment) => {
   }
 };
 
-// 组件挂载时
-onMounted(async () => {
-  try {
-    // TODO: 从API获取评估数据
-    loading.value = false;
-  } catch (error) {
-    console.error('加载评估失败:', error);
-  }
+// 在组件挂载时获取数据
+onMounted(() => {
+  fetchAssessment();
 });
 
 // 组件卸载前清除定时器

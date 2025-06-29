@@ -132,7 +132,7 @@
 
         <!-- AI助手 -->
         <div v-if="activeTab === 'ai-assistant'">
-          <AIAssistant :user-id="userId || ''" />
+          <AIAssistant />
         </div>
 
         <!-- 学习分析 -->
