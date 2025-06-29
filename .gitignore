@@ -86,7 +86,6 @@ venv/
 ENV/
 
 # RAG Module sensitive content
-RAG/env.md
 RAG/.env
 RAG/data/
 RAG/hirag/api_keys.py

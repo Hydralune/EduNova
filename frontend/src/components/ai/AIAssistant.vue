@@ -1,5 +1,13 @@
 <template>
   <div class="ai-assistant">
+    <!-- 复制成功提示 -->
+    <div 
+      v-if="showCopyNotification" 
+      class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50 transition-opacity"
+    >
+      已复制到剪贴板
+    </div>
+    
     <!-- 对话列表侧边栏 -->
     <div v-if="showConversations" class="fixed inset-0 bg-black bg-opacity-50 flex z-40" @click="showConversations = false">
       <div class="bg-white w-80 h-full overflow-y-auto p-4" @click.stop>
@@ -70,11 +78,11 @@
         <div class="space-y-4">
           <!-- 系统消息 -->
           <div v-if="chatMessages.length === 0" class="flex items-start">
-            <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden">
+            <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden mt-1">
               <img src="/src/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
             </div>
-            <div class="ml-3 bg-gray-100 rounded-lg py-2 px-4 max-w-[80%]">
-              <p class="text-gray-800">你好！我是智能学习助手。有什么可以帮助你的吗？</p>
+            <div class="ml-3 pl-2 max-w-[80%]">
+              <p class="text-gray-800 font-medium">你好！我是智能学习助手。有什么可以帮助你的吗？</p>
             </div>
           </div>
           
@@ -87,7 +95,7 @@
               </div>
               <div class="flex-shrink-0 h-8 w-8 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center">
                 <template v-if="userAvatarUrl">
-                  <img :src="userAvatarUrl" alt="User" class="h-full w-full object-cover" />
+                  <img :src="formatAvatarUrl(userAvatarUrl)" alt="User" class="h-full w-full object-cover" />
                 </template>
                 <template v-else>
                   <span class="text-white font-medium">{{ userInitial }}</span>
@@ -97,11 +105,15 @@
             
             <!-- 系统回复 -->
             <div v-else class="flex items-start mt-4">
-              <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden">
+              <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden mt-1">
                 <img src="/src/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
               </div>
-              <div class="ml-3 bg-gray-100 rounded-lg py-2 px-4 max-w-[80%]">
-                <p v-if="message.content" class="text-gray-800 whitespace-pre-wrap">{{ message.content }}</p>
+              <div class="ml-3 pl-2 max-w-[80%] relative group">
+                <!-- 使用v-if/v-else来区分是否有内容 -->
+                <div v-if="message.content" class="text-gray-800 font-medium">
+                  <!-- 使用v-html渲染Markdown内容 -->
+                  <div class="markdown-body whitespace-pre-wrap" v-html="renderMarkdown(message.content)"></div>
+                </div>
                 
                 <!-- 加载中指示器 - 当消息为空时显示 -->
                 <div v-else class="flex space-x-1">
@@ -119,6 +131,17 @@
                     </li>
                   </ul>
                 </div>
+                
+                <!-- 复制按钮 - 使用group-hover使其仅在悬停时显示 -->
+                <button 
+                  @click="copyMessageContent(message.content)"
+                  class="absolute bottom-2 right-2 bg-gray-200 text-gray-600 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="复制内容"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -159,8 +182,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, onMounted, nextTick, watch, computed } from 'vue';
 import axios from 'axios';
+import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js';
+import DOMPurify from 'dompurify';
+import 'github-markdown-css/github-markdown.css';
+import 'highlight.js/styles/github.css';
 
 // 定义接口
 interface ChatMessage {
@@ -168,6 +196,7 @@ interface ChatMessage {
   content: string;
   sources?: Source[];
   timestamp?: number;
+  renderedContent?: string; // 新增：存储已渲染的Markdown内容
 }
 
 interface Source {
@@ -187,14 +216,8 @@ const props = defineProps({
   courseId: {
     type: [Number, String],
     default: null
-  },
-  userId: {
-    type: [Number, String],
-    required: true
   }
 });
-
-const API_BASE_URL = '/api';
 
 const chatContainer = ref<HTMLElement | null>(null);
 const userInput = ref('');
@@ -203,6 +226,7 @@ const chatMessages = ref<ChatMessage[]>([]);
 const conversationId = ref('');
 const userAvatarUrl = ref('');
 const userInitial = ref('');
+const showCopyNotification = ref(false);
 
 // 对话历史相关
 const showConversations = ref(false);
@@ -218,24 +242,145 @@ const suggestions = [
   '如何准备考试？'
 ];
 
+const API_BASE_URL = 'http://localhost:5001/api';
+
+// 初始化markdown-it实例，配置代码高亮
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  breaks: false, // 禁用自动换行转换
+  highlight: function (str: string, lang: string): string {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return `<div class="code-header"><span class="code-language">${lang}</span></div>` +
+               '<pre class="hljs has-language"><code>' +
+               hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+               '</code></pre>';
+      } catch (__) {}
+    }
+    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+  }
+});
+
+// 自定义列表渲染规则，更好地处理嵌套列表
+const defaultRender = md.renderer.rules.list_item_open || function(tokens, idx, options, env, self) {
+  return self.renderToken(tokens, idx, options);
+};
+
+md.renderer.rules.list_item_open = function(tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  if (token.markup === '*' || token.markup === '-') {
+    token.attrJoin('class', 'md-list-item');
+  }
+  return defaultRender(tokens, idx, options, env, self);
+};
+
+// 渲染Markdown内容
+function renderMarkdown(content: string): string {
+  if (!content) return '';
+  try {
+    // 1. 激进预处理 - 处理所有可能导致多余空行的情况
+    const lines = content.split('\n');
+    const processedLines = [];
+    let consecutiveEmptyLines = 0;
+    
+    // 逐行处理，严格控制空行数量
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // 如果是空行
+      if (line === '') {
+        consecutiveEmptyLines++;
+        // 最多只允许一个空行
+        if (consecutiveEmptyLines <= 1) {
+          processedLines.push('');
+        }
+      } else {
+        // 非空行，重置计数器
+        consecutiveEmptyLines = 0;
+        
+        // 处理标题格式
+        if (/^#{1,6}(?!\s)/.test(line)) {
+          processedLines.push(line.replace(/^(#{1,6})/, '$1 '));
+        } else {
+          processedLines.push(line);
+        }
+      }
+    }
+    
+    // 2. 使用处理后的内容渲染Markdown
+    const processedContent = processedLines.join('\n');
+    const html = md.render(processedContent);
+    
+    // 3. 后处理HTML，移除任何可能导致多余空行的元素
+    const cleanedHtml = html
+      // 移除连续的<br>标签
+      .replace(/<br\s*\/?>\s*<br\s*\/?>\s*<br\s*\/?>/g, '<br><br>')
+      // 移除连续的空段落
+      .replace(/<p>\s*<\/p>\s*<p>\s*<\/p>/g, '<p class="single-space"></p>')
+      // 移除段落之间的多余空白
+      .replace(/<\/p>\s+<p>/g, '</p><p>');
+    
+    return DOMPurify.sanitize(cleanedHtml);
+  } catch (err) {
+    console.error('Markdown渲染错误:', err);
+    return content; // 如果渲染失败，返回原始内容
+  }
+}
+
+// 复制消息内容
+function copyMessageContent(content: string): void {
+  if (!content) return;
+  
+  navigator.clipboard.writeText(content)
+    .then(() => {
+      // 显示复制成功提示
+      showCopyNotification.value = true;
+      setTimeout(() => {
+        showCopyNotification.value = false;
+      }, 2000);
+    })
+    .catch(err => {
+      console.error('复制失败:', err);
+    });
+}
+
+// 格式化头像URL
+function formatAvatarUrl(url: string): string {
+  if (!url) return '';
+  
+  // 如果已经是完整URL，直接返回
+  if (url.startsWith('http')) {
+    return url;
+  }
+  
+  // 如果是相对路径，添加基础URL
+  return `http://localhost:5001${url}`;
+}
+
 onMounted(async () => {
   // 获取用户信息
   try {
-    // 尝试获取用户信息，包括头像
-    const userResponse = await axios.get(`${API_BASE_URL}/users/${props.userId}`, {
+    // 使用当前用户的个人资料API而不是按ID获取
+    const userResponse = await axios.get(`${API_BASE_URL}/auth/profile`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
     });
     
-    if (userResponse.data.status === 'success') {
+    if (userResponse.data && userResponse.data.user) {
       const userData = userResponse.data.user;
+      console.log('获取到用户信息:', userData);
+      
       // 设置用户头像URL
       if (userData.avatar_url) {
         userAvatarUrl.value = userData.avatar_url;
+        console.log('设置用户头像URL:', userAvatarUrl.value);
       } else {
         // 如果没有头像，使用用户名的首字母
         userInitial.value = userData.username ? userData.username.charAt(0).toUpperCase() : 'U';
+        console.log('设置用户初始字母:', userInitial.value);
       }
     } else {
       // 如果无法获取用户信息，使用默认首字母
@@ -248,7 +393,11 @@ onMounted(async () => {
 
   // 检查AI模块状态
   try {
-    const statusResponse = await axios.get(`${API_BASE_URL}/rag/status`);
+    const statusResponse = await axios.get(`${API_BASE_URL}/rag/status`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
     console.log('AI模块状态:', statusResponse.data);
     
     if (!statusResponse.data.ai_enabled) {
@@ -345,6 +494,8 @@ async function sendMessage() {
     // 处理流式响应
     const decoder = new TextDecoder();
     let buffer = '';
+    let lastRenderTime = Date.now();
+    const renderInterval = 500; // 每500毫秒渲染一次
     
     while (true) {
       const { done, value } = await reader.read();
@@ -370,6 +521,19 @@ async function sendMessage() {
               } else {
                 chatMessages.value[aiMessageIndex].content += data.content;
               }
+              
+              // 实时渲染Markdown：每隔一定时间或内容达到一定长度时渲染
+              const now = Date.now();
+              if (now - lastRenderTime > renderInterval) {
+                // 强制Vue更新视图
+                chatMessages.value = [...chatMessages.value];
+                lastRenderTime = now;
+                
+                // 滚动到底部
+                nextTick(() => {
+                  scrollToBottom();
+                });
+              }
             }
             
             // 处理完成信号
@@ -378,6 +542,9 @@ async function sendMessage() {
               if (data.conversation_id) {
                 conversationId.value = data.conversation_id;
               }
+              
+              // 最后一次渲染，确保所有内容都已渲染
+              chatMessages.value = [...chatMessages.value];
               
               loading.value = false;
               return;
@@ -504,4 +671,225 @@ function setDefaultUserInitial() {
   // 如果无法从localStorage获取，使用默认值
   userInitial.value = 'U';
 }
-</script> 
+</script>
+
+<style>
+/* 添加Markdown样式 */
+.ai-assistant .markdown-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.4; /* 调整行高 */
+  background-color: transparent !important; /* 移除白色背景 */
+  padding: 0 !important; /* 移除默认内边距 */
+  margin: 0 !important; /* 移除默认外边距 */
+  font-weight: 500; /* 添加字体加粗 */
+  width: 100%; /* 确保内容宽度适应容器 */
+  word-break: break-word; /* 确保长文本会换行 */
+  color: #333; /* 使用黑色文字 */
+}
+
+/* 自定义水平线样式 */
+.ai-assistant .markdown-body hr.thin-line {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border: none;
+  margin: 8px 0;
+}
+
+/* 移除markdown-body中的页面分隔 */
+.ai-assistant .markdown-body > *:first-child {
+  margin-top: 0 !important;
+}
+
+.ai-assistant .markdown-body > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* 修复段落和其他元素之间的间距问题 */
+.ai-assistant .markdown-body p {
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+
+/* 空段落样式 - 极小化空间 */
+.ai-assistant .markdown-body p:empty,
+.ai-assistant .markdown-body p.single-space {
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0.25em !important;
+  line-height: 0.25em !important;
+  min-height: 0 !important;
+  max-height: 0.25em !important;
+}
+
+/* 控制换行符 */
+.ai-assistant .markdown-body br {
+  line-height: 0.25em !important;
+  content: "";
+  display: block;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0.25em !important;
+}
+
+/* 调整标题间距 */
+.ai-assistant .markdown-body h1,
+.ai-assistant .markdown-body h2,
+.ai-assistant .markdown-body h3,
+.ai-assistant .markdown-body h4,
+.ai-assistant .markdown-body h5,
+.ai-assistant .markdown-body h6 {
+  margin-top: 1em !important;
+  margin-bottom: 0.5em !important;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #333; /* 标题颜色 */
+}
+
+/* 第一个标题不需要顶部边距 */
+.ai-assistant .markdown-body h1:first-child,
+.ai-assistant .markdown-body h2:first-child,
+.ai-assistant .markdown-body h3:first-child,
+.ai-assistant .markdown-body h4:first-child,
+.ai-assistant .markdown-body h5:first-child,
+.ai-assistant .markdown-body h6:first-child {
+  margin-top: 0 !important;
+}
+
+.ai-assistant .markdown-body h1 {
+  font-size: 1.4em;
+  padding-bottom: 0.2em;
+}
+
+.ai-assistant .markdown-body h2 {
+  font-size: 1.3em;
+  padding-bottom: 0.2em;
+}
+
+.ai-assistant .markdown-body h3 {
+  font-size: 1.2em;
+}
+
+.ai-assistant .markdown-body h4 {
+  font-size: 1.1em;
+}
+
+.ai-assistant .markdown-body pre {
+  background-color: rgba(0, 0, 0, 0.03); /* 浅灰色代码块背景 */
+  border-radius: 6px;
+  font-size: 90%;
+  line-height: 1.4;
+  overflow: auto;
+  padding: 8px;
+  margin: 6px 0;
+  color: #333; /* 代码块文字颜色 */
+}
+
+.ai-assistant .markdown-body code {
+  background-color: rgba(0, 0, 0, 0.03); /* 浅灰色行内代码背景 */
+  border-radius: 3px;
+  font-size: 90%;
+  margin: 0;
+  padding: 0.1em 0.3em;
+  color: #333; /* 行内代码文字颜色 */
+}
+
+.ai-assistant .markdown-body img {
+  max-width: 100%;
+  box-sizing: content-box;
+  margin: 6px 0;
+}
+
+.ai-assistant .markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 6px 0;
+  font-size: 0.95em;
+}
+
+.ai-assistant .markdown-body table th,
+.ai-assistant .markdown-body table td {
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 调整表格边框颜色 */
+  padding: 4px 6px;
+}
+
+.ai-assistant .markdown-body table tr {
+  background-color: transparent;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.ai-assistant .markdown-body table tr:nth-child(2n) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.ai-assistant .markdown-body blockquote {
+  border-left: 0.25em solid rgba(0, 0, 0, 0.1); /* 调整引用块边框颜色 */
+  color: #666; /* 调整引用块文字颜色 */
+  padding: 0 0.6em;
+  margin: 6px 0;
+}
+
+.ai-assistant .markdown-body ul,
+.ai-assistant .markdown-body ol {
+  padding-left: 1.5em;
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+
+/* 减小列表项的间距 */
+.ai-assistant .markdown-body li + li {
+  margin-top: 0.15em;
+}
+
+/* 嵌套列表样式 */
+.ai-assistant .markdown-body ul ul,
+.ai-assistant .markdown-body ol ol,
+.ai-assistant .markdown-body ul ol,
+.ai-assistant .markdown-body ol ul {
+  margin-top: 0.1em !important;
+  margin-bottom: 0.1em !important;
+}
+
+/* 代码块样式优化 */
+.ai-assistant .markdown-body .code-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 3px 6px;
+  background-color: rgba(0, 0, 0, 0.05); /* 调整代码头部背景 */
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  font-size: 12px;
+  color: #666; /* 调整代码头部文字颜色 */
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ai-assistant .markdown-body .code-language {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.ai-assistant .markdown-body pre.has-language {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 移除github-markdown-css的边框和阴影 */
+.ai-assistant .markdown-body pre,
+.ai-assistant .markdown-body code {
+  border: none;
+  box-shadow: none;
+}
+
+/* 调整链接颜色 */
+.ai-assistant .markdown-body a {
+  color: #2563eb; /* 蓝色链接 */
+  text-decoration: underline;
+}
+
+/* 调整代码高亮颜色 */
+.ai-assistant .markdown-body .hljs {
+  background-color: transparent;
+  color: #333;
+}
+</style> 
