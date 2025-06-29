@@ -4,9 +4,12 @@
       <!-- 页面标题 -->
       <div class="px-4 py-6 sm:px-0">
         <div class="border-4 border-dashed border-gray-200 rounded-lg p-8 text-center">
-          <h1 class="text-3xl font-bold text-gray-900 mb-4">
-            欢迎使用智能教学系统
-          </h1>
+          <div class="flex items-center justify-center mb-4">
+            <img src="@/assets/images/atom.png" alt="Atom Icon" class="h-10 w-10 mr-3" />
+            <h1 class="text-3xl font-bold text-gray-900">
+              欢迎使用智能教学系统
+            </h1>
+          </div>
           <p class="text-lg text-gray-600 mb-8">
             您好，{{ authStore.user?.full_name }}！请根据您的角色选择相应的功能模块。
           </p>

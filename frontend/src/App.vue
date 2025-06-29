@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="min-h-screen bg-gray-50">
+  <div id="app" class="min-h-screen bg-gray-50 flex flex-col">
     <!-- 全局加载指示器 -->
     <div v-if="isInitializing" class="fixed inset-0 bg-white flex items-center justify-center z-50">
       <div class="text-center">
@@ -9,14 +9,15 @@
     </div>
 
     <!-- 主要内容 -->
-    <div v-else>
+    <div v-else class="flex flex-col flex-grow">
       <!-- 导航栏 -->
       <nav v-if="showNavigation" class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
               <router-link to="/" class="flex items-center">
-                <div class="flex-shrink-0">
+                <div class="flex-shrink-0 flex items-center">
+                  <img src="@/assets/images/atom.png" alt="Atom Icon" class="h-8 w-8 mr-2" />
                   <h1 class="text-xl font-bold text-primary-600">智能教学系统</h1>
                 </div>
               </router-link>
@@ -92,6 +93,17 @@
       <main class="flex-1">
         <router-view />
       </main>
+
+      <!-- 页脚 -->
+      <footer v-if="showNavigation" class="bg-white border-t border-gray-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center text-xs text-gray-500">
+            <a href="https://www.flaticon.com/free-icons/atom" title="atom icons" class="hover:text-primary-600">
+              Atom icons created by Freepik - Flaticon
+            </a>
+          </div>
+        </div>
+      </footer>
 
       <!-- 全局通知 -->
       <div

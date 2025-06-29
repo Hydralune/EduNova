@@ -219,7 +219,7 @@ const userInitials = computed(() => {
 });
 
 // 系统状态信息
-const lastLogin = computed(() => authStore.user?.last_login || new Date().toISOString());
+const lastLogin = computed(() => authStore.user?.updated_at || new Date().toISOString());
 const notificationCount = computed(() => 3); // 示例数据
 
 // 格式化日期

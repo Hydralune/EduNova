@@ -6,6 +6,9 @@
         <div class="relative z-10 pb-8 bg-transparent sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
           <main class="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28">
             <div class="sm:text-center lg:text-left">
+              <div class="flex items-center sm:justify-center lg:justify-start mb-4">
+                <img src="@/assets/images/atom.png" alt="Atom Icon" class="h-12 w-12 mr-3" />
+              </div>
               <h1 class="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
                 <span class="block xl:inline">智能教学</span>
                 <span class="block text-primary-600 xl:inline">实训系统</span>
