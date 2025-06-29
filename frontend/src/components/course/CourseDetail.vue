@@ -139,60 +139,130 @@
             <h3 class="text-lg font-semibold">评估测验</h3>
             <button 
               v-if="canEdit" 
-              @click="showAddAssessmentModal = true"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md"
+              @click="createNewAssessment"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               创建评估
             </button>
           </div>
 
           <div v-if="assessments.length > 0" class="space-y-4">
-            <div v-for="assessment in assessments" :key="assessment.id" class="p-4 border rounded-md">
-              <div class="flex items-center justify-between">
+            <div 
+              v-for="assessment in assessments" 
+              :key="assessment.id" 
+              class="bg-white p-6 rounded-lg shadow-md border border-gray-200"
+            >
+              <div class="flex justify-between items-start">
                 <div>
-                  <h4 class="font-medium">{{ assessment.title }}</h4>
-                  <p class="text-sm text-gray-500">{{ assessment.type }} · {{ assessment.question_count }}题 · {{ assessment.time_limit }}分钟</p>
+                  <h4 class="text-lg font-semibold">{{ assessment.title }}</h4>
+                  <p class="text-sm text-gray-600">{{ assessment.description }}</p>
+                  <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
+                    <span>总分: {{ assessment.total_score }}</span>
+                    <span>题目数: {{ getTotalQuestions(assessment) }}</span>
+                    <span>时间限制: {{ assessment.duration || '无限制' }}</span>
+                    <span>截止日期: {{ formatDate(assessment.due_date) }}</span>
+                    <span>尝试次数: {{ assessment.max_attempts || '无限制' }}</span>
                 </div>
-                <div class="flex gap-2">
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                  <span 
+                    :class="getStatusClass(assessment)"
+                    class="px-2 py-1 text-xs rounded-full"
+                  >
+                    {{ getStatusText(assessment) }}
+                  </span>
+                  
+                  <div class="flex gap-2 mt-2">
+                    <router-link 
+                      :to="`/assessments/${assessment.id}`" 
+                      class="text-blue-600 hover:text-blue-800"
+                    >
+                      查看
+                    </router-link>
+                    
+                    <span v-if="canEdit" class="text-gray-300">|</span>
+                    
                   <button 
-                    @click="viewAssessment(assessment.id)" 
+                      v-if="canEdit"
+                      @click="editAssessment(assessment)" 
+                      class="text-blue-600 hover:text-blue-800"
+                  >
+                      编辑
+                  </button>
+                    
+                    <span v-if="canEdit" class="text-gray-300">|</span>
+                    
+                  <button 
+                      v-if="canEdit"
+                      @click="deleteAssessment(assessment)" 
+                      class="text-red-600 hover:text-red-800"
+                  >
+                      删除
+                  </button>
+                </div>
+              </div>
+              </div>
+              
+              <!-- 学生提交状态 -->
+              <div v-if="!canEdit && assessment.submissions" class="mt-4 pt-4 border-t">
+                <div class="flex justify-between items-center">
+                  <div>
+                    <p class="text-sm">
+                      <span class="font-medium">提交状态:</span>
+                      {{ assessment.submissions.length > 0 ? `已提交 ${assessment.submissions.length} 次` : '未提交' }}
+                    </p>
+                    <p v-if="assessment.submissions && assessment.submissions.length > 0" class="text-sm">
+                      <span class="font-medium">最高分:</span>
+                      {{ getHighestScore(assessment.submissions) }} / {{ assessment.total_score }}
+                    </p>
+              </div>
+                <div>
+                    <button 
+                      v-if="canTakeAssessment(assessment)"
+                      @click="takeAssessment(assessment)" 
+                      class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      {{ assessment.submissions && assessment.submissions.length > 0 ? '重新尝试' : '开始' }}
+                    </button>
+                    <button 
+                      v-else-if="assessment.submissions && assessment.submissions.length > 0"
+                      @click="viewSubmissions(assessment)" 
+                      class="px-4 py-2 border rounded-md hover:bg-gray-50"
+                    >
+                      查看提交
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 教师查看提交 -->
+              <div v-if="canEdit" class="mt-4 pt-4 border-t">
+                <div class="flex justify-between items-center">
+                  <p class="text-sm">
+                    <span class="font-medium">提交数:</span>
+                    {{ assessment.submission_count || 0 }}
+                  </p>
+                  <button 
+                    v-if="assessment.submission_count > 0"
+                    @click="viewAllSubmissions(assessment)" 
                     class="px-4 py-2 border rounded-md hover:bg-gray-50"
                   >
-                    查看模式
+                    查看提交
                   </button>
-                  <button 
-                    v-if="canEdit"
-                    @click="viewAssessment(assessment.id)" 
-                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    查看测验内容
-                  </button>
-                  <button 
-                    v-if="!canEdit"
-                    @click="startAssessment(assessment.id)" 
-                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    开始评估
-                  </button>
-                </div>
-              </div>
-              <div class="mt-2">
-                <p class="text-sm text-gray-700">{{ assessment.description }}</p>
-              </div>
-              <div class="mt-2 flex items-center text-sm text-gray-500">
-                <span>截止日期: {{ assessment.due_date || '无' }}</span>
-                <span class="mx-2">|</span>
-                <span>尝试次数: {{ assessment.attempts || 0 }}/{{ assessment.max_attempts || '无限制' }}</span>
-              </div>
-              <div class="flex justify-between items-center mt-4">
-                <div>
-                  <span class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">未开始</span>
                 </div>
               </div>
             </div>
           </div>
           <div v-else class="text-center py-10">
             <p class="text-gray-500">暂无评估测验</p>
+            <button 
+              v-if="canEdit" 
+              @click="createNewAssessment"
+              class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              创建评估
+            </button>
           </div>
         </div>
 
@@ -284,7 +354,7 @@
         
         <!-- 智能助手 -->
         <div v-else-if="activeTab === 'ai-assistant'" class="p-6">
-          <AIAssistant :courseId="courseId" />
+          <AIAssistant :courseId="courseId" :userId="authStore.user?.id || 0" />
         </div>
       </div>
     </div>
@@ -384,6 +454,7 @@ import { courseAPI, materialAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
 import AIAssistant from '../ai/AIAssistant.vue';
 import { useRouter } from 'vue-router';
+import { assessmentAPI } from '@/api';
 
 // 定义Course接口
 interface CourseSection {
@@ -424,15 +495,40 @@ interface AvailableStudent {
 }
 
 interface Assessment {
-  id: string | number;
+  id: number;
   title: string;
-  type: string;
-  question_count: number;
-  time_limit: number;
   description: string;
+  course_id: number;
+  type: string;
+  total_score: number;
+  duration: string | null;
   due_date: string | null;
-  attempts: number;
+  start_date: string | null;
   max_attempts: number;
+  is_published: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  questions: any[];
+  submission_count: number;
+  submissions?: any[];
+}
+
+interface Question {
+  id: number;
+  type: string;
+  content: string;
+  options?: string[];
+  answer?: string | string[];
+}
+
+interface Submission {
+  id: number;
+  assessment_id: number;
+  student_id: number;
+  status: 'pending' | 'in_progress' | 'completed';
+  score: number;
+  submitted_at: string;
 }
 
 interface Course {
@@ -453,12 +549,9 @@ interface Course {
   updated_at?: string;
 }
 
-const props = defineProps({
-  id: {
-    type: [Number, String],
-    required: true
-  }
-});
+const props = defineProps<{
+  id: string | number;
+}>();
 
 const authStore = useAuthStore();
 const courseId = computed(() => props.id);
@@ -473,7 +566,7 @@ const showAddMaterialModal = ref(false);
 const showAddAssessmentModal = ref(false);
 const showAddStudentModal = ref(false);
 const showMaterialPreview = ref(false);
-const previewMaterialId = ref(0);
+const previewMaterialId = ref<number | undefined>();
 
 const tabs = [
   { id: 'chapters', name: '章节内容' },
@@ -498,73 +591,33 @@ const materialUploadError = ref('');
 // 评估数据
 const assessments = ref<Assessment[]>([]);
 
-// 从mock数据加载评估
-async function loadMockAssessment() {
-  try {
-    const mockExam = await import('../../assets/mock-exam.json');
-    const data = mockExam.default;
-    
-    // 将mock数据转换为评估列表格式
-    assessments.value = [{
-      id: data.id,
-      title: data.title,
-      type: data.type,
-      question_count: getTotalQuestions(data),
-      time_limit: parseInt(data.duration) || 30,
-      description: data.description,
-      due_date: data.due_date ? new Date(data.due_date).toLocaleDateString() : null,
-      attempts: 0,
-      max_attempts: data.max_attempts,
-    }];
-    
-    console.log('Mock assessment loaded:', assessments.value);
-  } catch (error) {
-    console.error('Failed to load mock assessment:', error);
-  }
-}
-
-// 计算题目总数
-function getTotalQuestions(assessment: any): number {
-  let count = 0;
-  if (assessment && assessment.sections) {
-    assessment.sections.forEach((section: any) => {
-      if (section.questions) {
-        count += section.questions.length;
-      }
-    });
-  }
-  return count;
-}
-
-const students = ref<Student[]>([]);
-const availableStudents = ref<AvailableStudent[]>([]);
-const selectedStudents = ref<number[]>([]);
-const isLoadingStudents = ref(false);
-const studentError = ref('');
-
 const router = useRouter();
 
 onMounted(async () => {
-  await fetchCourseDetail();
-  if (course.value) {
-    await fetchMaterials();
-    await fetchStudents();
-    await loadMockAssessment(); // 加载模拟评估数据
+  try {
+    loading.value = true;
+    await Promise.all([
+      fetchCourse(),
+      fetchMaterials(),
+      fetchStudents(),
+      fetchAssessments()
+    ]);
+  } catch (error) {
+    console.error('加载数据失败:', error);
+  } finally {
+    loading.value = false;
   }
 });
 
-async function fetchCourseDetail() {
-  loading.value = true;
+async function fetchCourse() {
   try {
     // 调用API获取课程详情
     const response = await courseAPI.getCourse(Number(courseId.value));
     
     // 处理API响应 - 根据API文档，response已经是解析后的数据
     course.value = response as unknown as Course;
-    loading.value = false;
   } catch (error) {
     console.error('获取课程详情失败:', error);
-    loading.value = false;
   }
 }
 
@@ -722,6 +775,12 @@ function getMaterialIcon(materialType: string) {
   }
 }
 
+const students = ref<Student[]>([]);
+const availableStudents = ref<AvailableStudent[]>([]);
+const selectedStudents = ref<number[]>([]);
+const isLoadingStudents = ref(false);
+const studentError = ref('');
+
 async function fetchStudents() {
   if (!course.value) return;
   
@@ -770,7 +829,7 @@ async function addStudents() {
     await fetchStudents();
     
     // 更新课程信息
-    await fetchCourseDetail();
+    await fetchCourse();
   } catch (error) {
     console.error('添加学生失败:', error);
     alert('添加学生失败，请重试');
@@ -788,7 +847,7 @@ async function removeStudent(studentId: number) {
       await fetchStudents();
       
       // 更新课程信息
-      await fetchCourseDetail();
+      await fetchCourse();
     } catch (error) {
       console.error('移除学生失败:', error);
       alert('移除学生失败，请重试');
@@ -823,14 +882,91 @@ function previewMaterial(materialId: number) {
   showMaterialPreview.value = true;
 }
 
-function viewAssessment(assessmentId: string | number) {
-  // 导航到评估查看页面
-  router.push(`/assessments/${assessmentId}`);
-}
+// 评估相关方法
+const createNewAssessment = () => {
+  router.push(`/assessments/create?courseId=${courseId}`);
+};
 
-function startAssessment(assessmentId: string | number) {
-  // 导航到评估答题页面
-  console.log('Starting assessment:', assessmentId);
-  router.push(`/assessments/${assessmentId}/take`);
-}
+const getTotalQuestions = (assessment: Assessment): number => {
+  return assessment.questions?.length || 0;
+};
+
+const getStatusClass = (assessment: Assessment): string => {
+  if (!assessment.submissions || assessment.submissions.length === 0) {
+    return 'bg-blue-100 text-blue-800';
+  }
+  const latestSubmission = assessment.submissions[assessment.submissions.length - 1];
+  if (latestSubmission.status === 'completed') {
+    return 'bg-green-100 text-green-800';
+  }
+  return 'bg-yellow-100 text-yellow-800';
+};
+
+const getStatusText = (assessment: Assessment): string => {
+  if (!assessment.submissions || assessment.submissions.length === 0) {
+    return '未开始';
+  }
+  const latestSubmission = assessment.submissions[assessment.submissions.length - 1];
+  if (latestSubmission.status === 'completed') {
+    return '已完成';
+  }
+  return '进行中';
+};
+
+const editAssessment = (assessment: Assessment): void => {
+  router.push(`/assessments/${assessment.id}/edit`);
+};
+
+const deleteAssessment = async (assessment: Assessment): Promise<void> => {
+  if (confirm('确定要删除这个评估吗？')) {
+    try {
+      await assessmentAPI.deleteAssessment(assessment.id);
+      // 重新加载评估列表
+      await fetchAssessments();
+    } catch (error) {
+      console.error('删除评估失败:', error);
+    }
+  }
+};
+
+const canTakeAssessment = (assessment: Assessment): boolean => {
+  if (!assessment.max_attempts) return true;
+  return !assessment.submissions || assessment.submissions.length < assessment.max_attempts;
+};
+
+const takeAssessment = (assessment: Assessment): void => {
+  router.push(`/assessments/${assessment.id}/take`);
+};
+
+const viewSubmissions = (assessment: Assessment): void => {
+  router.push(`/assessments/${assessment.id}/submissions`);
+};
+
+const viewAllSubmissions = (assessment: Assessment): void => {
+  router.push(`/assessments/${assessment.id}/all-submissions`);
+};
+
+const getHighestScore = (submissions: Submission[]): number => {
+  if (!submissions || submissions.length === 0) return 0;
+  return Math.max(...submissions.map(s => s.score || 0));
+};
+
+const formatDate = (date: string | null): string => {
+  if (!date) return '无限制';
+  return new Date(date).toLocaleDateString();
+};
+
+// 获取评估列表
+const fetchAssessments = async () => {
+  try {
+    loading.value = true;
+    const response = await assessmentAPI.getCourseAssessments(Number(courseId.value));
+    assessments.value = response.assessments || [];
+  } catch (error) {
+    console.error('获取评估列表失败:', error);
+    assessments.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
 </script> 

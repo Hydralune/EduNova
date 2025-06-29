@@ -1,132 +1,81 @@
 <template>
-  <div class="assessment-view">
-    <div v-if="loading" class="flex justify-center items-center h-64">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-
-    <div v-else>
-      <!-- 教师编辑模式 -->
-      <div v-if="isTeacher && editMode">
-        <AssessmentEditor 
-          :initial-assessment="assessment"
-          @save="saveAssessment"
-          @cancel="editMode = false"
-        />
+  <main class="flex-1">
+    <div class="container mx-auto py-6 px-4">
+      <div v-if="loading" class="flex justify-center items-center h-64">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
 
-      <!-- 教师查看模式 -->
-      <div v-else-if="isTeacher && !editMode">
-        <!-- 评估头部信息 -->
-        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
-          <div class="flex justify-between items-center mb-4">
-            <div>
-              <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
-              <p class="text-gray-600">{{ assessment.description }}</p>
-            </div>
-            <div class="text-right">
-              <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
-              <p class="text-sm text-gray-600">时间限制: {{ assessment.duration }}</p>
-              <p v-if="assessment.due_date" class="text-sm text-gray-600">截止日期: {{ formatDate(assessment.due_date) }}</p>
-            </div>
-          </div>
-          <div class="flex justify-end">
-            <button 
-              @click="editMode = true"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              编辑测验
-            </button>
-          </div>
+      <div v-else>
+        <!-- 教师编辑模式 -->
+        <div v-if="isTeacher && editMode">
+          <AssessmentEditor 
+            :initial-assessment="assessment"
+            @save="saveAssessment"
+            @cancel="editMode = false"
+          />
         </div>
 
-        <!-- 题目预览 -->
-        <div class="space-y-8">
-          <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
-            <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
-            
-            <div class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3" v-html="question.stem"></p>
-                    
-                    <!-- 选择题选项 -->
-                    <div v-if="question.type === 'multiple_choice' || question.type === 'multiple_select'" class="space-y-2">
-                      <div v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center">
-                        <span class="mr-2">{{ String.fromCharCode(65 + optIndex) }}.</span>
-                        <span v-html="option"></span>
-                      </div>
-                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
-                        正确答案: {{ Array.isArray(question.answer) ? question.answer.join(', ') : question.answer }}
-                      </p>
-                    </div>
-                    
-                    <!-- 判断题答案 -->
-                    <div v-if="question.type === 'true_false'" class="mt-2">
-                      <div class="flex items-center space-x-4">
-                        <div class="flex items-center">
-                          <input 
-                            type="radio" 
-                            :id="`q-${sectionIndex}-${qIndex}-true`" 
-                            :name="`q-${sectionIndex}-${qIndex}`"
-                            value="true"
-                            :checked="answers[sectionIndex]?.[qIndex] === 'true'"
-                            @change="answers[sectionIndex][qIndex] = 'true'"
-                            class="mr-2"
-                          />
-                          <label :for="`q-${sectionIndex}-${qIndex}-true`">正确</label>
+        <!-- 教师查看模式 -->
+        <div v-else-if="isTeacher && !editMode">
+          <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+            <div class="flex justify-between items-center mb-4">
+              <div>
+                <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
+                <p class="text-gray-600">{{ assessment.description }}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
+                <p class="text-sm text-gray-600">时间限制: {{ assessment.duration }}</p>
+                <p v-if="assessment.due_date" class="text-sm text-gray-600">截止日期: {{ formatDate(assessment.due_date) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 题目预览 -->
+          <div class="space-y-8">
+            <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+              <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
+              <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
+              
+              <div class="space-y-6">
+                <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
+                  <div class="flex">
+                    <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
+                    <div class="flex-1">
+                      <p class="mb-3" v-html="question.stem"></p>
+                      
+                      <!-- 选择题选项 -->
+                      <div v-if="question.type === 'multiple_choice' || question.type === 'multiple_select'" class="space-y-2">
+                        <div v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center">
+                          <span class="mr-2">{{ String.fromCharCode(65 + optIndex) }}.</span>
+                          <span v-html="option"></span>
                         </div>
-                        <div class="flex items-center">
-                          <input 
-                            type="radio" 
-                            :id="`q-${sectionIndex}-${qIndex}-false`" 
-                            :name="`q-${sectionIndex}-${qIndex}`"
-                            value="false"
-                            :checked="answers[sectionIndex]?.[qIndex] === 'false'"
-                            @change="answers[sectionIndex][qIndex] = 'false'"
-                            class="mr-2"
-                          />
-                          <label :for="`q-${sectionIndex}-${qIndex}-false`">错误</label>
-                        </div>
+                        <p class="text-sm text-gray-600 mt-2">
+                          正确答案: {{ Array.isArray(question.answer) ? question.answer.join(', ') : question.answer }}
+                        </p>
                       </div>
-                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
-                        正确答案: {{ question.answer === 'true' ? '正确' : '错误' }}
-                      </p>
-                    </div>
-                    
-                    <!-- 填空题答案 -->
-                    <div v-if="question.type === 'fill_in_blank'" class="mt-2">
-                      <div 
-                        v-for="(_, blankIndex) in answers[sectionIndex][qIndex]" 
-                        :key="blankIndex"
-                        class="flex items-center mb-2"
-                      >
-                        <input 
-                          type="text" 
-                          :placeholder="`第 ${blankIndex + 1} 空`"
-                          v-model="answers[sectionIndex][qIndex][blankIndex]"
-                          class="border rounded px-2 py-1"
-                        />
+
+                      <!-- 判断题答案 -->
+                      <div v-if="question.type === 'true_false'" class="mt-2">
+                        <p class="text-sm text-gray-600">
+                          正确答案: {{ question.answer === 'true' ? '正确' : '错误' }}
+                        </p>
                       </div>
-                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
-                        正确答案: {{ Array.isArray(question.answer) ? question.answer.join(' | ') : question.answer }}
-                      </p>
-                    </div>
-                    
-                    <!-- 简答题和论述题 -->
-                    <div v-if="question.type === 'short_answer' || question.type === 'essay'" class="mt-2">
-                      <textarea 
-                        v-model="answers[sectionIndex][qIndex]"
-                        :rows="question.type === 'essay' ? 6 : 3"
-                        class="w-full border rounded px-2 py-1"
-                        :placeholder="'请在此输入答案'"
-                      ></textarea>
-                      <p v-if="isTeacher" class="text-sm text-gray-600 mt-2">
-                        参考答案:
-                        <span v-html="question.reference_answer || question.answer"></span>
-                      </p>
+
+                      <!-- 填空题答案 -->
+                      <div v-if="question.type === 'fill_in_blank'" class="mt-2">
+                        <p class="text-sm text-gray-600">
+                          正确答案: {{ Array.isArray(question.answer) ? question.answer.join(' | ') : question.answer }}
+                        </p>
+                      </div>
+
+                      <!-- 简答题和论述题参考答案 -->
+                      <div v-if="question.type === 'short_answer' || question.type === 'essay'" class="mt-2">
+                        <p class="text-sm text-gray-600">
+                          参考答案:
+                          <span v-html="question.reference_answer || question.answer"></span>
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -134,234 +83,265 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 学生模式 -->
-      <div v-else>
-        <!-- 评估头部信息 -->
-        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
-          <div class="flex justify-between items-center mb-4">
-            <div>
-              <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
-              <p class="text-gray-600">{{ assessment.description }}</p>
+        <!-- 学生做题模式 -->
+        <div v-else class="assessment-player">
+          <!-- 评估头部信息 -->
+          <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+            <div class="flex justify-between items-center">
+              <div>
+                <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
+                <p class="text-gray-600">{{ assessment.description }}</p>
+              </div>
+              <div class="text-right">
+                <p v-if="started && !submitted && timeLimit" class="text-lg font-semibold text-red-600">
+                  {{ formatTime(remainingTime) }}
+                </p>
+                <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
+                <p class="text-sm text-gray-600">题目: {{ totalQuestions }} 题</p>
+              </div>
             </div>
-            <div class="text-right">
-              <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
-              <p class="text-sm text-gray-600">时间限制: {{ assessment.duration }}</p>
-              <p v-if="assessment.due_date" class="text-sm text-gray-600">截止日期: {{ formatDate(assessment.due_date) }}</p>
-            </div>
-          </div>
-          
-          <div class="flex justify-between items-center">
-            <div>
-              <span v-if="!started && !submitted" class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">未开始</span>
-              <span v-else-if="started && !submitted" class="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">进行中</span>
-              <span v-else class="text-sm bg-green-100 text-green-800 px-2 py-1 rounded">已提交</span>
-            </div>
-            
-            <div v-if="!started && !submitted">
+
+            <!-- 开始按钮 -->
+            <div v-if="!started && !submitted" class="mt-4 flex justify-center">
               <button 
-                @click="startAssessment" 
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                @click="startAssessment"
+                class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
-                开始评估
+                开始答题
               </button>
             </div>
-            
-            <div v-if="started && !submitted" class="text-right">
-              <p class="text-sm text-red-600 mb-2" v-if="timeLimit">
-                剩余时间: {{ formatTime(remainingTime) }}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 评估内容 -->
-        <div v-if="started && !submitted" class="space-y-8">
-          <!-- 循环显示各个部分 -->
-          <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
-            <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
-            
-            <!-- 题目列表 -->
-            <div class="space-y-6">
-              <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                <div class="flex">
-                  <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="mb-3" v-html="question.stem"></p>
-                    
-                    <!-- 单选题 -->
-                    <div v-if="question.type === 'multiple_choice'" class="space-y-2">
-                      <div 
-                        v-for="(option, optIndex) in question.options" 
-                        :key="optIndex"
-                        class="flex items-center"
-                      >
-                        <input 
-                          type="radio" 
-                          :id="`q-${sectionIndex}-${qIndex}-${optIndex}`" 
-                          :name="`q-${sectionIndex}-${qIndex}`"
-                          :value="String.fromCharCode(65 + optIndex)"
-                          v-model="answers[sectionIndex][qIndex]"
-                          class="mr-2"
-                        />
-                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">
-                          {{ String.fromCharCode(65 + optIndex) }}. {{ option }}
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- 多选题 -->
-                    <div v-if="question.type === 'multiple_select'" class="space-y-2">
-                      <div 
-                        v-for="(option, optIndex) in question.options" 
-                        :key="optIndex"
-                        class="flex items-center"
-                      >
-                        <input 
-                          type="checkbox" 
-                          :id="`q-${sectionIndex}-${qIndex}-${optIndex}`" 
-                          :value="String.fromCharCode(65 + optIndex)"
-                          v-model="answers[sectionIndex][qIndex]"
-                          class="mr-2"
-                        />
-                        <label :for="`q-${sectionIndex}-${qIndex}-${optIndex}`">
-                          {{ String.fromCharCode(65 + optIndex) }}. {{ option }}
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- 判断题 -->
-                    <div v-if="question.type === 'true_false'" class="space-y-2">
-                      <div class="flex items-center space-x-4">
-                        <div class="flex items-center">
-                          <input 
-                            type="radio" 
-                            :id="`q-${sectionIndex}-${qIndex}-true`" 
-                            :name="`q-${sectionIndex}-${qIndex}`"
-                            value="true"
-                            :checked="answers[sectionIndex]?.[qIndex] === 'true'"
-                            @change="answers[sectionIndex][qIndex] = 'true'"
-                            class="mr-2"
-                          />
-                          <label :for="`q-${sectionIndex}-${qIndex}-true`">正确</label>
-                        </div>
-                        <div class="flex items-center">
-                          <input 
-                            type="radio" 
-                            :id="`q-${sectionIndex}-${qIndex}-false`" 
-                            :name="`q-${sectionIndex}-${qIndex}`"
-                            value="false"
-                            :checked="answers[sectionIndex]?.[qIndex] === 'false'"
-                            @change="answers[sectionIndex][qIndex] = 'false'"
-                            class="mr-2"
-                          />
-                          <label :for="`q-${sectionIndex}-${qIndex}-false`">错误</label>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- 填空题 -->
-                    <div v-if="question.type === 'fill_in_blank'" class="space-y-2">
-                      <div 
-                        v-for="(_, blankIndex) in answers[sectionIndex][qIndex]" 
-                        :key="blankIndex"
-                        class="flex items-center"
-                      >
-                        <input 
-                          type="text" 
-                          :placeholder="`第 ${blankIndex + 1} 空`"
-                          v-model="answers[sectionIndex][qIndex][blankIndex]"
-                          class="border rounded px-2 py-1"
-                        />
-                      </div>
-                    </div>
-                    
-                    <!-- 简答题 -->
-                    <div v-if="question.type === 'short_answer'" class="mt-2">
-                      <textarea 
-                        v-model="answers[sectionIndex][qIndex]"
-                        rows="3"
-                        class="w-full border rounded px-2 py-1"
-                        :placeholder="'请在此输入答案'"
-                      ></textarea>
-                    </div>
-                    
-                    <!-- 论述题 -->
-                    <div v-if="question.type === 'essay'" class="mt-2">
-                      <textarea 
-                        v-model="answers[sectionIndex][qIndex]"
-                        rows="6"
-                        class="w-full border rounded px-2 py-1"
-                        :placeholder="'请在此输入答案'"
-                      ></textarea>
-                    </div>
-                  </div>
-                </div>
+
+            <!-- 进度条 -->
+            <div v-if="started && !submitted" class="mt-4">
+              <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  class="bg-blue-600 h-2.5 rounded-full" 
+                  :style="{ width: `${completionPercentage}%` }"
+                ></div>
+              </div>
+              <div class="flex justify-between mt-1 text-sm text-gray-600">
+                <span>进度: {{ currentQuestionIndex + 1 }}/{{ totalQuestions }}</span>
+                <span>已完成: {{ answeredQuestions }}/{{ totalQuestions }}</span>
               </div>
             </div>
           </div>
-          
-          <!-- 提交按钮 -->
-          <div class="flex justify-between">
+
+          <!-- 以下内容只在开始答题后显示 -->
+          <div v-if="started && !submitted">
+            <!-- 题目导航 -->
+            <div class="bg-white p-4 rounded-lg shadow-md border border-gray-200 mb-6">
+              <div class="flex flex-wrap gap-2">
+                <button 
+                  v-for="index in totalQuestions" 
+                  :key="index"
+                  @click="navigateToQuestion(index - 1)"
+                  :class="[
+                    'w-8 h-8 flex items-center justify-center rounded-full text-sm',
+                    currentQuestionIndex === index - 1 
+                      ? 'bg-blue-600 text-white'
+                      : isQuestionAnswered(index - 1)
+                        ? 'bg-green-100 text-green-800 border'
+                        : 'bg-gray-100 text-gray-800 border',
+                    isQuestionMarked(index - 1) ? 'ring-2 ring-yellow-400' : ''
+                  ]"
+                >
+                  {{ index }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 当前题目 -->
+            <div v-if="currentQuestion" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">
+                  {{ currentQuestionIndex + 1 }}. {{ getQuestionTypeName(currentQuestion.type) }}
+                  <span class="text-sm text-gray-500 ml-2">({{ currentQuestionScore }}分)</span>
+                </h3>
+                <div class="flex gap-2">
+                  <button 
+                    @click="toggleQuestionMark(currentQuestionIndex)"
+                    :class="[
+                      'text-sm px-2 py-1 rounded-md',
+                      isQuestionMarked(currentQuestionIndex)
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-800'
+                    ]"
+                  >
+                    标记题目
+                  </button>
+                </div>
+              </div>
+
+              <!-- 题干 -->
+              <div class="mb-6">
+                <p class="text-lg" v-html="currentQuestion.stem"></p>
+              </div>
+
+              <!-- 选择题 -->
+              <div v-if="currentQuestion.type === 'multiple_choice'" class="space-y-3">
+                <div 
+                  v-for="(option, optIndex) in currentQuestion.options" 
+                  :key="optIndex"
+                  @click="selectOption(optIndex)"
+                  :class="[
+                    'p-3 border rounded-md cursor-pointer hover:bg-gray-50 flex items-center',
+                    currentAnswers[currentQuestionIndex] === String.fromCharCode(65 + optIndex)
+                      ? 'bg-blue-50 border-blue-200'
+                      : ''
+                  ]"
+                >
+                  <div class="w-6 h-6 flex items-center justify-center border rounded-full mr-3">
+                    {{ String.fromCharCode(65 + optIndex) }}
+                  </div>
+                  <div v-html="option"></div>
+                </div>
+              </div>
+
+              <!-- 多选题 -->
+              <div v-if="currentQuestion.type === 'multiple_select'" class="space-y-3">
+                <div 
+                  v-for="(option, optIndex) in currentQuestion.options" 
+                  :key="optIndex"
+                  @click="toggleMultiSelect(optIndex)"
+                  :class="[
+                    'p-3 border rounded-md cursor-pointer hover:bg-gray-50 flex items-center',
+                    isOptionSelected(optIndex) ? 'bg-blue-50 border-blue-200' : ''
+                  ]"
+                >
+                  <div class="w-6 h-6 flex items-center justify-center border rounded mr-3">
+                    {{ String.fromCharCode(65 + optIndex) }}
+                  </div>
+                  <div v-html="option"></div>
+                </div>
+              </div>
+
+              <!-- 填空题 -->
+              <div v-if="currentQuestion.type === 'fill_in_blank'" class="space-y-4">
+                <div 
+                  v-for="(_, blankIndex) in currentAnswers[currentQuestionIndex]" 
+                  :key="blankIndex"
+                  class="flex items-center"
+                >
+                  <input 
+                    type="text" 
+                    :placeholder="`第 ${blankIndex + 1} 空`"
+                    v-model="currentAnswers[currentQuestionIndex][blankIndex]"
+                    class="border rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <!-- 判断题 -->
+              <div v-if="currentQuestion.type === 'true_false'" class="space-y-3">
+                <div 
+                  v-for="(option, value) in { true: '正确', false: '错误' }" 
+                  :key="value"
+                  @click="selectTrueFalse(value)"
+                  :class="[
+                    'p-3 border rounded-md cursor-pointer hover:bg-gray-50 flex items-center',
+                    currentAnswers[currentQuestionIndex] === value ? 'bg-blue-50 border-blue-200' : ''
+                  ]"
+                >
+                  <div class="w-6 h-6 flex items-center justify-center border rounded-full mr-3"></div>
+                  <div>{{ option }}</div>
+                </div>
+              </div>
+
+              <!-- 简答题 -->
+              <div v-if="currentQuestion.type === 'short_answer'" class="mt-4">
+                <textarea 
+                  v-model="currentAnswers[currentQuestionIndex]"
+                  rows="4"
+                  class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="请输入您的答案"
+                ></textarea>
+              </div>
+
+              <!-- 论述题 -->
+              <div v-if="currentQuestion.type === 'essay'" class="mt-4">
+                <textarea 
+                  v-model="currentAnswers[currentQuestionIndex]"
+                  rows="8"
+                  class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="请输入您的答案"
+                ></textarea>
+              </div>
+
+              <!-- 导航按钮 -->
+              <div class="flex justify-between mt-8">
+                <button 
+                  @click="previousQuestion"
+                  :disabled="currentQuestionIndex === 0"
+                  :class="[
+                    'px-4 py-2 border rounded-md hover:bg-gray-50',
+                    currentQuestionIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                  ]"
+                >
+                  上一题
+                </button>
+                <button 
+                  @click="saveProgress"
+                  class="px-4 py-2 border rounded-md hover:bg-gray-50"
+                >
+                  保存进度
+                </button>
+                <button 
+                  v-if="currentQuestionIndex === totalQuestions - 1"
+                  @click="showSubmitConfirm = true"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  提交答案
+                </button>
+                <button 
+                  v-else
+                  @click="nextQuestion"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  下一题
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 结果展示 -->
+          <div v-if="submitted && showResults" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            <h3 class="text-xl font-semibold mb-4">评估结果</h3>
+            <div class="flex justify-between items-center mb-6">
+              <div>
+                <p class="text-lg">得分: <span class="font-bold">{{ score }}</span> / {{ assessment.total_score }}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">提交时间: {{ formatDate(submissionTime) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 确认提交对话框 -->
+      <div v-if="showSubmitConfirm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+          <h3 class="text-xl font-bold mb-4">确认提交</h3>
+          <p class="mb-4">您确定要提交此评估吗？提交后将无法修改答案。</p>
+          <div class="flex justify-end gap-3">
             <button 
-              @click="saveProgress" 
+              @click="showSubmitConfirm = false"
               class="px-4 py-2 border rounded-md hover:bg-gray-50"
             >
-              保存进度
+              取消
             </button>
             <button 
-              @click="submitAssessment" 
+              @click="confirmSubmit"
               class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              提交答案
+              确认提交
             </button>
           </div>
         </div>
-        
-        <!-- 结果展示 -->
-        <div v-if="submitted && showResults" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h3 class="text-xl font-semibold mb-4">评估结果</h3>
-          <div class="flex justify-between items-center mb-6">
-            <div>
-              <p class="text-lg">得分: <span class="font-bold">{{ score }}</span> / {{ assessment.total_score }}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-600">提交时间: {{ formatDate(submissionTime) }}</p>
-            </div>
-          </div>
-          
-          <!-- 展示详细结果 -->
-          <div class="space-y-6">
-            <!-- 这里可以添加详细的答案和解析 -->
-          </div>
-        </div>
       </div>
     </div>
-
-    <!-- 确认提交对话框 -->
-    <div v-if="showSubmitConfirm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h3 class="text-xl font-bold mb-4">确认提交</h3>
-        <p class="mb-4">您确定要提交此评估吗？提交后将无法修改答案。</p>
-        <div class="flex justify-end gap-3">
-          <button 
-            @click="showSubmitConfirm = false" 
-            class="px-4 py-2 border rounded-md"
-          >
-            取消
-          </button>
-          <button 
-            @click="confirmSubmit" 
-            class="px-4 py-2 bg-blue-600 text-white rounded-md"
-          >
-            确认提交
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+  </main>
 </template>
 
 <script setup>
@@ -406,6 +386,11 @@ const timeLimit = ref(null);
 const remainingTime = ref(0);
 const timer = ref(null);
 
+// 新增状态
+const currentQuestionIndex = ref(0);
+const markedQuestions = ref(new Set());
+const currentAnswers = ref([]);
+
 // 评估数据
 const assessment = reactive({
   id: typeof props.assessmentId === 'string' ? parseInt(props.assessmentId) : props.assessmentId,
@@ -423,13 +408,50 @@ const assessment = reactive({
   sections: []
 });
 
-// 答案数据
-const answers = ref([]);
+// 计算属性
+const totalQuestions = computed(() => {
+  return assessment.sections.reduce((total, section) => total + section.questions.length, 0);
+});
+
+const currentQuestion = computed(() => {
+  let questionCount = 0;
+  for (const section of assessment.sections) {
+    if (questionCount + section.questions.length > currentQuestionIndex.value) {
+      return section.questions[currentQuestionIndex.value - questionCount];
+    }
+    questionCount += section.questions.length;
+  }
+  return null;
+});
+
+const currentQuestionScore = computed(() => {
+  let questionCount = 0;
+  for (const section of assessment.sections) {
+    if (questionCount + section.questions.length > currentQuestionIndex.value) {
+      return section.score_per_question;
+    }
+    questionCount += section.questions.length;
+  }
+  return 0;
+});
+
+const answeredQuestions = computed(() => {
+  return currentAnswers.value.filter(answer => {
+    if (Array.isArray(answer)) {
+      return answer.some(a => a !== '');
+    }
+    return answer !== '' && answer !== null && answer !== undefined;
+  }).length;
+});
+
+const completionPercentage = computed(() => {
+  return (answeredQuestions.value / totalQuestions.value) * 100;
+});
 
 // 初始化答案
 const initAnswers = () => {
-  answers.value = assessment.sections.map(section => {
-    return section.questions.map(question => {
+  currentAnswers.value = assessment.sections.flatMap(section => 
+    section.questions.map(question => {
       if (question.type === 'multiple_choice' || question.type === 'true_false') {
         return '';
       } else if (question.type === 'multiple_select') {
@@ -441,9 +463,8 @@ const initAnswers = () => {
         return '';
       }
       return null;
-    });
-  });
-  console.log('Initialized answers:', answers.value);
+    })
+  );
 };
 
 // 从后端获取评估数据
@@ -504,7 +525,7 @@ const startAssessment = () => {
   started.value = true;
   initAnswers();
   if (assessment.duration) {
-    startTimer();
+      startTimer();
   }
 };
 
@@ -549,7 +570,7 @@ const formatBlankQuestion = (stem) => {
 const handleFileUpload = (event, sectionIndex, qIndex) => {
   const file = event.target.files[0];
   if (file) {
-    answers[sectionIndex][qIndex].files.push(file);
+    currentAnswers.value[qIndex].files.push(file);
   }
   // 重置文件输入以允许重复选择同一文件
   event.target.value = '';
@@ -557,16 +578,16 @@ const handleFileUpload = (event, sectionIndex, qIndex) => {
 
 // 移除文件
 const removeFile = (sectionIndex, qIndex, fileIndex) => {
-  answers[sectionIndex][qIndex].files.splice(fileIndex, 1);
+  currentAnswers.value[qIndex].files.splice(fileIndex, 1);
 };
 
 // 保存进度
 const saveProgress = () => {
   // 实际应用中应该调用API保存进度
-  console.log('保存进度:', answers);
+  console.log('保存进度:', currentAnswers.value);
   emit('save-progress', {
     assessmentId: assessment.id,
-    answers: JSON.parse(JSON.stringify(answers))
+    answers: JSON.parse(JSON.stringify(currentAnswers.value))
   });
 };
 
@@ -591,7 +612,7 @@ const confirmSubmit = () => {
   // 发送数据到后端
   emit('submit', {
     assessmentId: assessment.id,
-    answers: JSON.parse(JSON.stringify(answers)),
+    answers: JSON.parse(JSON.stringify(currentAnswers.value)),
     submissionTime: submissionTime.value,
     timeSpent: timeLimit.value ? timeLimit.value - remainingTime.value : null
   });
@@ -607,12 +628,12 @@ const calculateScore = () => {
   assessment.sections.forEach((section, sectionIndex) => {
     section.questions.forEach((question, qIndex) => {
       if (question.type === 'multiple_choice') {
-        if (answers[sectionIndex][qIndex] === question.answer) {
+        if (currentAnswers.value[qIndex] === question.answer) {
           totalScore += section.score_per_question;
         }
       } else if (question.type === 'multiple_select') {
         // 多选题要完全匹配才得分
-        const userAnswer = answers[sectionIndex][qIndex].sort();
+        const userAnswer = currentAnswers.value[qIndex].sort();
         const correctAnswer = question.answer.sort();
         if (JSON.stringify(userAnswer) === JSON.stringify(correctAnswer)) {
           totalScore += section.score_per_question;
@@ -622,16 +643,16 @@ const calculateScore = () => {
         if (Array.isArray(question.answer)) {
           let correct = true;
           question.answer.forEach((ans, i) => {
-            if (answers[sectionIndex][qIndex][i]?.toLowerCase() !== ans.toLowerCase()) {
+            if (currentAnswers.value[qIndex][i]?.toLowerCase() !== ans.toLowerCase()) {
               correct = false;
             }
           });
           if (correct) totalScore += section.score_per_question;
-        } else if (answers[sectionIndex][qIndex][0]?.toLowerCase() === question.answer.toLowerCase()) {
+        } else if (currentAnswers.value[qIndex][0]?.toLowerCase() === question.answer.toLowerCase()) {
           totalScore += section.score_per_question;
         }
       } else if (question.type === 'true_false') {
-        if (answers[sectionIndex][qIndex] === question.answer) {
+        if (currentAnswers.value[qIndex] === question.answer) {
           totalScore += section.score_per_question;
         }
       }
@@ -650,6 +671,81 @@ const saveAssessment = async (updatedAssessment) => {
     editMode.value = false;
   } catch (error) {
     console.error('保存评估失败:', error);
+  }
+};
+
+// 新增方法
+const navigateToQuestion = (index) => {
+  currentQuestionIndex.value = index;
+};
+
+const toggleQuestionMark = (index) => {
+  if (markedQuestions.value.has(index)) {
+    markedQuestions.value.delete(index);
+  } else {
+    markedQuestions.value.add(index);
+  }
+};
+
+const isQuestionMarked = (index) => {
+  return markedQuestions.value.has(index);
+};
+
+const isQuestionAnswered = (index) => {
+  const answer = currentAnswers.value[index];
+  if (Array.isArray(answer)) {
+    return answer.some(a => a !== '');
+  }
+  return answer !== '' && answer !== null && answer !== undefined;
+};
+
+const getQuestionTypeName = (type) => {
+  const typeNames = {
+    'multiple_choice': '选择题',
+    'multiple_select': '多选题',
+    'true_false': '判断题',
+    'fill_in_blank': '填空题',
+    'short_answer': '简答题',
+    'essay': '论述题'
+  };
+  return typeNames[type] || type;
+};
+
+const selectOption = (optIndex) => {
+  currentAnswers.value[currentQuestionIndex.value] = String.fromCharCode(65 + optIndex);
+};
+
+const toggleMultiSelect = (optIndex) => {
+  if (!Array.isArray(currentAnswers.value[currentQuestionIndex.value])) {
+    currentAnswers.value[currentQuestionIndex.value] = [];
+  }
+  const answer = String.fromCharCode(65 + optIndex);
+  const index = currentAnswers.value[currentQuestionIndex.value].indexOf(answer);
+  if (index === -1) {
+    currentAnswers.value[currentQuestionIndex.value].push(answer);
+  } else {
+    currentAnswers.value[currentQuestionIndex.value].splice(index, 1);
+  }
+};
+
+const isOptionSelected = (optIndex) => {
+  const answers = currentAnswers.value[currentQuestionIndex.value];
+  return Array.isArray(answers) && answers.includes(String.fromCharCode(65 + optIndex));
+};
+
+const selectTrueFalse = (value) => {
+  currentAnswers.value[currentQuestionIndex.value] = value;
+};
+
+const previousQuestion = () => {
+  if (currentQuestionIndex.value > 0) {
+    currentQuestionIndex.value--;
+  }
+};
+
+const nextQuestion = () => {
+  if (currentQuestionIndex.value < totalQuestions.value - 1) {
+    currentQuestionIndex.value++;
   }
 };
 

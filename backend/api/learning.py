@@ -994,3 +994,28 @@ def grade_submission(submission_id):
         'submission': submission.to_dict()
     })
 
+@learning_bp.route('/courses/<int:course_id>/assessments', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_course_assessments(course_id):
+    """获取课程的所有评估"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取课程的所有评估
+    assessments = Assessment.query.filter_by(course_id=course_id).all()
+    
+    # 准备响应数据
+    assessments_data = []
+    for assessment in assessments:
+        assessment_dict = assessment.to_dict()
+        # 添加提交次数信息
+        assessment_dict['submission_count'] = StudentAnswer.query.filter_by(assessment_id=assessment.id).count()
+        assessments_data.append(assessment_dict)
+    
+    return jsonify({
+        'assessments': assessments_data,
+        'total': len(assessments_data)
+    })
+
