@@ -682,22 +682,49 @@ def remove_student_from_course(course_id, student_id):
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_assessments():
     """获取评估列表"""
+    print("\n=== 获取评估列表 ===")
     # 获取查询参数
-    course_id = request.args.get('course_id')
-    is_active = request.args.get('is_active')
+    course_id = request.args.get('course_id', type=int)
+    status = request.args.get('status')
+    search = request.args.get('search')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
+    
+    print(f"查询参数: course_id={course_id}, status={status}, search={search}, page={page}, per_page={per_page}")
     
     # 构建查询
     query = Assessment.query
     
     # 应用过滤条件
     if course_id:
+        print(f"过滤课程: {course_id}")
         query = query.filter_by(course_id=course_id)
     
-    if is_active is not None:
-        is_active_bool = is_active.lower() == 'true'
-        query = query.filter_by(is_active=is_active_bool)
+    if status:
+        print(f"过滤状态: {status}")
+        if status == 'active':
+            query = query.filter_by(is_active=True, is_published=True)
+        elif status == 'upcoming':
+            query = query.filter(
+                Assessment.start_date > datetime.utcnow(),
+                Assessment.is_published == True
+            )
+        elif status == 'past':
+            query = query.filter(
+                Assessment.due_date < datetime.utcnow(),
+                Assessment.is_published == True
+            )
+    else:
+        # 默认显示所有评估，包括未发布的
+        print("显示所有评估")
+    
+    if search:
+        print(f"搜索关键词: {search}")
+        search_term = f"%{search}%"
+        query = query.filter(Assessment.title.ilike(search_term))
+    
+    # 按创建时间倒序排序
+    query = query.order_by(Assessment.created_at.desc())
     
     # 执行分页查询
     assessments_pagination = query.paginate(page=page, per_page=per_page)
@@ -706,7 +733,13 @@ def get_assessments():
     assessments_data = []
     for assessment in assessments_pagination.items:
         assessment_dict = assessment.to_dict()
+        # 添加提交数量信息
+        assessment_dict['submission_count'] = len(assessment.student_answers)
         assessments_data.append(assessment_dict)
+    
+    print(f"找到 {len(assessments_data)} 个评估")
+    for assessment in assessments_data:
+        print(f"- {assessment['title']} (ID: {assessment['id']})")
     
     return jsonify({
         'assessments': assessments_data,

@@ -41,7 +41,7 @@
 
         <!-- AI助手 -->
         <div v-if="activeTab === 'ai-assistant'">
-          <AIAssistant />
+          <AIAssistant :user-id="userId || ''" />
         </div>
 
         <!-- 知识库 -->

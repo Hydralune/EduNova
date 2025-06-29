@@ -187,10 +187,17 @@ export const materialAPI = {
 
 // 评估管理API
 export const assessmentAPI = {
-  getAssessments: (courseId: number) => api.get(`/courses/${courseId}/assessments`),
+  getAssessments: (courseId?: number, params: any = {}) => 
+    api.get(`/assessments`, { 
+      params: { 
+        ...params,
+        course_id: courseId || undefined 
+      } 
+    }),
   getAssessment: (assessmentId: number) => api.get(`/assessments/${assessmentId}`),
-  createAssessment: (courseId: number, data: any) =>
-    api.post(`/courses/${courseId}/assessments`, data),
+  createAssessment: (data: any) => api.post(`/assessments`, data),
+  updateAssessment: (assessmentId: number, data: any) => api.put(`/assessments/${assessmentId}`, data),
+  deleteAssessment: (assessmentId: number) => api.delete(`/assessments/${assessmentId}`),
   submitAnswer: (assessmentId: number, data: any) =>
     api.post(`/assessments/${assessmentId}/submit`, data),
   getAssessmentAnswers: (assessmentId: number) =>

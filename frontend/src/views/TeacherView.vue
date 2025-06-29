@@ -130,9 +130,14 @@
           <CourseList />
         </div>
 
+        <!-- 评估测试 -->
+        <div v-if="activeTab === 'assessments'">
+          <AssessmentList :role="'teacher'" />
+        </div>
+
         <!-- AI助手 -->
         <div v-if="activeTab === 'ai-assistant'">
-          <AIAssistant />
+          <AIAssistant :user-id="userId || ''" />
         </div>
 
         <!-- 学习分析 -->
@@ -184,6 +189,7 @@ import AIAssistant from '@/components/ai/AIAssistant.vue';
 import LearningAnalytics from '@/components/analytics/LearningAnalytics.vue';
 import KnowledgeBase from '@/components/rag/KnowledgeBase.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
+import AssessmentList from '@/components/assessment/AssessmentList.vue';
 
 const authStore = useAuthStore();
 const userId = computed(() => authStore.user?.id);
@@ -192,6 +198,7 @@ const userId = computed(() => authStore.user?.id);
 const tabs = [
   { id: 'dashboard', name: '工作台' },
   { id: 'courses', name: '课程管理' },
+  { id: 'assessments', name: '评估测试' },
   { id: 'ai-assistant', name: '智能备课' },
   { id: 'analytics', name: '学情分析' },
   { id: 'knowledge-base', name: '知识库' }
