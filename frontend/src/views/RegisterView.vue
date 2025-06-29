@@ -184,7 +184,7 @@ const isLoading = ref(false)
 const error = ref('')
 const success = ref(false)
 
-const handleSubmit = async () => {
+    const handleSubmit = async () => {
   try {
     error.value = ''
     success.value = false
@@ -204,7 +204,7 @@ const handleSubmit = async () => {
     isLoading.value = true
     
     const { confirm_password, ...registerData } = form.value
-    await authStore.register(registerData)
+    await authStore.registerUser(registerData)
     
     success.value = true
     
