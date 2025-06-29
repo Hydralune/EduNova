@@ -77,21 +77,25 @@ body {
 
 /* 通知样式 */
 .notification {
-  @apply fixed top-4 right-4 z-50 max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden;
+  @apply fixed inset-0 flex items-center justify-center z-50 pointer-events-none;
+}
+
+.notification-container {
+  @apply max-w-sm w-full bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden transform transition-all duration-300 ease-in-out;
 }
 
 .notification-success {
-  @apply bg-green-50 border-l-4 border-green-400;
+  @apply border-l-4 border-green-500;
 }
 
 .notification-error {
-  @apply bg-red-50 border-l-4 border-red-400;
+  @apply border-l-4 border-red-500;
 }
 
 .notification-warning {
-  @apply bg-yellow-50 border-l-4 border-yellow-400;
+  @apply border-l-4 border-yellow-500;
 }
 
 .notification-info {
-  @apply bg-blue-50 border-l-4 border-blue-400;
+  @apply border-l-4 border-blue-500;
 } 

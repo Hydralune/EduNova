@@ -11,6 +11,15 @@ interface LoginResponse {
   user: User;
 }
 
+interface ProfileResponse {
+  user: User;
+}
+
+interface ProfileUpdateResponse {
+  message: string;
+  user: User;
+}
+
 interface AvatarResponse {
   message: string;
   avatar_url: string;
@@ -96,9 +105,10 @@ export const register = async (userData: any) => {
 export const fetchUserProfile = async (): Promise<User> => {
   try {
     console.log('获取用户资料')
-    const response = await api.get('/auth/profile')
+    const response = await api.get<ProfileResponse>('/auth/profile')
     console.log('获取用户资料成功')
-    return response.user
+    // axios拦截器已经处理了response.data
+    return (response as unknown as ProfileResponse).user
   } catch (error) {
     console.error('获取用户资料失败:', error)
     throw error
@@ -117,26 +127,47 @@ export const updateUserProfile = async (userData: any) => {
       throw new Error('未登录，无法更新资料')
     }
     
-    // 使用fetch API替代axios
-    const response = await fetch(`${API_URL}/auth/profile`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(userData)
-    })
-    
-    if (!response.ok) {
-      // 如果服务器返回错误状态码
-      const errorData = await response.text()
-      console.error('更新资料失败，服务器响应:', response.status, errorData)
-      throw new Error(`服务器错误 ${response.status}: ${errorData}`)
+    // 检查是否包含文件（头像）
+    if (userData instanceof FormData) {
+      console.log('检测到FormData，使用multipart/form-data方式提交')
+      
+      // 确保FormData中包含头像文件
+      const formData = userData as FormData
+      
+      // 使用fetch API发送multipart/form-data请求
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // 不要设置Content-Type，让浏览器自动处理
+        },
+        credentials: 'include',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        // 如果服务器返回错误状态码
+        const errorData = await response.text()
+        console.error('更新资料失败，服务器响应:', response.status, errorData)
+        throw new Error(`服务器错误 ${response.status}: ${errorData}`)
+      }
+      
+      const data = await response.json()
+      console.log('更新用户资料成功，服务器响应:', data)
+      return data
+    } else {
+      // 使用axios实例处理JSON请求
+      console.log('使用axios实例提交JSON用户资料:', JSON.stringify(userData))
+      
+      // 确保设置了正确的Content-Type
+      const response = await api.put('/auth/profile', userData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      console.log('更新用户资料成功，服务器响应:', response)
+      return response
     }
-    
-    const data = await response.json()
-    console.log('更新用户资料成功，服务器响应:', data)
-    return data
   } catch (error: any) {
     console.error('更新用户资料失败:', error)
     throw { error: error.message || '更新用户资料失败', status: error.status || 500 }
@@ -170,6 +201,7 @@ export const uploadAvatar = async (file: File, userId: number): Promise<AvatarRe
     // 使用新的直接上传端点，不需要JWT验证
     const response = await fetch(`${API_URL}/auth/upload-avatar/${userId}`, {
       method: 'POST',
+      credentials: 'include',
       body: formData
       // 不需要设置任何头部，让浏览器自动处理
     })
@@ -189,5 +221,40 @@ export const uploadAvatar = async (file: File, userId: number): Promise<AvatarRe
     // 格式化错误信息
     const errorMessage = error.message || '上传头像失败'
     throw { error: errorMessage, status: error.status || 500 }
+  }
+}
+
+/**
+ * 简单头像上传（不需要认证）
+ */
+export const simpleAvatarUpload = async (file: File, userId: number): Promise<AvatarResponse> => {
+  try {
+    console.log('使用简单方式上传头像，用户ID:', userId);
+    const formData = new FormData();
+    formData.append('avatar', file);
+    formData.append('user_id', userId.toString());
+    
+    const response = await fetch(`${API_URL}/auth/simple-avatar-upload`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+      // 不需要设置任何头部，让浏览器自动处理
+    });
+    
+    if (!response.ok) {
+      // 如果服务器返回错误状态码
+      const errorText = await response.text();
+      console.error('头像上传失败，服务器响应:', response.status, errorText);
+      throw new Error(`服务器错误 ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('头像上传成功，服务器响应:', data);
+    return data as AvatarResponse;
+  } catch (error: any) {
+    console.error('头像上传失败:', error);
+    // 格式化错误信息
+    const errorMessage = error.message || '上传头像失败';
+    throw { error: errorMessage, status: error.status || 500 };
   }
 } 

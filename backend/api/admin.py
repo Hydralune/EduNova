@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, make_response
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from backend.models.user import User, db
-from backend.models.config import SystemConfig
+from backend.models.config import Config
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 from backend.models.course import Course
@@ -13,18 +13,34 @@ admin_bp = Blueprint('admin', __name__)
 @admin_bp.route('/<path:path>', methods=['OPTIONS'])
 def options_handler(path):
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 # 特别为/users添加OPTIONS处理
 @admin_bp.route('/users', methods=['OPTIONS'])
 def users_options():
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 # 特别为/users/<user_id>添加OPTIONS处理
@@ -270,7 +286,7 @@ def get_config():
     is_admin = claims.get('role') == 'admin'
     
     # 构建查询
-    query = SystemConfig.query
+    query = Config.query
     
     # 非管理员只能查看公开配置
     if not is_admin:
@@ -319,7 +335,7 @@ def update_config():
             category = 'general'
             is_public = False
         
-        config = SystemConfig.set_value(
+        config = Config.set_value(
             key=key,
             value=config_value,
             description=description,

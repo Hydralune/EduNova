@@ -153,7 +153,20 @@
                   <h4 class="font-medium">{{ assessment.title }}</h4>
                   <p class="text-sm text-gray-500">{{ assessment.type }} · {{ assessment.question_count }}题 · {{ assessment.time_limit }}分钟</p>
                 </div>
-                <button class="px-4 py-2 border rounded-md">开始</button>
+                <div class="flex gap-2">
+                  <button 
+                    @click="viewAssessment(assessment.id)" 
+                    class="px-4 py-2 border rounded-md hover:bg-gray-50"
+                  >
+                    查看模式
+                  </button>
+                  <button 
+                    @click="startAssessment(assessment.id)" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    开始评估
+                  </button>
+                </div>
               </div>
               <div class="mt-2">
                 <p class="text-sm text-gray-700">{{ assessment.description }}</p>
@@ -162,6 +175,11 @@
                 <span>截止日期: {{ assessment.due_date || '无' }}</span>
                 <span class="mx-2">|</span>
                 <span>尝试次数: {{ assessment.attempts || 0 }}/{{ assessment.max_attempts || '无限制' }}</span>
+              </div>
+              <div class="flex justify-between items-center mt-4">
+                <div>
+                  <span class="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">未开始</span>
+                </div>
               </div>
             </div>
           </div>
@@ -351,6 +369,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI, materialAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
+import { useRouter } from 'vue-router';
 
 // 定义Course接口
 interface CourseSection {
@@ -388,6 +407,18 @@ interface AvailableStudent {
   name: string;
   email: string;
   role: string;
+}
+
+interface Assessment {
+  id: string | number;
+  title: string;
+  type: string;
+  question_count: number;
+  time_limit: number;
+  description: string;
+  due_date: string | null;
+  attempts: number;
+  max_attempts: number;
 }
 
 interface Course {
@@ -449,19 +480,46 @@ const materialTitle = ref('');
 const materialUploadProgress = ref(0);
 const materialUploadError = ref('');
 
-const assessments = ref([
-  {
-    id: 1,
-    title: '第一章测验',
-    type: '测验',
-    question_count: 10,
-    time_limit: 30,
-    description: '测试对第一章内容的理解',
-    due_date: '2025-07-15',
-    attempts: 0,
-    max_attempts: 3,
-  },
-]);
+// 评估数据
+const assessments = ref<Assessment[]>([]);
+
+// 从mock数据加载评估
+async function loadMockAssessment() {
+  try {
+    const mockExam = await import('../../assets/mock-exam.json');
+    const data = mockExam.default;
+    
+    // 将mock数据转换为评估列表格式
+    assessments.value = [{
+      id: data.id,
+      title: data.title,
+      type: data.type,
+      question_count: getTotalQuestions(data),
+      time_limit: parseInt(data.duration) || 30,
+      description: data.description,
+      due_date: data.due_date ? new Date(data.due_date).toLocaleDateString() : null,
+      attempts: 0,
+      max_attempts: data.max_attempts,
+    }];
+    
+    console.log('Mock assessment loaded:', assessments.value);
+  } catch (error) {
+    console.error('Failed to load mock assessment:', error);
+  }
+}
+
+// 计算题目总数
+function getTotalQuestions(assessment: any): number {
+  let count = 0;
+  if (assessment && assessment.sections) {
+    assessment.sections.forEach((section: any) => {
+      if (section.questions) {
+        count += section.questions.length;
+      }
+    });
+  }
+  return count;
+}
 
 const students = ref<Student[]>([]);
 const availableStudents = ref<AvailableStudent[]>([]);
@@ -469,11 +527,14 @@ const selectedStudents = ref<number[]>([]);
 const isLoadingStudents = ref(false);
 const studentError = ref('');
 
+const router = useRouter();
+
 onMounted(async () => {
   await fetchCourseDetail();
   if (course.value) {
     await fetchMaterials();
     await fetchStudents();
+    await loadMockAssessment(); // 加载模拟评估数据
   }
 });
 
@@ -745,5 +806,16 @@ function filterStudents() {
 function previewMaterial(materialId: number) {
   previewMaterialId.value = materialId;
   showMaterialPreview.value = true;
+}
+
+function viewAssessment(assessmentId: string | number) {
+  // 导航到评估查看页面
+  router.push(`/assessments/${assessmentId}`);
+}
+
+function startAssessment(assessmentId: string | number) {
+  // 导航到评估答题页面
+  console.log('Starting assessment:', assessmentId);
+  router.push(`/assessments/${assessmentId}/take`);
 }
 </script> 

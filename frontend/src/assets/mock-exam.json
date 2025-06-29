@@ -1,0 +1,158 @@
+{
+    "id": "exam001",
+    "title": "第一章测验",
+    "description": "测试对第一章内容的理解",
+    "course_id": "course123",
+    "type": "quiz",
+    "total_score": 100,
+    "duration": "30分钟",
+    "due_date": "2025-07-15T23:59:59Z",
+    "start_date": "2025-06-01T09:00:00Z",
+    "max_attempts": 3,
+    "is_published": true,
+    "is_active": true,
+    "created_at": "2025-06-01T10:00:00Z",
+    "updated_at": "2025-06-01T10:00:00Z",
+    "sections": [
+      {
+        "type": "multiple_choice",
+        "description": "选择题：请在每小题给出的选项中选出一个正确答案。",
+        "score_per_question": 4,
+        "questions": [
+          {
+            "id": 1,
+            "stem": "以下哪个是JavaScript的基本数据类型？",
+            "type": "multiple_choice",
+            "score": 4,
+            "difficulty": "easy",
+            "options": [
+              "A. Array",
+              "B. Object",
+              "C. String",
+              "D. RegExp"
+            ],
+            "answer": "C",
+            "explanation": "JavaScript的基本数据类型包括String、Number、Boolean、Null、Undefined和Symbol。"
+          },
+          {
+            "id": 2,
+            "stem": "Vue.js中用于响应式数据的API是？",
+            "type": "multiple_choice",
+            "score": 4,
+            "difficulty": "medium",
+            "options": [
+              "A. useState",
+              "B. reactive",
+              "C. useEffect",
+              "D. setState"
+            ],
+            "answer": "B",
+            "explanation": "在Vue.js中，reactive是用于创建响应式对象的API。"
+          }
+        ]
+      },
+      {
+        "type": "multiple_select",
+        "description": "多选题：请在每小题给出的选项中选出所有正确答案。",
+        "score_per_question": 5,
+        "questions": [
+          {
+            "id": 3,
+            "stem": "以下哪些是JavaScript框架或库？",
+            "type": "multiple_select",
+            "score": 5,
+            "difficulty": "medium",
+            "options": [
+              "A. React",
+              "B. Python",
+              "C. Vue",
+              "D. Angular"
+            ],
+            "answer": ["A", "C", "D"],
+            "explanation": "React、Vue和Angular都是JavaScript框架或库，而Python是一种编程语言。"
+          }
+        ]
+      },
+      {
+        "type": "fill_in_blank",
+        "description": "填空题：请在横线上填写正确的内容。",
+        "score_per_question": 4,
+        "questions": [
+          {
+            "id": 4,
+            "stem": "Vue.js中，用于创建组件的API是_____。",
+            "type": "fill_in_blank",
+            "score": 4,
+            "difficulty": "medium",
+            "answer": "defineComponent",
+            "explanation": "在Vue.js中，defineComponent是用于创建组件的API。"
+          },
+          {
+            "id": 5,
+            "stem": "在Vue 3中，_____函数用于创建响应式对象，而_____函数用于创建响应式基本类型。",
+            "type": "fill_in_blank",
+            "score": 4,
+            "difficulty": "hard",
+            "answer": ["reactive", "ref"],
+            "explanation": "在Vue 3中，reactive函数用于创建响应式对象，而ref函数用于创建响应式基本类型。"
+          }
+        ]
+      },
+      {
+        "type": "true_false",
+        "description": "判断题：请判断以下说法是否正确。",
+        "score_per_question": 3,
+        "questions": [
+          {
+            "id": 6,
+            "stem": "Vue.js是一个前端框架。",
+            "type": "true_false",
+            "score": 3,
+            "difficulty": "easy",
+            "answer": "true",
+            "explanation": "Vue.js是一个用于构建用户界面的渐进式JavaScript框架。"
+          },
+          {
+            "id": 7,
+            "stem": "React使用模板语法而不是JSX。",
+            "type": "true_false",
+            "score": 3,
+            "difficulty": "medium",
+            "answer": "false",
+            "explanation": "React使用JSX语法，而不是模板语法。"
+          }
+        ]
+      },
+      {
+        "type": "short_answer",
+        "description": "简答题：请简要回答以下问题。",
+        "score_per_question": 10,
+        "questions": [
+          {
+            "id": 8,
+            "stem": "简述Vue.js的生命周期钩子函数。",
+            "type": "short_answer",
+            "score": 10,
+            "difficulty": "medium",
+            "reference_answer": "Vue组件的生命周期钩子包括：创建阶段的beforeCreate和created，挂载阶段的beforeMount和mounted，更新阶段的beforeUpdate和updated，卸载阶段的beforeUnmount和unmounted等。"
+          }
+        ]
+      },
+      {
+        "type": "essay",
+        "description": "论述题：请详细回答以下问题，并上传相关资料。",
+        "score_per_question": 20,
+        "questions": [
+          {
+            "id": 9,
+            "stem": "分析Vue.js和React的异同，并结合实际项目经验谈谈你的选择偏好。",
+            "type": "essay",
+            "score": 20,
+            "difficulty": "hard",
+            "reference_answer": "Vue和React都是流行的前端框架，它们有许多相似之处，如组件化架构、虚拟DOM等。不同之处在于Vue使用模板语法和选项式API，而React使用JSX和函数式组件...",
+            "allow_attachment": true
+          }
+        ]
+      }
+    ]
+  }

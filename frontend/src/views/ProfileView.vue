@@ -170,11 +170,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { authAPI } from '@/api';
-import axios from 'axios';
+import * as authAPI from '@/api/auth';
+
+// 注入通知服务
+const showNotification = inject('showNotification') as (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -251,47 +253,21 @@ const saveProfile = async () => {
   loading.value = true;
   
   try {
-    // 更新基本信息
-    const response = await authAPI.updateProfile({
+    // 更新用户资料
+    await authStore.updateProfile({
       email: editForm.email,
       full_name: editForm.full_name
     });
     
-    console.log('资料更新响应:', response);
-    
-    // 确保用户信息被更新到store中
-    if (response && response.user) {
-      // 直接更新store中的用户信息
-      authStore.setUser(response.user);
-      console.log('用户信息已更新到store:', response.user);
-    } else {
-      // 如果响应中没有用户信息，则重新获取
-      await authStore.fetchProfile();
-      console.log('已重新获取用户资料');
-    }
-    
-    // 如果有选择新头像，则上传头像
+    // 如果有选择头像，上传头像
     if (selectedFile.value) {
       try {
-        console.log('准备上传头像...');
-        console.log('文件名:', selectedFile.value.name);
-        console.log('文件类型:', selectedFile.value.type);
-        console.log('文件大小:', selectedFile.value.size, 'bytes');
-        
-        // 确保用户ID可用
-        if (!authStore.user || !authStore.user.id) {
-          throw new Error('用户ID不可用，无法上传头像');
-        }
-        
-        // 使用authStore的uploadUserAvatar方法上传头像
-        const response = await authStore.uploadUserAvatar(selectedFile.value);
-        console.log('头像上传成功，响应:', response);
-        
-        // 更新用户头像URL已经在authStore.uploadUserAvatar中处理
-      } catch (uploadErr) {
-        console.error('头像上传失败:', uploadErr);
-        alert('头像上传失败: ' + (uploadErr.error || uploadErr.message || '未知错误'));
-        return; // 如果头像上传失败，不继续后面的操作
+        const avatarResponse = await authStore.simpleUploadUserAvatar(selectedFile.value);
+        console.log('头像上传成功:', avatarResponse);
+      } catch (avatarErr: any) {
+        console.error('头像上传失败:', avatarErr);
+        showNotification('error', '头像上传失败', (avatarErr.error || avatarErr.message || '未知错误'));
+        // 继续执行，不要因为头像上传失败而中断整个流程
       }
     }
     
@@ -299,7 +275,7 @@ const saveProfile = async () => {
     isEditing.value = false;
     previewAvatar.value = ''; // 清除预览头像
     selectedFile.value = null; // 清除选择的文件
-    alert('个人资料更新成功');
+    showNotification('success', '个人资料更新成功');
     
     // 刷新页面显示
     if (authStore.user) {
@@ -319,7 +295,7 @@ const changePassword = async () => {
   passwordError.value = '';
   
   // 验证两次输入的密码是否一致
-  if (passwordForm.new_password !== passwordForm.confirm_password) {
+  if (passwordForm.old_password !== passwordForm.new_password) {
     passwordError.value = '两次输入的新密码不一致';
     return;
   }
@@ -327,7 +303,7 @@ const changePassword = async () => {
   loading.value = true;
   
   try {
-    await authAPI.changePassword({
+    await authAPI.changeUserPassword({
       old_password: passwordForm.old_password,
       new_password: passwordForm.new_password
     });
@@ -340,7 +316,7 @@ const changePassword = async () => {
     // 关闭模态框
     showPasswordModal.value = false;
     
-    alert('密码修改成功');
+    showNotification('success', '密码修改成功');
   } catch (err: any) {
     console.error('修改密码失败:', err);
     passwordError.value = typeof err === 'string' ? err : (err.error || '修改密码失败，请检查当前密码是否正确');
@@ -377,12 +353,12 @@ const onFileChange = (event: Event) => {
     
     // 检查文件类型和大小
     if (!file.type.match('image.*')) {
-      alert('请选择图片文件');
+      showNotification('error', '文件类型错误', '请选择图片文件');
       return;
     }
     
     if (file.size > 5 * 1024 * 1024) { // 5MB限制
-      alert('图片大小不能超过5MB');
+      showNotification('error', '文件过大', '图片大小不能超过5MB');
       return;
     }
     

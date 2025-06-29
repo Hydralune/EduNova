@@ -243,6 +243,113 @@
         <div v-if="activeTab === 'settings'">
           <AdminDashboard activeTab="settings" />
         </div>
+        
+        <!-- 评估管理 -->
+        <div v-if="activeTab === 'assessments'">
+          <h2 class="text-xl font-semibold mb-4">评估管理</h2>
+          
+          <div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="mb-6">
+              <h3 class="text-lg font-medium">评估列表</h3>
+              <p class="text-gray-600 text-sm">管理所有课程的评估和查看学生提交</p>
+            </div>
+            
+            <AssessmentList 
+              role="teacher"
+              @create="createAssessment"
+              @edit="editAssessment"
+              @delete="deleteAssessment"
+              @view-submissions="viewSubmissions"
+              @take="takeAssessment"
+            />
+          </div>
+        </div>
+        
+        <!-- 提交列表模态框 -->
+        <div v-if="showSubmissionsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-lg p-6 w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold">{{ currentAssessment ? currentAssessment.title : '' }} - 提交列表</h3>
+              <button @click="closeSubmissionsModal" class="text-gray-500 hover:text-gray-700">
+                <span class="text-2xl">&times;</span>
+              </button>
+            </div>
+            
+            <SubmissionList 
+              :assessment-id="currentAssessment ? currentAssessment.id : null"
+              :show-back-button="false"
+              :show-assessment-filter="false"
+              :show-assessment-info="false"
+              role="teacher"
+              @view="viewSubmissionDetail"
+              @grade="gradeSubmission"
+              @edit-grade="editGrade"
+            />
+          </div>
+        </div>
+        
+        <!-- 评分模态框 -->
+        <div v-if="showGradingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-lg p-6 w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold">评分 - {{ getStudentName(currentSubmission.student_id) }}</h3>
+              <button @click="closeGradingModal" class="text-gray-500 hover:text-gray-700">
+                <span class="text-2xl">&times;</span>
+              </button>
+            </div>
+            
+            <div class="space-y-6">
+              <!-- 学生信息 -->
+              <div class="bg-gray-50 p-4 rounded-md">
+                <p><span class="font-medium">学生:</span> {{ getStudentName(currentSubmission.student_id) }}</p>
+                <p><span class="font-medium">评估:</span> {{ getAssessmentTitle(currentSubmission.assessment_id) }}</p>
+                <p><span class="font-medium">提交时间:</span> {{ formatDate(currentSubmission.submitted_at) }}</p>
+              </div>
+              
+              <!-- 答案预览 -->
+              <div>
+                <h4 class="text-lg font-medium mb-2">学生答案</h4>
+                <div class="bg-gray-50 p-4 rounded-md">
+                  <pre class="whitespace-pre-wrap">{{ formatAnswers(currentSubmission.answers) }}</pre>
+                </div>
+              </div>
+              
+              <!-- 评分表单 -->
+              <div>
+                <h4 class="text-lg font-medium mb-2">评分</h4>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">分数</label>
+                    <input 
+                      type="number" 
+                      v-model="gradingForm.score"
+                      min="0"
+                      :max="getAssessmentTotalScore(currentSubmission.assessment_id)"
+                      class="w-full px-3 py-2 border rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">反馈</label>
+                    <textarea 
+                      v-model="gradingForm.feedback"
+                      rows="4"
+                      class="w-full px-3 py-2 border rounded-md"
+                      placeholder="请输入对学生的反馈..."
+                    ></textarea>
+                  </div>
+                  <div class="flex justify-end">
+                    <button 
+                      @click="submitGrade"
+                      class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      提交评分
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -250,18 +357,23 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import AdminDashboard from '@/components/admin/AdminDashboard.vue';
 import CourseList from '@/components/course/CourseList.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
+import AssessmentList from '../components/assessment/AssessmentList.vue';
+import SubmissionList from '../components/assessment/SubmissionList.vue';
 
 const authStore = useAuthStore();
+const router = useRouter();
 
 // 标签页
 const tabs = [
   { id: 'dashboard', name: '概览' },
   { id: 'admin-dashboard', name: '用户管理' },
   { id: 'courses', name: '课程管理' },
+  { id: 'assessments', name: '评估管理' },
   { id: 'settings', name: '系统设置' }
 ];
 const activeTab = ref('dashboard');
@@ -295,7 +407,154 @@ const systemLogs = ref([
   }
 ]);
 
-// 这里可以添加获取统计数据和日志数据的API调用
+// 状态变量
+const showSubmissionsModal = ref(false);
+const showGradingModal = ref(false);
+const currentAssessment = ref(null);
+const currentSubmission = ref(null);
+const gradingForm = ref({
+  score: 0,
+  feedback: ''
+});
+
+// 学生和评估数据（实际应用中应该从API获取）
+const students = ref([
+  { id: 1, name: '张三' },
+  { id: 2, name: '李四' },
+  { id: 3, name: '王五' }
+]);
+
+const assessments = ref([
+  {
+    id: 1,
+    title: '第一章测验',
+    total_score: 100
+  },
+  {
+    id: 2,
+    title: '期中考试',
+    total_score: 100
+  }
+]);
+
+// 方法
+const createAssessment = () => {
+  // 跳转到创建评估页面或打开模态框
+  console.log('创建评估');
+};
+
+const editAssessment = (assessment) => {
+  // 跳转到编辑评估页面或打开模态框
+  console.log('编辑评估', assessment);
+};
+
+const deleteAssessment = (assessment) => {
+  // 删除评估
+  console.log('删除评估', assessment);
+};
+
+const viewSubmissions = (data) => {
+  currentAssessment.value = data.assessment;
+  showSubmissionsModal.value = true;
+};
+
+const closeSubmissionsModal = () => {
+  showSubmissionsModal.value = false;
+  currentAssessment.value = null;
+};
+
+const viewSubmissionDetail = (submission) => {
+  // 查看提交详情
+  console.log('查看提交详情', submission);
+};
+
+const gradeSubmission = (submission) => {
+  currentSubmission.value = submission;
+  gradingForm.value = {
+    score: submission.score || 0,
+    feedback: submission.feedback || ''
+  };
+  showGradingModal.value = true;
+};
+
+const editGrade = (submission) => {
+  // 与评分相同，但使用已有的分数和反馈
+  gradeSubmission(submission);
+};
+
+const closeGradingModal = () => {
+  showGradingModal.value = false;
+  currentSubmission.value = null;
+};
+
+const submitGrade = async () => {
+  try {
+    // 实际应用中，这里应该调用API
+    // const response = await fetch(`/api/submissions/${currentSubmission.value.id}/grade`, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({
+    //     score: gradingForm.value.score,
+    //     feedback: gradingForm.value.feedback
+    //   }),
+    // });
+    // const data = await response.json();
+    
+    console.log('提交评分', {
+      submissionId: currentSubmission.value.id,
+      score: gradingForm.value.score,
+      feedback: gradingForm.value.feedback
+    });
+    
+    // 更新当前提交的评分信息
+    currentSubmission.value.score = gradingForm.value.score;
+    currentSubmission.value.feedback = gradingForm.value.feedback;
+    currentSubmission.value.graded_at = new Date().toISOString();
+    
+    // 关闭模态框
+    closeGradingModal();
+  } catch (error) {
+    console.error('评分失败:', error);
+  }
+};
+
+const getStudentName = (studentId) => {
+  const student = students.value.find(s => s.id === studentId);
+  return student ? student.name : `学生 ${studentId}`;
+};
+
+const getAssessmentTitle = (assessmentId) => {
+  const assessment = assessments.value.find(a => a.id === assessmentId);
+  return assessment ? assessment.title : `评估 ${assessmentId}`;
+};
+
+const getAssessmentTotalScore = (assessmentId) => {
+  const assessment = assessments.value.find(a => a.id === assessmentId);
+  return assessment ? assessment.total_score : 100;
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleString();
+};
+
+const formatAnswers = (answersJson) => {
+  try {
+    const answers = JSON.parse(answersJson);
+    return JSON.stringify(answers, null, 2);
+  } catch (error) {
+    return answersJson || '无答案';
+  }
+};
+
+const takeAssessment = (assessment) => {
+  // 导航到评估播放器
+  console.log('开始评估', assessment);
+  router.push(`/assessments/${assessment.id}/take`);
+};
 </script>
 
 <style scoped>

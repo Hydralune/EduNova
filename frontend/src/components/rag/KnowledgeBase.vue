@@ -296,6 +296,34 @@
         </form>
       </div>
     </div>
+
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-lg font-semibold">评估测验</h3>
+        <!-- v-if -->
+      </div>
+      <div class="space-y-4">
+        <div class="p-4 border rounded-md">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-medium">第一章测验</h4>
+              <p class="text-sm text-gray-500">测验 · 10题 · 30分钟</p>
+            </div>
+            <router-link to="/test-assessment" class="px-4 py-2 border rounded-md hover:bg-gray-50">
+              开始
+            </router-link>
+          </div>
+          <div class="mt-2">
+            <p class="text-sm text-gray-700">测试对第一章内容的理解</p>
+          </div>
+          <div class="mt-2 flex items-center text-sm text-gray-500">
+            <span>截止日期: 2025-07-15</span>
+            <span class="mx-2">|</span>
+            <span>尝试次数: 0/3</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 

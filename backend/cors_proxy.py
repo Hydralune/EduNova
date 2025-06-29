@@ -16,12 +16,18 @@ def proxy(path):
     print(f"Proxying request: {request.method} {url}")
     print(f"Headers: {request.headers}")
     
+    # Get the origin
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origin = origin if origin in allowed_origins else 'http://localhost:3000'
+    
     # Handle OPTIONS requests directly
     if request.method == 'OPTIONS':
         response = Response()
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Origin', cors_origin)
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
     
     # Forward the request to the backend
@@ -40,13 +46,14 @@ def proxy(path):
         response = Response(resp.content, resp.status_code)
         
         # Add CORS headers
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Origin', cors_origin)
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
         
         # Copy headers from the backend response
         for key, value in resp.headers.items():
-            if key.lower() not in ['access-control-allow-origin', 'access-control-allow-headers', 'access-control-allow-methods']:
+            if key.lower() not in ['access-control-allow-origin', 'access-control-allow-headers', 'access-control-allow-methods', 'access-control-allow-credentials']:
                 response.headers[key] = value
                 
         return response

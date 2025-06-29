@@ -206,6 +206,36 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
+  const simpleUploadUserAvatar = async (file: File) => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      // 确保用户已登录且有用户ID
+      if (!user.value || !user.value.id) {
+        throw new Error('用户未登录或用户ID不可用')
+      }
+      
+      console.log('开始简单上传头像，用户ID:', user.value.id)
+      const response = await authAPI.simpleAvatarUpload(file, user.value.id)
+      console.log('上传头像成功:', response)
+      
+      // 更新用户头像URL
+      if (response && response.avatar_url && user.value) {
+        user.value.avatar_url = response.avatar_url
+        saveToLocalStorage()
+      }
+      
+      return response
+    } catch (err: any) {
+      console.error('上传头像失败:', err)
+      error.value = err.error || '上传头像失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
   const logout = () => {
     console.log('用户登出')
     token.value = ''
@@ -232,6 +262,7 @@ export const useAuthStore = defineStore('auth', () => {
     fetchProfile,
     updateProfile,
     uploadUserAvatar,
+    simpleUploadUserAvatar,
     logout,
     clearError,
     setUser,

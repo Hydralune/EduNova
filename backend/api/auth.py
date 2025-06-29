@@ -129,15 +129,18 @@ def login():
         
         print(f"为用户 {username} 创建令牌，声明: {additional_claims}")
         
+        # 确保用户ID是字符串类型
+        user_id_str = str(user.id)
+        
         access_token = create_access_token(
-            identity=user.id,
+            identity=user_id_str,  # 使用字符串类型的用户ID
             additional_claims=additional_claims,
             expires_delta=datetime.timedelta(days=1)  # 延长令牌有效期到1天
         )
         
         # 创建刷新令牌
         refresh_token = create_refresh_token(
-            identity=user.id,
+            identity=user_id_str,  # 使用字符串类型的用户ID
             expires_delta=datetime.timedelta(days=30)
         )
         
@@ -211,9 +214,18 @@ def register():
 @auth_bp.route('/profile', methods=['OPTIONS'])
 def profile_options():
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '3600')
     return response
 
 @auth_bp.route('/profile', methods=['GET', 'PUT'])
@@ -222,8 +234,15 @@ def profile():
     """获取或更新用户个人资料"""
     try:
         # 获取当前用户ID
-        user_id = get_jwt_identity()
-        print(f"获取用户资料，用户ID: {user_id}")
+        user_id_str = get_jwt_identity()
+        print(f"获取用户资料，用户ID字符串: {user_id_str}, 类型: {type(user_id_str)}")
+        
+        # 将字符串ID转换为整数
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
+            print(f"无法将用户ID转换为整数: {user_id_str}")
+            return jsonify({'error': '无效的用户ID'}), 400
         
         user = User.query.get(user_id)
         if not user:
@@ -246,24 +265,78 @@ def profile():
                 }
             })
             # 添加CORS头
-            response.headers.add('Access-Control-Allow-Origin', '*')
+            origin = request.headers.get('Origin', '')
+            allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+            
+            if origin in allowed_origins:
+                response.headers.add('Access-Control-Allow-Origin', origin)
+            else:
+                response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+                
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
             return response
         
         # 更新个人资料
         if request.method == 'PUT':
             try:
-                data = request.get_json()
-                if not data:
-                    return jsonify({'error': '无效的请求数据'}), 400
+                print(f"更新用户 {user.username} 的资料，内容类型: {request.content_type}")
+                print(f"请求头: {request.headers}")
                 
-                print(f"更新用户 {user.username} 的资料: {data}")
-                
-                # 更新用户信息
-                if 'email' in data:
-                    user.email = data['email']
-                if 'full_name' in data:
-                    user.full_name = data['full_name']
+                # 检查是否是表单数据（包含头像上传）
+                if request.content_type and 'multipart/form-data' in request.content_type:
+                    print("检测到表单数据，处理文件上传")
+                    
+                    # 处理表单数据
+                    if 'email' in request.form:
+                        user.email = request.form['email']
+                    if 'full_name' in request.form:
+                        user.full_name = request.form['full_name']
+                    
+                    # 处理头像上传
+                    if 'avatar' in request.files:
+                        file = request.files['avatar']
+                        if file and file.filename:
+                            if allowed_file(file.filename):
+                                # 确保上传目录存在
+                                upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'avatars')
+                                os.makedirs(upload_folder, exist_ok=True)
+                                
+                                # 生成安全的文件名
+                                timestamp = int(time.time())
+                                filename = secure_filename(f"avatar_{user.id}_{timestamp}.png")
+                                file_path = os.path.join(upload_folder, filename)
+                                
+                                # 保存文件
+                                file.save(file_path)
+                                print(f"头像已保存到: {file_path}")
+                                
+                                # 更新用户头像URL
+                                avatar_url = f"/uploads/avatars/{filename}"
+                                user.avatar_url = avatar_url
+                            else:
+                                return jsonify({'error': '只允许上传图片文件 (png, jpg, jpeg, gif)'}), 400
+                else:
+                    # 处理JSON数据
+                    try:
+                        # 尝试获取JSON数据
+                        data = request.get_json(force=True, silent=True)
+                        print(f"解析的JSON数据: {data}")
+                        
+                        if not data:
+                            # 如果无法解析JSON，尝试读取原始请求体
+                            raw_data = request.get_data()
+                            print(f"原始请求体: {raw_data}")
+                            return jsonify({'error': '无效的JSON数据格式'}), 422
+                        
+                        # 更新用户信息
+                        if 'email' in data:
+                            user.email = data['email']
+                        if 'full_name' in data:
+                            user.full_name = data['full_name']
+                    except Exception as json_err:
+                        print(f"JSON解析错误: {str(json_err)}")
+                        return jsonify({'error': f'无法解析JSON数据: {str(json_err)}'}), 422
                 
                 # 更新时间戳
                 user.updated_at = datetime.datetime.utcnow()
@@ -286,12 +359,22 @@ def profile():
                     }
                 })
                 # 添加CORS头
-                response.headers.add('Access-Control-Allow-Origin', '*')
+                origin = request.headers.get('Origin', '')
+                allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+                
+                if origin in allowed_origins:
+                    response.headers.add('Access-Control-Allow-Origin', origin)
+                else:
+                    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+                    
                 response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+                response.headers.add('Access-Control-Allow-Credentials', 'true')
                 return response
             except Exception as e:
                 db.session.rollback()
                 print(f"更新个人资料时出错: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return jsonify({'error': f'更新个人资料时出错: {str(e)}'}), 500
     except Exception as e:
         print(f"处理个人资料请求时出错: {str(e)}")
@@ -302,7 +385,12 @@ def profile():
 def change_password():
     """修改当前用户的密码"""
     # 获取当前用户ID
-    user_id = get_jwt_identity()
+    user_id_str = get_jwt_identity()
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        return jsonify({'error': '无效的用户ID'}), 400
+        
     user = User.query.get(user_id)
     if not user:
         return jsonify({'error': '用户不存在'}), 404
@@ -333,9 +421,17 @@ def change_password():
 @auth_bp.route('/avatar', methods=['OPTIONS'])
 def avatar_options():
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 @auth_bp.route('/avatar', methods=['POST'])
@@ -542,9 +638,17 @@ def simple_avatar_test():
 @auth_bp.route('/upload-avatar/<int:user_id>', methods=['OPTIONS'])
 def upload_avatar_options(user_id):
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 @auth_bp.route('/upload-avatar/<int:user_id>', methods=['POST'])
@@ -605,6 +709,101 @@ def upload_avatar_direct(user_id):
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        return response
+            
+    except Exception as e:
+        db.session.rollback()
+        print(f"处理头像上传请求时出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'处理请求时出错: {str(e)}'}), 500
+
+@auth_bp.route('/simple-avatar-upload', methods=['POST', 'OPTIONS'])
+def simple_avatar_upload():
+    """简单的头像上传端点，不需要认证"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        origin = request.headers.get('Origin', '')
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+            
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+        
+    try:
+        print("开始处理简单头像上传请求")
+        
+        # 获取用户ID
+        user_id = request.form.get('user_id')
+        if not user_id:
+            return jsonify({'error': '缺少用户ID'}), 400
+            
+        print(f"上传头像，用户ID: {user_id}")
+        
+        # 查找用户
+        user = User.query.get(user_id)
+        if not user:
+            print(f"用户不存在，ID: {user_id}")
+            return jsonify({'error': '用户不存在'}), 404
+        
+        # 确保上传目录存在
+        upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'avatars')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        # 处理文件上传
+        if 'avatar' not in request.files:
+            print("请求中没有找到'avatar'文件")
+            return jsonify({'error': '未找到头像文件'}), 400
+            
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'error': '未选择文件'}), 400
+            
+        print(f"接收到文件: {file.filename}, 类型: {file.content_type}")
+        
+        # 检查文件类型
+        if not allowed_file(file.filename):
+            print(f"不允许的文件类型: {file.filename}")
+            return jsonify({'error': '只允许上传图片文件 (png, jpg, jpeg, gif)'}), 400
+        
+        # 生成安全的文件名
+        timestamp = int(time.time())
+        filename = secure_filename(f"avatar_{user_id}_{timestamp}.png")
+        file_path = os.path.join(upload_folder, filename)
+        
+        # 保存文件
+        file.save(file_path)
+        print(f"文件已保存到: {file_path}")
+        
+        # 更新用户头像URL
+        avatar_url = f"/uploads/avatars/{filename}"
+        user.avatar_url = avatar_url
+        db.session.commit()
+        print(f"用户头像URL已更新: {avatar_url}")
+        
+        # 添加CORS头
+        response = jsonify({
+            'message': '头像上传成功',
+            'avatar_url': avatar_url
+        })
+        
+        # 使用请求的Origin而不是通配符
+        origin = request.headers.get('Origin', '')
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+            
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
             
     except Exception as e:

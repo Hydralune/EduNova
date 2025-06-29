@@ -93,11 +93,19 @@ export const authAPI = {
       });
     }
     
-    console.log('发送JSON请求');
-    return api.put('/auth/profile', data).then(response => {
+    console.log('发送JSON请求, 数据:', JSON.stringify(data));
+    
+    // 直接使用axios实例，确保Content-Type正确设置
+    return api.put('/auth/profile', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => {
       console.log('JSON请求响应:', response);
       return response;
-    }).catch(error => {
+    })
+    .catch(error => {
       console.error('JSON请求失败:', error);
       throw error;
     });
@@ -118,18 +126,18 @@ export const userAPI = {
 
 // 课程管理API
 export const courseAPI = {
-  getCourses: (params?: any) => api.get('/learning/courses', { params }),
-  getCourse: (courseId: number) => api.get(`/learning/courses/${courseId}`),
+  getCourses: (params?: any) => api.get('/courses', { params }),
+  getCourse: (courseId: number) => api.get(`/courses/${courseId}`),
   createCourse: (data: any, coverImage?: File) => {
     if (coverImage) {
       const formData = new FormData()
       formData.append('data', JSON.stringify(data))
       formData.append('cover_image', coverImage)
-      return api.post('/learning/courses', formData, {
+      return api.post('/courses', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
     } else {
-      return api.post('/learning/courses', data)
+      return api.post('/courses', data)
     }
   },
   updateCourse: (courseId: number, data: any, coverImage?: File) => {
@@ -137,23 +145,23 @@ export const courseAPI = {
       const formData = new FormData()
       formData.append('data', JSON.stringify(data))
       formData.append('cover_image', coverImage)
-      return api.put(`/learning/courses/${courseId}`, formData, {
+      return api.put(`/courses/${courseId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
     } else {
-      return api.put(`/learning/courses/${courseId}`, data)
+      return api.put(`/courses/${courseId}`, data)
     }
   },
-  deleteCourse: (courseId: number) => api.delete(`/learning/courses/${courseId}`),
-  getMyCourses: () => api.get('/learning/my-courses'),
-  enrollCourse: (courseId: number) => api.post(`/learning/enroll/${courseId}`),
-  unenrollCourse: (courseId: number) => api.post(`/learning/unenroll/${courseId}`),
-  getCourseStudents: (courseId: number) => api.get(`/learning/courses/${courseId}/students`),
-  getAvailableStudents: (courseId: number) => api.get(`/learning/courses/${courseId}/available-students`),
+  deleteCourse: (courseId: number) => api.delete(`/courses/${courseId}`),
+  getMyCourses: () => api.get('/my-courses'),
+  enrollCourse: (courseId: number) => api.post(`/enroll/${courseId}`),
+  unenrollCourse: (courseId: number) => api.post(`/unenroll/${courseId}`),
+  getCourseStudents: (courseId: number) => api.get(`/courses/${courseId}/students`),
+  getAvailableStudents: (courseId: number) => api.get(`/courses/${courseId}/available-students`),
   addStudentsToCourse: (courseId: number, studentIds: number[]) => 
-    api.post(`/learning/courses/${courseId}/students`, { student_ids: studentIds }),
+    api.post(`/courses/${courseId}/students`, { student_ids: studentIds }),
   removeStudentFromCourse: (courseId: number, studentId: number) => 
-    api.delete(`/learning/courses/${courseId}/students/${studentId}`),
+    api.delete(`/courses/${courseId}/students/${studentId}`),
 }
 
 // 课件资源API

@@ -4,11 +4,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, jsonify, request, make_response, send_from_directory
-from backend.extensions import db, jwt, cors
+from backend.extensions import db, jwt, cors, migrate
 from flask_cors import CORS
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # 确保数据库目录存在
@@ -32,22 +32,34 @@ app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 604800  # 刷新令牌过期时间7天
 # Initialize extensions with app
 db.init_app(app)
 jwt.init_app(app)
+migrate.init_app(app, db)
 cors.init_app(app, resources={r"/*": {
-    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
     "supports_credentials": True,
-    "allow_headers": ["Content-Type", "Authorization"],
-    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "expose_headers": ["Content-Type", "Authorization"],
+    "max_age": 3600
 }})
 
 # 全局OPTIONS处理
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/<path:path>', methods=['OPTIONS'])
 def options_handler(path):
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
     response = make_response()
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Origin')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '3600')
     return response
 
 # Create upload directory
@@ -62,7 +74,8 @@ from backend.models.user import User
 from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.material import Material
-from backend.models.assessment import Assessment, StudentAnswer
+from backend.models.assessment import Assessment, StudentAnswer, AssessmentSubmission
+from backend.models.config import Config
 
 # Import and register blueprints
 from backend.api.user import user_bp
@@ -72,9 +85,9 @@ from backend.api.rag_ai import rag_ai_bp
 from backend.api.auth import auth_bp
 
 # Register blueprints
-app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(user_bp, url_prefix='/api/users')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
-app.register_blueprint(learning_bp, url_prefix='/api')  # Make sure prefix matches with frontend API calls
+app.register_blueprint(learning_bp, url_prefix='/api')
 app.register_blueprint(rag_ai_bp, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 

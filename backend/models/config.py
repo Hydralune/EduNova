@@ -2,7 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from backend.models.user import db
 
-class SystemConfig(db.Model):
+class Config(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(100), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=True)
@@ -14,7 +14,7 @@ class SystemConfig(db.Model):
     updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     
     def __repr__(self):
-        return f'<SystemConfig {self.key}>'
+        return f'<Config {self.key}>'
     
     def to_dict(self):
         return {

@@ -1,5 +1,24 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useRoute } from 'vue-router'
+import { h } from 'vue'
+import HomeView from '../views/HomeView.vue'
+import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import AdminView from '../views/AdminView.vue'
+import ProfileView from '../views/ProfileView.vue'
+import StudentView from '../views/StudentView.vue'
+import TeacherView from '../views/TeacherView.vue'
+import CourseDetailView from '../views/CourseDetailView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
+import TestAssessmentView from '../views/TestAssessmentView.vue'
+import AssessmentPlayerView from '../views/AssessmentPlayerView.vue'
+
+// 导入评估相关视图
+import AssessmentList from '../components/assessment/AssessmentList.vue'
+import AssessmentView from '../components/assessment/AssessmentView.vue'
+import SubmissionList from '../components/assessment/SubmissionList.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -7,59 +26,88 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('../views/HomeView.vue')
+      component: HomeView
     },
     {
       path: '/login',
       name: 'login',
-      component: () => import('../views/LoginView.vue')
+      component: LoginView
     },
     {
       path: '/register',
       name: 'register',
-      component: () => import('../views/RegisterView.vue')
+      component: RegisterView
     },
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: () => import('../views/DashboardView.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/profile',
-      name: 'profile',
-      component: () => import('../views/ProfileView.vue'),
+      component: DashboardView,
       meta: { requiresAuth: true }
     },
     {
       path: '/admin',
       name: 'admin',
-      component: () => import('../views/AdminView.vue'),
+      component: AdminView,
       meta: { requiresAuth: true, requiresAdmin: true }
     },
     {
-      path: '/teacher',
-      name: 'teacher',
-      component: () => import('../views/TeacherView.vue'),
-      meta: { requiresAuth: true, requiresTeacher: true }
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: { requiresAuth: true }
     },
     {
       path: '/student',
       name: 'student',
-      component: () => import('../views/StudentView.vue'),
+      component: StudentView,
       meta: { requiresAuth: true, requiresStudent: true }
     },
     {
+      path: '/teacher',
+      name: 'teacher',
+      component: TeacherView,
+      meta: { requiresAuth: true, requiresTeacher: true }
+    },
+    {
       path: '/course/:id',
-      name: 'course-detail',
-      component: () => import('../views/CourseDetailView.vue'),
-      meta: { requiresAuth: true },
-      props: true
+      name: 'courseDetail',
+      component: CourseDetailView,
+      meta: { requiresAuth: true }
+    },
+    // 评估相关路由
+    {
+      path: '/test-assessment',
+      name: 'testAssessment',
+      component: TestAssessmentView
+    },
+    {
+      path: '/assessments',
+      name: 'assessments',
+      component: AssessmentList,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/assessments/:id',
+      name: 'assessmentDetail',
+      component: AssessmentView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/assessments/:id/take',
+      name: 'assessmentTake',
+      component: AssessmentPlayerView,
+      meta: { requiresAuth: false } // 暂时禁用权限检查以便测试
+    },
+    {
+      path: '/assessments/:id/submissions',
+      name: 'assessmentSubmissions',
+      component: SubmissionList,
+      meta: { requiresAuth: true }
     },
     {
       path: '/:pathMatch(.*)*',
-      name: 'not-found',
-      component: () => import('../views/NotFoundView.vue')
+      name: 'notFound',
+      component: NotFoundView
     }
   ]
 })

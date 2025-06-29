@@ -8,6 +8,7 @@ from backend.models.user import User, db
 from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.material import Material
+from backend.models.assessment import Assessment, StudentAnswer
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -61,12 +62,12 @@ def get_learning_history(student_id):
     }), 200
 
 # 添加OPTIONS请求处理
-@learning_bp.route('/learning/courses', methods=['OPTIONS'])
+@learning_bp.route('/courses', methods=['OPTIONS'])
 def courses_options():
     return '', 200
 
 # 获取课程列表
-@learning_bp.route('/learning/courses', methods=['GET'])
+@learning_bp.route('/courses', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_courses():
     """获取课程列表"""
@@ -110,7 +111,7 @@ def get_courses():
     })
 
 # 获取课程详情
-@learning_bp.route('/learning/courses/<int:course_id>', methods=['GET'])
+@learning_bp.route('/courses/<int:course_id>', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_course(course_id):
     """获取课程详情"""
@@ -129,7 +130,7 @@ def get_course(course_id):
     return jsonify(course_data)
 
 # 创建课程
-@learning_bp.route('/learning/courses', methods=['POST'])
+@learning_bp.route('/courses', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def create_course():
     """创建新课程"""
@@ -194,7 +195,7 @@ def create_course():
     return jsonify(new_course.to_dict()), 201
 
 # 更新课程
-@learning_bp.route('/learning/courses/<int:course_id>', methods=['PUT'])
+@learning_bp.route('/courses/<int:course_id>', methods=['PUT'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def update_course(course_id):
     """更新课程信息"""
@@ -266,7 +267,7 @@ def update_course(course_id):
     return jsonify(course.to_dict())
 
 # 删除课程
-@learning_bp.route('/learning/courses/<int:course_id>', methods=['DELETE'])
+@learning_bp.route('/courses/<int:course_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def delete_course(course_id):
     """删除课程"""
@@ -478,7 +479,7 @@ def delete_material(material_id):
     })
 
 # 获取课程的所有学生
-@learning_bp.route('/learning/courses/<int:course_id>/students', methods=['GET'])
+@learning_bp.route('/courses/<int:course_id>/students', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_course_students(course_id):
     """获取课程的所有学生"""
@@ -538,7 +539,7 @@ def get_course_students(course_id):
     })
 
 # 获取可添加到课程的学生
-@learning_bp.route('/learning/courses/<int:course_id>/available-students', methods=['GET'])
+@learning_bp.route('/courses/<int:course_id>/available-students', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_available_students(course_id):
     """获取可添加到课程的学生"""
@@ -573,7 +574,7 @@ def get_available_students(course_id):
     })
 
 # 添加学生到课程
-@learning_bp.route('/learning/courses/<int:course_id>/students', methods=['POST'])
+@learning_bp.route('/courses/<int:course_id>/students', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def add_students_to_course(course_id):
     """添加学生到课程"""
@@ -630,7 +631,7 @@ def add_students_to_course(course_id):
     }), 201
 
 # 从课程中移除学生
-@learning_bp.route('/learning/courses/<int:course_id>/students/<int:student_id>', methods=['DELETE'])
+@learning_bp.route('/courses/<int:course_id>/students/<int:student_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def remove_student_from_course(course_id, student_id):
     """从课程中移除学生"""
@@ -673,5 +674,290 @@ def remove_student_from_course(course_id, student_id):
     return jsonify({
         'message': 'Student removed from course successfully',
         'student': student_data
+    })
+
+# ============ 评估相关API ============
+
+@learning_bp.route('/assessments', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_assessments():
+    """获取评估列表"""
+    # 获取查询参数
+    course_id = request.args.get('course_id')
+    is_active = request.args.get('is_active')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    # 构建查询
+    query = Assessment.query
+    
+    # 应用过滤条件
+    if course_id:
+        query = query.filter_by(course_id=course_id)
+    
+    if is_active is not None:
+        is_active_bool = is_active.lower() == 'true'
+        query = query.filter_by(is_active=is_active_bool)
+    
+    # 执行分页查询
+    assessments_pagination = query.paginate(page=page, per_page=per_page)
+    
+    # 准备响应数据
+    assessments_data = []
+    for assessment in assessments_pagination.items:
+        assessment_dict = assessment.to_dict()
+        assessments_data.append(assessment_dict)
+    
+    return jsonify({
+        'assessments': assessments_data,
+        'total': assessments_pagination.total,
+        'pages': assessments_pagination.pages,
+        'current_page': page
+    })
+
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_assessment(assessment_id):
+    """获取单个评估详情"""
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    return jsonify(assessment.to_dict())
+
+@learning_bp.route('/assessments', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def create_assessment():
+    """创建新评估"""
+    data = request.json
+    
+    # 验证必要数据
+    required_fields = ['title', 'course_id', 'questions']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+    
+    # 创建评估
+    assessment = Assessment(
+        title=data['title'],
+        description=data.get('description', ''),
+        course_id=data['course_id'],
+        questions=json.dumps(data['questions']),
+        due_date=datetime.fromisoformat(data['due_date']) if 'due_date' in data else None,
+        is_active=data.get('is_active', True)
+    )
+    
+    db.session.add(assessment)
+    db.session.commit()
+    
+    return jsonify(assessment.to_dict()), 201
+
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['PUT'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def update_assessment(assessment_id):
+    """更新评估"""
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    data = request.json
+    
+    # 更新评估信息
+    if 'title' in data:
+        assessment.title = data['title']
+    
+    if 'description' in data:
+        assessment.description = data['description']
+    
+    if 'questions' in data:
+        assessment.questions = json.dumps(data['questions'])
+    
+    if 'due_date' in data:
+        assessment.due_date = datetime.fromisoformat(data['due_date']) if data['due_date'] else None
+    
+    if 'is_active' in data:
+        assessment.is_active = data['is_active']
+    
+    db.session.commit()
+    
+    return jsonify(assessment.to_dict())
+
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['DELETE'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def delete_assessment(assessment_id):
+    """删除评估"""
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    assessment_data = assessment.to_dict()
+    db.session.delete(assessment)
+    db.session.commit()
+    
+    return jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
+
+@learning_bp.route('/assessments/<int:assessment_id>/submit', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def submit_assessment(assessment_id):
+    """提交评估答案"""
+    data = request.json
+    
+    # 在实际应用中，应该从JWT中获取学生ID
+    # student_id = get_jwt_identity()
+    student_id = data.get('student_id', 1)  # 临时使用请求中的学生ID或默认值
+    
+    # 验证评估是否存在
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    # 验证截止日期
+    if assessment.due_date and datetime.utcnow() > assessment.due_date:
+        return jsonify({'error': 'Assessment submission deadline has passed'}), 400
+    
+    # 验证尝试次数
+    existing_attempts = StudentAnswer.query.filter_by(
+        student_id=student_id,
+        assessment_id=assessment_id
+    ).count()
+    
+    # 这里应该检查评估的最大尝试次数设置，但目前模型中没有此字段
+    # 暂时使用硬编码的值
+    max_attempts = 3
+    if existing_attempts >= max_attempts:
+        return jsonify({'error': 'Maximum number of attempts reached'}), 400
+    
+    # 创建学生答案记录
+    student_answer = StudentAnswer(
+        student_id=student_id,
+        assessment_id=assessment_id,
+        answers=json.dumps(data.get('answers', {})),
+        submitted_at=datetime.utcnow()
+    )
+    
+    # 自动评分逻辑（简单版本）
+    score = 0
+    assessment_questions = json.loads(assessment.questions)
+    student_answers = data.get('answers', {})
+    
+    # 这里需要根据实际的数据结构进行调整
+    # 简单示例：
+    # for question_id, answer in student_answers.items():
+    #     correct_answer = next((q for q in assessment_questions if q['id'] == int(question_id)), {}).get('answer')
+    #     if answer == correct_answer:
+    #         score += 1
+    
+    student_answer.score = score
+    
+    db.session.add(student_answer)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Assessment submitted successfully',
+        'submission_id': student_answer.id,
+        'submitted_at': student_answer.submitted_at.isoformat(),
+        'score': student_answer.score
+    })
+
+@learning_bp.route('/assessments/<int:assessment_id>/submissions', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_assessment_submissions(assessment_id):
+    """获取评估的所有提交"""
+    # 验证评估是否存在
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    # 获取查询参数
+    student_id = request.args.get('student_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    # 构建查询
+    query = StudentAnswer.query.filter_by(assessment_id=assessment_id)
+    
+    if student_id:
+        query = query.filter_by(student_id=student_id)
+    
+    # 执行分页查询
+    submissions_pagination = query.paginate(page=page, per_page=per_page)
+    
+    # 准备响应数据
+    submissions_data = []
+    for submission in submissions_pagination.items:
+        submissions_data.append(submission.to_dict())
+    
+    return jsonify({
+        'submissions': submissions_data,
+        'total': submissions_pagination.total,
+        'pages': submissions_pagination.pages,
+        'current_page': page
+    })
+
+@learning_bp.route('/students/<int:student_id>/submissions', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_student_submissions(student_id):
+    """获取学生的所有提交"""
+    # 验证学生是否存在
+    student = User.query.get(student_id)
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+    
+    # 获取查询参数
+    assessment_id = request.args.get('assessment_id', type=int)
+    course_id = request.args.get('course_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    # 构建查询
+    query = StudentAnswer.query.filter_by(student_id=student_id)
+    
+    if assessment_id:
+        query = query.filter_by(assessment_id=assessment_id)
+    
+    if course_id:
+        # 需要联表查询
+        query = query.join(Assessment).filter(Assessment.course_id == course_id)
+    
+    # 执行分页查询
+    submissions_pagination = query.paginate(page=page, per_page=per_page)
+    
+    # 准备响应数据
+    submissions_data = []
+    for submission in submissions_pagination.items:
+        submissions_data.append(submission.to_dict())
+    
+    return jsonify({
+        'submissions': submissions_data,
+        'total': submissions_pagination.total,
+        'pages': submissions_pagination.pages,
+        'current_page': page
+    })
+
+@learning_bp.route('/submissions/<int:submission_id>/grade', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def grade_submission(submission_id):
+    """评分学生提交"""
+    # 验证提交是否存在
+    submission = StudentAnswer.query.get(submission_id)
+    if not submission:
+        return jsonify({'error': 'Submission not found'}), 404
+    
+    data = request.json
+    
+    # 更新分数和反馈
+    if 'score' in data:
+        submission.score = data['score']
+    
+    if 'feedback' in data:
+        submission.feedback = data['feedback']
+    
+    submission.graded_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Submission graded successfully',
+        'submission': submission.to_dict()
     })
 
