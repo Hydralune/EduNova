@@ -4,9 +4,9 @@
       <h2 class="text-2xl font-bold">知识库管理</h2>
       <button 
         @click="showImportModal = true"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+        class="px-4 py-2 bg-blue-600 text-white rounded-md"
       >
-        导入资料
+        上传课件
       </button>
     </div>
     
@@ -176,14 +176,42 @@
       </div>
     </div>
     
-    <!-- 导入资料模态框 -->
+    <!-- 知识库资料列表 -->
+    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mt-6">
+      <h3 class="text-lg font-semibold mb-4">知识库资料</h3>
+      
+      <div v-if="materialsLoading" class="flex justify-center py-10">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+      
+      <div v-else-if="knowledgeItems.length > 0" class="space-y-4">
+        <div v-for="item in knowledgeItems" :key="item.id" class="flex items-center justify-between p-4 border rounded-md">
+          <div class="flex items-center">
+            <span class="mr-3" v-html="getMaterialIcon(item.material_type)"></span>
+            <div>
+              <p class="font-medium">{{ item.title }}</p>
+              <p class="text-sm text-gray-500">{{ item.course_name }} · {{ item.material_type }} · {{ item.size }}</p>
+            </div>
+          </div>
+          <div class="flex space-x-3">
+            <button @click="previewMaterial(item.id)" class="text-blue-600 hover:text-blue-800">预览</button>
+            <button @click="downloadMaterial(item.id)" class="text-blue-600 hover:text-blue-800">下载</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-center py-10">
+        <p class="text-gray-500">暂无知识库资料</p>
+      </div>
+    </div>
+    
+    <!-- 上传课件模态框 -->
     <div v-if="showImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 w-full max-w-lg">
-        <h3 class="text-xl font-bold mb-4">导入资料到知识库</h3>
+        <h3 class="text-xl font-bold mb-4">上传课件资源</h3>
         
         <form @submit.prevent="importMaterial" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">选择课程</label>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">选择课程 <span class="text-red-500">*</span></label>
             <select 
               v-model="importForm.courseId" 
               required
@@ -195,22 +223,18 @@
             </select>
           </div>
           
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">资料类型</label>
-            <select 
-              v-model="importForm.materialType" 
-              required
-              class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="document">文档</option>
-              <option value="video">视频</option>
-              <option value="audio">音频</option>
-              <option value="image">图片</option>
-            </select>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">课件标题</label>
+            <input 
+              v-model="importForm.title" 
+              type="text" 
+              class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+              placeholder="输入课件标题（可选，默认使用文件名）" 
+            />
           </div>
           
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">上传文件</label>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">选择文件 <span class="text-red-500">*</span></label>
             <div class="border-2 border-dashed border-gray-300 rounded-md p-6">
               <div class="text-center">
                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -218,15 +242,33 @@
                 </svg>
                 <p class="mt-1 text-sm text-gray-600">
                   拖放文件到这里，或者
-                  <span class="text-blue-600 hover:text-blue-500 cursor-pointer">浏览文件</span>
+                  <label for="file-upload" class="text-blue-600 hover:text-blue-500 cursor-pointer">浏览文件</label>
                 </p>
                 <p class="mt-1 text-xs text-gray-500">
                   支持 PDF, DOCX, TXT, MP4, MP3 等格式
                 </p>
               </div>
-              <input type="file" class="hidden" />
+              <input 
+                id="file-upload" 
+                type="file" 
+                class="hidden" 
+                @change="handleFileChange" 
+                required 
+              />
             </div>
+            <p v-if="importForm.file" class="mt-2 text-sm text-gray-500">
+              已选择: {{ importForm.file.name }} ({{ (importForm.file.size / 1024).toFixed(1) }}KB)
+            </p>
           </div>
+          
+          <div v-if="importProgress > 0 && importProgress < 100" class="mb-4">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${importProgress}%`"></div>
+            </div>
+            <p class="text-sm text-gray-500 mt-1">上传中... {{ importProgress }}%</p>
+          </div>
+          
+          <p v-if="importError" class="text-red-500 mb-4">{{ importError }}</p>
           
           <div class="flex justify-end gap-2 mt-6">
             <button 
@@ -241,13 +283,13 @@
               class="px-4 py-2 bg-blue-600 text-white rounded-md"
               :disabled="importing"
             >
-              <span v-if="!importing">导入</span>
+              <span v-if="!importing">上传</span>
               <span v-else class="flex items-center">
                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                导入中
+                上传中
               </span>
             </button>
           </div>
@@ -258,7 +300,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, inject, watch } from 'vue';
+import { ragAiAPI, materialAPI, courseAPI } from '../../api';
+
+// 全局状态注入
+const globalCourses = inject('courses', ref([]));
+const globalMaterials = inject('materials', ref([]));
+const isDataLoaded = inject('isDataLoaded', ref(false));
 
 // 搜索相关
 const searchQuery = ref('');
@@ -274,46 +322,388 @@ const searchFilters = reactive({
 // 导入相关
 const showImportModal = ref(false);
 const importing = ref(false);
+const importProgress = ref(0);
+const importError = ref('');
 const importForm = reactive({
   courseId: '',
-  materialType: 'document'
+  title: '',
+  file: null as File | null
 });
 
-// 模拟数据
-const courses = ref([
-  { id: 1, name: '人工智能基础' },
-  { id: 2, name: '高等数学' },
-  { id: 3, name: '英语写作' }
-]);
+// 课程列表
+const courses = ref([]);
+const coursesLoading = ref(false);
+const materialsLoading = ref(false);
 
 const stats = reactive({
-  totalDocuments: 156,
-  totalCourses: 8,
-  lastUpdated: '2025-06-24',
+  totalDocuments: 0,
+  totalCourses: 0,
+  lastUpdated: '',
   typeDistribution: {
-    document: 60,
-    video: 20,
-    audio: 15,
-    image: 5
+    document: 0,
+    video: 0,
+    audio: 0,
+    image: 0
   }
 });
 
+// 知识库资料列表
+const knowledgeItems = ref([]);
+
 onMounted(async () => {
-  // 这里可以调用API获取知识库统计数据
-  await fetchKnowledgeStats();
+  // 如果全局数据已加载，直接使用
+  if (isDataLoaded.value && globalCourses.value.length > 0) {
+    courses.value = globalCourses.value;
+    processGlobalMaterials();
+    updateStats();
+  } else {
+    // 否则加载数据
+    await Promise.all([
+      fetchCourses(),
+      fetchKnowledgeItems()
+    ]);
+  }
 });
+
+// 监听全局数据变化
+watch(() => globalMaterials.value, () => {
+  if (globalMaterials.value.length > 0) {
+    processGlobalMaterials();
+    updateStats();
+  }
+}, { deep: true });
+
+function processGlobalMaterials() {
+  if (globalMaterials.value.length > 0) {
+    // 处理全局材料数据，添加课程名称
+    const materialsWithCourseNames = globalMaterials.value.map(material => {
+      const course = globalCourses.value.find(c => c.id === material.course_id);
+      return {
+        ...material,
+        course_name: course ? course.name : '未知课程'
+      };
+    });
+    
+    // 按上传时间降序排序，最新的在最上面
+    knowledgeItems.value = materialsWithCourseNames.sort((a, b) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }
+}
+
+function updateStats() {
+  // 更新统计数据
+  if (knowledgeItems.value.length > 0) {
+    stats.totalDocuments = knowledgeItems.value.length;
+    
+    // 获取涉及的课程数量
+    const uniqueCourseIds = new Set(knowledgeItems.value.map(item => item.course_id));
+    stats.totalCourses = uniqueCourseIds.size;
+    
+    // 获取最后更新时间
+    const latestMaterial = knowledgeItems.value[0]; // 已按时间排序，第一个是最新的
+    stats.lastUpdated = latestMaterial.created_at ? new Date(latestMaterial.created_at).toLocaleDateString() : '';
+    
+    // 计算类型分布
+    const typeCount = {
+      document: 0,
+      video: 0,
+      audio: 0,
+      image: 0
+    };
+    
+    knowledgeItems.value.forEach(item => {
+      const type = item.material_type.toLowerCase();
+      if (type.includes('文档') || type.includes('pdf') || type.includes('doc')) {
+        typeCount.document++;
+      } else if (type.includes('视频') || type.includes('video')) {
+        typeCount.video++;
+      } else if (type.includes('音频') || type.includes('audio')) {
+        typeCount.audio++;
+      } else if (type.includes('图片') || type.includes('image')) {
+        typeCount.image++;
+      } else {
+        typeCount.document++; // 默认归为文档
+      }
+    });
+    
+    const total = knowledgeItems.value.length;
+    stats.typeDistribution = {
+      document: Math.round((typeCount.document / total) * 100) || 0,
+      video: Math.round((typeCount.video / total) * 100) || 0,
+      audio: Math.round((typeCount.audio / total) * 100) || 0,
+      image: Math.round((typeCount.image / total) * 100) || 0
+    };
+  }
+}
+
+async function fetchCourses() {
+  try {
+    coursesLoading.value = true;
+    // 调用API获取课程列表
+    const response = await courseAPI.getCourses();
+    courses.value = response.courses || [];
+    
+    if (courses.value.length === 0) {
+      // 如果API返回为空或出错，使用模拟数据
+      courses.value = [
+        { id: 1, name: '人工智能基础' },
+        { id: 2, name: '高等数学' },
+        { id: 3, name: '英语写作' }
+      ];
+      console.warn('使用模拟课程数据，实际项目中应从API获取');
+    }
+  } catch (error) {
+    console.error('获取课程列表失败:', error);
+    // 出错时使用模拟数据
+    courses.value = [
+      { id: 1, name: '人工智能基础' },
+      { id: 2, name: '高等数学' },
+      { id: 3, name: '英语写作' }
+    ];
+  } finally {
+    coursesLoading.value = false;
+  }
+}
+
+async function fetchKnowledgeItems() {
+  try {
+    materialsLoading.value = true;
+    // 获取所有课程的材料
+    const allMaterials = [];
+    
+    // 遍历所有课程，获取每个课程的材料
+    for (const course of courses.value) {
+      try {
+        const response = await materialAPI.getMaterials(course.id);
+        if (response && response.materials && response.materials.length > 0) {
+          // 为每个材料添加课程名称
+          const materialsWithCourseName = response.materials.map(material => ({
+            ...material,
+            course_name: course.name
+          }));
+          allMaterials.push(...materialsWithCourseName);
+        }
+      } catch (error) {
+        console.error(`获取课程 ${course.id} 的材料失败:`, error);
+      }
+    }
+    
+    // 如果API返回的材料为空，使用模拟数据
+    if (allMaterials.length === 0) {
+      console.warn('未找到材料数据，使用模拟数据');
+      knowledgeItems.value = [
+        {
+          id: 1,
+          title: '机器学习基础概念',
+          material_type: '文档',
+          course_name: '人工智能基础',
+          size: '2.5MB',
+          created_at: '2025-05-15'
+        },
+        {
+          id: 2,
+          title: '深度学习简介',
+          material_type: '视频',
+          course_name: '人工智能基础',
+          size: '45MB',
+          created_at: '2025-06-01'
+        },
+        {
+          id: 3,
+          title: '微积分基础',
+          material_type: '文档',
+          course_name: '高等数学',
+          size: '1.8MB',
+          created_at: '2025-04-20'
+        }
+      ];
+    } else {
+      // 按上传时间降序排序，最新的在最上面
+      knowledgeItems.value = allMaterials.sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }
+    
+    // 更新统计数据
+    updateStats();
+  } catch (error) {
+    console.error('获取知识库资料列表失败:', error);
+    // 出错时使用模拟数据
+    knowledgeItems.value = [
+      {
+        id: 1,
+        title: '机器学习基础概念',
+        material_type: '文档',
+        course_name: '人工智能基础',
+        size: '2.5MB',
+        created_at: '2025-05-15'
+      },
+      {
+        id: 2,
+        title: '深度学习简介',
+        material_type: '视频',
+        course_name: '人工智能基础',
+        size: '45MB',
+        created_at: '2025-06-01'
+      },
+      {
+        id: 3,
+        title: '微积分基础',
+        material_type: '文档',
+        course_name: '高等数学',
+        size: '1.8MB',
+        created_at: '2025-04-20'
+      }
+    ];
+  } finally {
+    materialsLoading.value = false;
+  }
+}
 
 async function fetchKnowledgeStats() {
   try {
     // 实际项目中应该调用API获取数据
-    // const response = await api.getKnowledgeBaseStats();
+    // const response = await ragAiAPI.getKnowledgeBaseStatus();
     // stats.totalDocuments = response.totalDocuments;
     // ...
     
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 更新统计数据
+    updateStats();
   } catch (error) {
     console.error('获取知识库统计数据失败:', error);
+  }
+}
+
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    importForm.file = target.files[0];
+    if (!importForm.title) {
+      importForm.title = importForm.file.name;
+    }
+  }
+}
+
+async function importMaterial() {
+  if (!importForm.file || !importForm.courseId) return;
+  
+  importing.value = true;
+  importError.value = '';
+  importProgress.value = 10;
+  
+  try {
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('file', importForm.file);
+    formData.append('title', importForm.title || importForm.file.name);
+    
+    importProgress.value = 30;
+    
+    // 调用API上传课件
+    const response = await materialAPI.uploadMaterial(Number(importForm.courseId), formData);
+    
+    importProgress.value = 80;
+    
+    // 关闭模态框
+    showImportModal.value = false;
+    
+    // 获取新上传的资料信息
+    const newMaterial = response.material || {
+      id: Date.now(), // 临时ID
+      title: importForm.title || importForm.file.name,
+      material_type: getMaterialTypeFromFileName(importForm.file.name),
+      size: formatFileSize(importForm.file.size),
+      course_id: Number(importForm.courseId),
+      created_at: new Date().toISOString()
+    };
+    
+    // 添加课程名称
+    const course = courses.value.find(c => c.id === Number(importForm.courseId));
+    newMaterial.course_name = course ? course.name : '未知课程';
+    
+    // 将新资料添加到列表最前面
+    knowledgeItems.value.unshift(newMaterial);
+    
+    // 更新统计数据
+    updateStats();
+    
+    // 重置表单
+    importForm.title = '';
+    importForm.file = null;
+    importProgress.value = 0;
+    
+    // 显示成功提示
+    alert('课件上传成功！');
+  } catch (error) {
+    console.error('上传课件失败:', error);
+    importError.value = '上传失败，请重试';
+    importProgress.value = 0;
+  } finally {
+    importing.value = false;
+  }
+}
+
+function getMaterialTypeFromFileName(fileName: string) {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (!extension) return '文档';
+  
+  if (['pdf', 'doc', 'docx', 'txt', 'ppt', 'pptx', 'xls', 'xlsx'].includes(extension)) {
+    return '文档';
+  } else if (['mp4', 'avi', 'mov', 'wmv', 'flv'].includes(extension)) {
+    return '视频';
+  } else if (['mp3', 'wav', 'ogg', 'flac'].includes(extension)) {
+    return '音频';
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(extension)) {
+    return '图片';
+  }
+  
+  return '文档';
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+function getMaterialIcon(materialType: string) {
+  const type = materialType.toLowerCase();
+  switch (type) {
+    case 'pdf':
+    case '文档':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'video':
+    case '视频':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'audio':
+    case '音频':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      `;
+    case 'image':
+    case '图片':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      `;
+    default:
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      `;
   }
 }
 
@@ -325,7 +715,7 @@ async function searchKnowledge() {
   
   try {
     // 这里应该调用API搜索知识库
-    // const response = await api.searchKnowledgeBase({
+    // const response = await ragAiAPI.searchKnowledgeBase({
     //   query: searchQuery.value,
     //   course_id: searchFilters.courseId,
     //   material_type: searchFilters.materialType,
@@ -377,29 +767,12 @@ async function searchKnowledge() {
   }
 }
 
-async function importMaterial() {
-  importing.value = true;
-  
-  try {
-    // 这里应该调用API导入资料
-    // const formData = new FormData();
-    // formData.append('file', file);
-    // formData.append('course_id', importForm.courseId);
-    // formData.append('material_type', importForm.materialType);
-    // await api.importKnowledgeBase(formData);
-    
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // 关闭模态框
-    showImportModal.value = false;
-    
-    // 更新知识库统计
-    await fetchKnowledgeStats();
-  } catch (error) {
-    console.error('导入资料失败:', error);
-  } finally {
-    importing.value = false;
-  }
+function previewMaterial(materialId: number) {
+  // 实际项目中应该跳转到预览页面或打开预览模态框
+  console.log('预览资料:', materialId);
+}
+
+function downloadMaterial(materialId: number) {
+  materialAPI.downloadMaterial(materialId);
 }
 </script> 

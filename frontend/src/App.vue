@@ -24,11 +24,11 @@
             </div>
 
             <div class="flex items-center space-x-4">
-              <template v-if="authStore.isAuthenticated">
+              <template v-if="authStore.user">
                 <!-- 用户菜单 -->
                 <div class="relative">
                   <button
-                    @click="showUserMenu = !showUserMenu"
+                    @click="toggleUserMenu"
                     class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
                     <div class="h-8 w-8 rounded-full overflow-hidden flex items-center justify-center">
@@ -49,8 +49,8 @@
 
                   <!-- 下拉菜单 -->
                   <div
-                    v-if="showUserMenu"
-                    @click="showUserMenu = false"
+                    v-if="userMenuOpen"
+                    @click="toggleUserMenu"
                     class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
                   >
                     <div class="py-1">
@@ -176,9 +176,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { courseAPI, materialAPI } from './api'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,13 +187,26 @@ const authStore = useAuthStore()
 
 // 状态
 const isInitializing = ref(true)
-const showUserMenu = ref(false)
+const userMenuOpen = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
 const notification = ref({
   show: false,
   type: 'info' as 'success' | 'error' | 'warning' | 'info',
   title: '',
   message: ''
 })
+
+// 全局数据
+const globalCourses = ref<any[]>([]);
+const globalMaterials = ref<any[]>([]);
+const isDataLoaded = ref(false);
+const isDataLoading = ref(false);
+
+// 提供全局数据给组件使用
+provide('courses', globalCourses);
+provide('materials', globalMaterials);
+provide('isDataLoaded', isDataLoaded);
+provide('isDataLoading', isDataLoading);
 
 // 计算属性
 const showNavigation = computed(() => {
@@ -233,11 +247,13 @@ const hideNotification = () => {
   notification.value.show = false
 }
 
-// 点击外部关闭用户菜单
-const handleClickOutside = (event: Event) => {
-  const target = event.target as Element
-  if (!target.closest('.relative')) {
-    showUserMenu.value = false
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (userMenuRef.value && !(userMenuRef.value as HTMLElement).contains(event.target as HTMLElement)) {
+    userMenuOpen.value = false
   }
 }
 
@@ -257,6 +273,11 @@ onMounted(async () => {
   
   // 添加点击外部事件监听
   document.addEventListener('click', handleClickOutside)
+
+  // 如果用户已登录，预加载课程和材料数据
+  if (authStore.user) {
+    await loadGlobalData();
+  }
 })
 
 onUnmounted(() => {
@@ -268,6 +289,51 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled promise rejection:', event.reason)
   showNotification('error', '系统错误', '发生了未预期的错误，请刷新页面重试')
 })
+
+// 监听登录状态变化
+authStore.$subscribe((mutation, state) => {
+  if (state.user && !isDataLoaded.value && !isDataLoading.value) {
+    loadGlobalData();
+  }
+});
+
+async function loadGlobalData() {
+  if (isDataLoading.value) return;
+  
+  isDataLoading.value = true;
+  try {
+    // 加载课程数据
+    const courseResponse = await courseAPI.getCourses();
+    const courses = courseResponse && typeof courseResponse === 'object' ? (courseResponse as any).courses || [] : [];
+    
+    if (Array.isArray(courses)) {
+      globalCourses.value = courses;
+      
+      // 加载每个课程的材料
+      const allMaterials: any[] = [];
+      for (const course of globalCourses.value) {
+        try {
+          const materialResponse = await materialAPI.getMaterials(course.id);
+          const materials = materialResponse && typeof materialResponse === 'object' ? (materialResponse as any).materials || [] : [];
+          
+          if (Array.isArray(materials)) {
+            allMaterials.push(...materials);
+          }
+        } catch (error) {
+          console.error(`加载课程 ${course.id} 的材料失败:`, error);
+        }
+      }
+      
+      globalMaterials.value = allMaterials;
+    }
+    
+    isDataLoaded.value = true;
+  } catch (error) {
+    console.error('加载全局数据失败:', error);
+  } finally {
+    isDataLoading.value = false;
+  }
+}
 </script>
 
 <style>
@@ -287,15 +353,35 @@ window.addEventListener('unhandledrejection', (event) => {
 
 /* 全局样式 */
 .btn {
-  @apply px-4 py-2 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.btn:focus {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
 }
 
 .btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  background-color: var(--color-primary-600);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-700);
 }
 
 .btn-outline {
-  @apply border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-primary-500;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  background-color: white;
+}
+
+.btn-outline:hover {
+  background-color: #f9fafb;
 }
 
 .text-primary-600 {
