@@ -273,6 +273,11 @@
             <button @click="openAddStudentModal" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">添加学生</button>
           </div>
         </div>
+        
+        <!-- 智能助手 -->
+        <div v-else-if="activeTab === 'ai-assistant'" class="p-6">
+          <AIAssistant :courseId="courseId" :userId="authStore.user?.id || 0" />
+        </div>
       </div>
     </div>
 
@@ -369,6 +374,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI, materialAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
+import AIAssistant from '../ai/AIAssistant.vue';
 import { useRouter } from 'vue-router';
 
 // 定义Course接口
@@ -466,6 +472,7 @@ const tabs = [
   { id: 'materials', name: '课件资源' },
   { id: 'assessments', name: '评估测验' },
   { id: 'students', name: '学生管理' },
+  { id: 'ai-assistant', name: '智能助手' },
 ];
 
 const canEdit = computed(() => {

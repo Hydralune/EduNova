@@ -33,14 +33,15 @@ class LearningRecord(db.Model):
 class ChatHistory(db.Model):
     """学生与AI助手的对话历史"""
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
-    question = db.Column(db.Text, nullable=False)
-    answer = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    conversation_id = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # 'user' 或 'assistant'
+    message = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.Integer, nullable=False)  # Unix时间戳
     
     # Use string references for relationships
-    student = db.relationship('User', foreign_keys=[student_id], backref=db.backref('chat_history', lazy='dynamic'))
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('chat_history', lazy='dynamic'))
     course = db.relationship('Course', foreign_keys=[course_id], lazy='joined')
 
     def __repr__(self):
@@ -49,11 +50,12 @@ class ChatHistory(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'student_id': self.student_id,
-            'student_name': self.student.full_name if self.student else None,
+            'user_id': self.user_id,
+            'user_name': self.user.full_name if self.user else None,
             'course_id': self.course_id,
             'course_name': self.course.name if self.course else None,
-            'question': self.question,
-            'answer': self.answer,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+            'conversation_id': self.conversation_id,
+            'role': self.role,
+            'message': self.message,
+            'timestamp': self.timestamp
         } 

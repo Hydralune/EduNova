@@ -21,6 +21,11 @@
                   <h1 class="text-xl font-bold text-primary-600">智能教学系统</h1>
                 </div>
               </router-link>
+              
+              <!-- 导航链接 -->
+              <div v-if="authStore.user" class="ml-6 flex space-x-4">
+                <!-- 智能助手链接已移除 -->
+              </div>
             </div>
 
             <div class="flex items-center space-x-4">

@@ -20,6 +20,9 @@ import AssessmentList from '../components/assessment/AssessmentList.vue'
 import AssessmentView from '../components/assessment/AssessmentView.vue'
 import SubmissionList from '../components/assessment/SubmissionList.vue'
 
+// 导入AI助手组件
+import AIAssistant from '../components/ai/AIAssistant.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -72,6 +75,17 @@ const router = createRouter({
       path: '/course/:id',
       name: 'courseDetail',
       component: CourseDetailView,
+      meta: { requiresAuth: true }
+    },
+    // AI助手路由 - 现已集成到课程详情页面，但保留此路由用于直接访问
+    {
+      path: '/ai-assistant',
+      name: 'aiAssistant',
+      component: AIAssistant,
+      props: route => ({ 
+        userId: parseInt(localStorage.getItem('userId') || '0'),
+        courseId: route.query.courseId
+      }),
       meta: { requiresAuth: true }
     },
     // 评估相关路由
