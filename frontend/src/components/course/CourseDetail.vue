@@ -161,6 +161,14 @@
                     查看模式
                   </button>
                   <button 
+                    v-if="canEdit"
+                    @click="viewAssessment(assessment.id)" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    查看测验内容
+                  </button>
+                  <button 
+                    v-if="!canEdit"
                     @click="startAssessment(assessment.id)" 
                     class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >

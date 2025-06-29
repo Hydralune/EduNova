@@ -178,6 +178,7 @@ def register():
     email = data.get('email')
     password = data.get('password')
     full_name = data.get('full_name')
+    role = data.get('role', 'student')  # 从请求数据中获取角色，默认为student
     
     if not username or not email or not password:
         return jsonify({"error": "Username, email and password required"}), 400
@@ -189,12 +190,16 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({"error": "Email already exists"}), 409
     
+    # 验证角色是否有效
+    if role not in ['student', 'teacher']:
+        return jsonify({"error": "Invalid role"}), 400
+    
     # 创建新用户
     user = User(
         username=username,
         email=email,
         full_name=full_name,
-        role='student'  # 默认为学生角色
+        role=role  # 使用请求中指定的角色
     )
     user.set_password(password)
     
