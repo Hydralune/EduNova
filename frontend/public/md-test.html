@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown测试页面</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.2.0/github-markdown.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/styles/github.min.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      flex-grow: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #0366d6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0255b3;
+    }
+    .markdown-body {
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: 20px;
+    }
+    .error {
+      color: red;
+      padding: 10px;
+      border: 1px solid red;
+      border-radius: 4px;
+      background-color: #fff0f0;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #666;
+    }
+    .loading::before {
+      content: "";
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ccc;
+      border-top-color: #0366d6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    #debug-info {
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      background-color: #f6f8fa;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 20px;
+      max-height: 200px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Markdown渲染测试</h1>
+    
+    <div class="controls">
+      <input type="text" id="markdown-url" value="http://localhost:5001/uploads/materials/1/final.md" placeholder="输入Markdown文件URL">
+      <button id="load-btn">加载并渲染</button>
+    </div>
+    
+    <div id="status"></div>
+    
+    <div id="markdown-output" class="markdown-body">
+      <p>点击"加载并渲染"按钮加载Markdown内容</p>
+    </div>
+    
+    <div id="debug-info"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.7.0/lib/languages/python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const urlInput = document.getElementById('markdown-url');
+      const loadBtn = document.getElementById('load-btn');
+      const outputDiv = document.getElementById('markdown-output');
+      const statusDiv = document.getElementById('status');
+      const debugDiv = document.getElementById('debug-info');
+      
+      // 初始化markdown-it
+      const md = window.markdownit({
+        html: true,
+        linkify: true,
+        typographer: true,
+        highlight: function (str, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return '<pre class="hljs"><code>' +
+                     hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                     '</code></pre>';
+            } catch (__) {}
+          }
+          return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+        }
+      });
+      
+      function log(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        debugDiv.textContent += `[${timestamp}] ${message}\n`;
+        console.log(message);
+      }
+      
+      loadBtn.addEventListener('click', async function() {
+        const url = urlInput.value.trim();
+        if (!url) {
+          statusDiv.innerHTML = '<div class="error">请输入有效的URL</div>';
+          return;
+        }
+        
+        // 清空调试信息
+        debugDiv.textContent = '';
+        
+        // 显示加载状态
+        statusDiv.innerHTML = '<div class="loading">加载中...</div>';
+        outputDiv.innerHTML = '<p>正在加载Markdown内容...</p>';
+        
+        try {
+          // 添加时间戳以防止缓存
+          const urlWithTimestamp = url.includes('?') 
+            ? `${url}&_t=${Date.now()}` 
+            : `${url}?_t=${Date.now()}`;
+          
+          log(`正在从 ${urlWithTimestamp} 获取Markdown内容`);
+          
+          const response = await fetch(urlWithTimestamp, {
+            method: 'GET',
+            headers: {
+              'Accept': 'text/markdown, text/plain, */*',
+              'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store'
+          });
+          
+          log(`响应状态: ${response.status} ${response.statusText}`);
+          
+          // 记录响应头信息
+          const headers = {};
+          response.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+          log(`响应头: ${JSON.stringify(headers, null, 2)}`);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP错误! 状态: ${response.status}`);
+          }
+          
+          const text = await response.text();
+          log(`获取到的内容长度: ${text.length}字节`);
+          
+          if (text.length === 0) {
+            throw new Error('获取到的Markdown内容为空');
+          }
+          
+          log(`内容预览: ${text.substring(0, 100).replace(/\n/g, '\\n')}...`);
+          
+          // 渲染Markdown
+          const renderedHtml = md.render(text);
+          const sanitizedHtml = DOMPurify.sanitize(renderedHtml);
+          outputDiv.innerHTML = sanitizedHtml;
+          statusDiv.innerHTML = '<div style="color: green; padding: 10px;">加载成功!</div>';
+          
+        } catch (error) {
+          log(`错误: ${error.message}`);
+          statusDiv.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+          outputDiv.innerHTML = '<p>无法加载Markdown内容</p>';
+        }
+      });
+    });
+  </script>
+</body>
+</html> 

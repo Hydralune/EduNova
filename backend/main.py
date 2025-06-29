@@ -22,7 +22,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # 文件上传配置
 app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制上传文件大小为16MB
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 限制上传文件大小为200MB
 
 # JWT配置 - 使用与SECRET_KEY相同的密钥以确保一致性
 app.config['JWT_SECRET_KEY'] = app.config['SECRET_KEY']
@@ -170,6 +170,25 @@ def create_tables():
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     print(f"请求上传文件: {filename}")
+    
+    # 检查文件是否存在
+    file_path = os.path.join(app.root_path, 'uploads', filename)
+    if not os.path.exists(file_path):
+        print(f"文件不存在: {file_path}")
+        return jsonify({"error": f"File not found: {filename}"}), 404
+    
+    # 获取文件扩展名
+    _, ext = os.path.splitext(filename)
+    
+    # 处理Markdown文件
+    if ext.lower() == '.md':
+        print(f"检测到Markdown文件: {filename}")
+        return send_from_directory(
+            os.path.dirname(os.path.join(app.root_path, 'uploads', filename)),
+            os.path.basename(filename),
+            mimetype='text/markdown'
+        )
+    
     return send_from_directory(os.path.join(app.root_path, 'uploads'), filename)
 
 # 配置头像访问路由

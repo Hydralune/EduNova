@@ -1,102 +1,90 @@
 <template>
-  <div class="course-detail">
-    <div v-if="loading" class="flex justify-center py-10">
+  <div>
+    <div v-if="loading" class="flex justify-center items-center h-64">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
     </div>
 
-    <div v-else-if="!course" class="text-center py-10">
-      <p class="text-gray-500">课程不存在或已被删除</p>
-      <router-link to="/courses" class="text-blue-600 hover:text-blue-800 mt-4 inline-block">返回课程列表</router-link>
+    <div v-else-if="showMaterialPreview" class="bg-white rounded-lg shadow-md overflow-hidden">
+      <MaterialPreview 
+        :courseId="courseId" 
+        :initialMaterialId="previewMaterialId"
+        @close="showMaterialPreview = false"
+      />
     </div>
 
-    <div v-else>
+    <div v-else-if="course" class="bg-white rounded-lg shadow-md overflow-hidden">
       <!-- 课程头部信息 -->
-      <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 mb-6">
-        <div class="h-48 bg-gray-200 relative">
-          <img v-if="course.cover_image" :src="`http://localhost:5001${course.cover_image}`" alt="课程封面" class="w-full h-full object-cover" />
-          <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600">
-            <h3 class="text-xl font-bold text-white">{{ course.name }}</h3>
-          </div>
-          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-            <div class="flex items-center justify-between">
-              <h1 class="text-2xl font-bold text-white">{{ course.name }}</h1>
-              <span class="px-3 py-1 text-sm rounded-full" :class="difficultyClass(course.difficulty)">
+      <div class="p-6 border-b">
+        <div class="flex justify-between items-start">
+          <div>
+            <h1 class="text-2xl font-bold mb-2">{{ course.name }}</h1>
+            <p class="text-gray-600 mb-4">{{ course.description }}</p>
+            <div class="flex flex-wrap gap-2 mb-2">
+              <span class="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">
+                {{ course.category }}
+              </span>
+              <span :class="[
+                'px-3 py-1 rounded-full text-sm', 
+                difficultyClass(course.difficulty)
+              ]">
                 {{ difficultyText(course.difficulty) }}
               </span>
             </div>
-            <p class="text-white/80 mt-1">{{ course.category }}</p>
-          </div>
-        </div>
-        <div class="p-6">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center">
-              <div class="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
-              <div>
-                <p class="font-semibold">{{ course.teacher_name }}</p>
-                <p class="text-sm text-gray-500">教师</p>
-              </div>
-            </div>
-            <div class="flex gap-4">
-              <div class="text-center">
-                <p class="font-semibold">{{ course.student_count || 0 }}</p>
-                <p class="text-sm text-gray-500">学生</p>
-              </div>
-              <div class="text-center">
-                <p class="font-semibold">{{ course.material_count || 0 }}</p>
-                <p class="text-sm text-gray-500">课件</p>
-              </div>
-              <div class="text-center">
-                <p class="font-semibold">{{ course.assessment_count || 0 }}</p>
-                <p class="text-sm text-gray-500">评估</p>
-              </div>
-            </div>
-          </div>
-          <div class="border-t pt-4">
-            <h3 class="text-lg font-semibold mb-2">课程描述</h3>
-            <p class="text-gray-700">{{ course.description }}</p>
+            <p class="text-sm text-gray-500">
+              教师: {{ course.teacher_name }}
+            </p>
           </div>
         </div>
       </div>
 
-      <!-- 课程内容导航 -->
-      <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 mb-6">
-        <div class="flex border-b">
-          <button 
-            v-for="tab in tabs" 
+      <!-- 选项卡导航 -->
+      <div class="border-b">
+        <nav class="flex">
+          <button
+            v-for="tab in tabs"
             :key="tab.id"
             @click="activeTab = tab.id"
-            class="px-4 py-3 text-sm font-medium"
-            :class="activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'"
+            :class="[
+              'px-6 py-3 text-center border-b-2 font-medium',
+              activeTab === tab.id
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            ]"
           >
             {{ tab.name }}
           </button>
-        </div>
+        </nav>
       </div>
 
-      <!-- 课程内容 -->
-      <div class="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
+      <!-- 选项卡内容 -->
+      <div class="tab-content">
         <!-- 章节内容 -->
         <div v-if="activeTab === 'chapters'" class="p-6">
-          <div v-if="course.chapters && course.chapters.length > 0">
-            <div v-for="(chapter, index) in course.chapters" :key="index" class="mb-6">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-lg font-semibold">{{ chapter.title }}</h3>
-                <span class="text-sm text-gray-500">{{ chapter.duration || 0 }} 分钟</span>
+          <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-semibold">章节内容</h3>
+            <button 
+              v-if="canEdit" 
+              @click="showAddChapterModal = true"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md"
+            >
+              添加章节
+            </button>
+          </div>
+
+          <div v-if="course.chapters && course.chapters.length > 0" class="space-y-4">
+            <div v-for="(chapter, index) in course.chapters" :key="index" class="border rounded-md overflow-hidden">
+              <div class="flex justify-between items-center p-4 bg-gray-50">
+                <h4 class="font-medium">{{ chapter.title }}</h4>
+                <span class="text-sm text-gray-500">{{ chapter.duration }}分钟</span>
               </div>
-              <div class="ml-4 border-l-2 border-gray-200 pl-4">
-                <div v-for="(section, sIndex) in chapter.sections" :key="sIndex" class="py-2">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                      <span class="mr-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </span>
-                      <span>{{ section.title }}</span>
-                    </div>
-                    <span class="text-sm text-gray-500">{{ section.duration || 0 }} 分钟</span>
-                  </div>
+              <div v-if="chapter.sections && chapter.sections.length > 0" class="divide-y">
+                <div v-for="(section, sectionIndex) in chapter.sections" :key="sectionIndex" class="p-4 pl-8 flex justify-between items-center">
+                  <span>{{ section.title }}</span>
+                  <span class="text-sm text-gray-500">{{ section.duration }}分钟</span>
                 </div>
+              </div>
+              <div v-else class="p-4 pl-8 text-gray-500 italic">
+                暂无小节内容
               </div>
             </div>
           </div>
@@ -134,6 +122,7 @@
                 </div>
               </div>
               <div class="flex space-x-3">
+                <button @click="previewMaterial(material.id)" class="text-blue-600 hover:text-blue-800">预览</button>
                 <button @click="downloadMaterial(material.id)" class="text-blue-600 hover:text-blue-800">下载</button>
                 <button @click="confirmDeleteMaterial(material)" class="text-red-600 hover:text-red-800">删除</button>
               </div>
@@ -361,6 +350,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI, materialAPI } from '../../api';
+import MaterialPreview from './MaterialPreview.vue';
 
 // 定义Course接口
 interface CourseSection {
@@ -437,6 +427,8 @@ const showAddChapterModal = ref(false);
 const showAddMaterialModal = ref(false);
 const showAddAssessmentModal = ref(false);
 const showAddStudentModal = ref(false);
+const showMaterialPreview = ref(false);
+const previewMaterialId = ref(0);
 
 const tabs = [
   { id: 'chapters', name: '章节内容' },
@@ -595,7 +587,8 @@ async function confirmDeleteMaterial(material: Material) {
 }
 
 function getMaterialIcon(materialType: string) {
-  switch (materialType.toLowerCase()) {
+  const type = materialType.toLowerCase();
+  switch (type) {
     case 'pdf':
       return `
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -630,6 +623,18 @@ function getMaterialIcon(materialType: string) {
       return `
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      `;
+    case 'archive':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      `;
+    case 'text':
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       `;
     default:
@@ -735,5 +740,10 @@ function filterStudents() {
   
   // 使用搜索参数重新获取学生列表
   fetchStudents();
+}
+
+function previewMaterial(materialId: number) {
+  previewMaterialId.value = materialId;
+  showMaterialPreview.value = true;
 }
 </script> 

@@ -344,34 +344,13 @@ def upload_material(course_id):
     
     # 获取文件信息
     original_filename = file.filename
-    filename = secure_filename(original_filename)
-    file_ext = os.path.splitext(filename)[1].lower()
-    
-    # 根据文件扩展名确定文件类型
-    material_type = 'Other'
-    if file_ext in ['.pdf']:
-        material_type = 'PDF'
-    elif file_ext in ['.ppt', '.pptx']:
-        material_type = 'PowerPoint'
-    elif file_ext in ['.doc', '.docx']:
-        material_type = 'Word'
-    elif file_ext in ['.xls', '.xlsx']:
-        material_type = 'Excel'
-    elif file_ext in ['.jpg', '.jpeg', '.png', '.gif']:
-        material_type = 'Image'
-    elif file_ext in ['.mp4', '.avi', '.mov']:
-        material_type = 'Video'
-    elif file_ext in ['.zip', '.rar', '.7z']:
-        material_type = 'Archive'
-    elif file_ext in ['.txt', '.md']:
-        material_type = 'Text'
     
     # 创建上传目录
     upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'materials', str(course_id))
     os.makedirs(upload_folder, exist_ok=True)
     
-    # 保存文件
-    file_path = os.path.join(upload_folder, filename)
+    # 保存文件，使用原始文件名
+    file_path = os.path.join(upload_folder, original_filename)
     file.save(file_path)
     
     # 获取文件大小
@@ -384,15 +363,41 @@ def upload_material(course_id):
     else:
         size_str = f"{file_size / (1024 * 1024):.1f}MB"
     
-    # 创建新材料记录
-    title = request.form.get('title', filename)
+    # 根据文件扩展名确定文件类型
+    _, file_ext = os.path.splitext(original_filename)
+    file_extension = file_ext.lower()
+    
+    # 文件扩展名映射到类型
+    extension_to_type = {
+        '.pdf': 'PDF',
+        '.doc': 'Word', '.docx': 'Word',
+        '.ppt': 'PowerPoint', '.pptx': 'PowerPoint',
+        '.xls': 'Excel', '.xlsx': 'Excel',
+        '.jpg': 'Image', '.jpeg': 'Image', '.png': 'Image', 
+        '.gif': 'Image', '.bmp': 'Image', '.webp': 'Image',
+        '.mp4': 'Video', '.avi': 'Video', '.mov': 'Video',
+        '.wmv': 'Video', '.flv': 'Video', '.mkv': 'Video',
+        '.webm': 'Video', '.m4v': 'Video', '.3gp': 'Video',
+        '.zip': 'Archive', '.rar': 'Archive', '.7z': 'Archive',
+        '.txt': 'Text', 
+        '.md': 'Markdown', '.markdown': 'Markdown',
+        '.json': 'Text', '.xml': 'Text', '.csv': 'Text',
+        '.html': 'Text', '.css': 'Text', '.js': 'Text'
+    }
+    
+    # 获取文件类型
+    material_type = extension_to_type.get(file_extension, 'Other')
+    
+    # 如果类型是Other，使用文件扩展名作为类型（不带点）
+    if material_type == 'Other' and file_extension:
+        material_type = file_extension[1:].upper()
     
     # 创建新的Material对象
     new_material = Material(
-        title=title,
+        title=original_filename,
         material_type=material_type,
-        file_path=f'/uploads/materials/{course_id}/{filename}',
-        content=f'Original filename: {original_filename}',  # 存储原始文件名
+        file_path=f'/uploads/materials/{course_id}/{original_filename}',
+        content=f'Original filename: {original_filename}',
         course_id=course_id
     )
     
