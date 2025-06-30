@@ -25,6 +25,17 @@ import AIAssistant from '../components/ai/AIAssistant.vue'
 import TestAIAssistantView from '../views/TestAIAssistantView.vue'
 import SimpleTestView from '../views/SimpleTestView.vue'
 
+// 定义路由历史位置状态接口
+interface ScrollPositionNormalized {
+  left: number
+  top: number
+}
+
+interface PositionResult {
+  x: number
+  y: number
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -138,7 +149,22 @@ const router = createRouter({
       name: 'notFound',
       component: NotFoundView
     }
-  ]
+  ],
+  // 添加滚动行为，保存滚动位置
+  scrollBehavior(to, from, savedPosition) {
+    // 如果有保存的位置，则返回保存的位置
+    if (savedPosition) {
+      return savedPosition;
+    }
+    
+    // 如果有锚点，则滚动到锚点
+    if (to.hash) {
+      return { el: to.hash, behavior: 'smooth' };
+    }
+    
+    // 默认滚动到顶部
+    return { top: 0 };
+  }
 })
 
 // 路由守卫
@@ -174,41 +200,28 @@ router.beforeEach((to, from, next) => {
       return next('/student')
     }
   }
-  
+
+  // 需要认证但没有登录
   if (requiresAuth && !token) {
-    // 未登录，重定向到登录页
-    next('/login')
-  } else if (requiresAdmin && user?.role !== 'admin') {
-    // 需要管理员权限但用户不是管理员
-    if (user?.role === 'teacher') {
-      next('/teacher')
-    } else if (user?.role === 'student') {
-      next('/student')
-    } else {
-      next('/dashboard')
-    }
-  } else if (requiresTeacher && user?.role !== 'teacher') {
-    // 需要教师权限但用户不是教师
-    if (user?.role === 'admin') {
-      next('/admin')
-    } else if (user?.role === 'student') {
-      next('/student')
-    } else {
-      next('/dashboard')
-    }
-  } else if (requiresStudent && user?.role !== 'student') {
-    // 需要学生权限但用户不是学生
-    if (user?.role === 'admin') {
-      next('/admin')
-    } else if (user?.role === 'teacher') {
-      next('/teacher')
-    } else {
-      next('/dashboard')
-    }
-  } else {
-    // 放行
-    next()
+    return next('/login')
   }
+
+  // 需要管理员权限
+  if (requiresAdmin && (!user || user.role !== 'admin')) {
+    return next('/dashboard')
+  }
+
+  // 需要教师权限
+  if (requiresTeacher && (!user || user.role !== 'teacher')) {
+    return next('/dashboard')
+  }
+
+  // 需要学生权限
+  if (requiresStudent && (!user || user.role !== 'student')) {
+    return next('/dashboard')
+  }
+
+  next()
 })
 
 export default router 
