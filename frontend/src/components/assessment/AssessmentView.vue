@@ -627,42 +627,56 @@ const confirmSubmit = () => {
   showResults.value = true;
 };
 
-// 计算得分（简单模拟）
+  // 计算得分（简单模拟）
 const calculateScore = () => {
   let totalScore = 0;
+  let questionIndex = 0;
   
-  assessment.sections.forEach((section, sectionIndex) => {
-    section.questions.forEach((question, qIndex) => {
-      if (question.type === 'multiple_choice') {
-        if (currentAnswers.value[qIndex] === question.answer) {
-          totalScore += section.score_per_question;
-        }
-      } else if (question.type === 'multiple_select') {
-        // 多选题要完全匹配才得分
-        const userAnswer = currentAnswers.value[qIndex].sort();
-        const correctAnswer = question.answer.sort();
-        if (JSON.stringify(userAnswer) === JSON.stringify(correctAnswer)) {
-          totalScore += section.score_per_question;
-        }
-      } else if (question.type === 'fill_in_blank') {
-        // 简单处理单个空和多个空的情况
-        if (Array.isArray(question.answer)) {
-          let correct = true;
-          question.answer.forEach((ans, i) => {
-            if (currentAnswers.value[qIndex][i]?.toLowerCase() !== ans.toLowerCase()) {
-              correct = false;
-            }
-          });
-          if (correct) totalScore += section.score_per_question;
-        } else if (currentAnswers.value[qIndex][0]?.toLowerCase() === question.answer.toLowerCase()) {
-          totalScore += section.score_per_question;
-        }
-      } else if (question.type === 'true_false') {
-        if (currentAnswers.value[qIndex] === question.answer) {
-          totalScore += section.score_per_question;
-        }
+  assessment.sections.forEach((section) => {
+    section.questions.forEach((question) => {
+      const userAnswer = currentAnswers.value[questionIndex];
+      let isCorrect = false;
+
+      switch (question.type) {
+        case 'multiple_choice':
+          // 将用户答案转换为数字进行比较
+          const userChoice = String.fromCharCode(65 + Number(question.answer)) === userAnswer;
+          isCorrect = userChoice;
+          break;
+
+        case 'multiple_select':
+          // 多选题：将用户答案和正确答案都转换为字母数组进行比较
+          if (Array.isArray(userAnswer) && Array.isArray(question.answer)) {
+            const userLetters = userAnswer.map(ans => String.fromCharCode(65 + Number(ans))).sort();
+            const correctLetters = question.answer.map(ans => String.fromCharCode(65 + Number(ans))).sort();
+            isCorrect = JSON.stringify(userLetters) === JSON.stringify(correctLetters);
+          }
+          break;
+
+        case 'fill_in_blank':
+          if (Array.isArray(question.answer)) {
+            isCorrect = question.answer.every((ans, i) => 
+              userAnswer[i]?.toLowerCase().trim() === ans.toLowerCase().trim()
+            );
+          } else {
+            isCorrect = userAnswer[0]?.toLowerCase().trim() === question.answer.toLowerCase().trim();
+          }
+          break;
+
+        case 'true_false':
+          isCorrect = userAnswer === question.answer;
+          break;
+
+        // 简答题和论述题需要人工评分
+        case 'short_answer':
+        case 'essay':
+          break;
       }
-      // 简答题和论述题需要人工评分
+
+      if (isCorrect) {
+        totalScore += section.score_per_question;
+      }
+      questionIndex++;
     });
   });
   

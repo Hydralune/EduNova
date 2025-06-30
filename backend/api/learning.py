@@ -868,18 +868,73 @@ def submit_assessment(assessment_id):
         submitted_at=datetime.utcnow()
     )
     
-    # 自动评分逻辑（简单版本）
+    # 自动评分逻辑
     score = 0
-    assessment_questions = json.loads(assessment.questions)
-    student_answers = data.get('answers', {})
+    assessment_data = json.loads(assessment.questions)
+    student_answers = data.get('answers', [])
     
-    # 这里需要根据实际的数据结构进行调整
-    # 简单示例：
-    # for question_id, answer in student_answers.items():
-    #     correct_answer = next((q for q in assessment_questions if q['id'] == int(question_id)), {}).get('answer')
-    #     if answer == correct_answer:
-    #         score += 1
-    
+    # 确保assessment_data是一个字典，包含sections字段
+    if isinstance(assessment_data, dict) and 'sections' in assessment_data:
+        sections = assessment_data['sections']
+    else:
+        # 如果不是新格式，将问题列表转换为单个section
+        sections = [{
+            'questions': assessment_data if isinstance(assessment_data, list) else [],
+            'score_per_question': assessment.total_score / len(assessment_data) if isinstance(assessment_data, list) and len(assessment_data) > 0 else 0
+        }]
+
+    question_index = 0
+    for section in sections:
+        for question in section['questions']:
+            if question_index >= len(student_answers):
+                break
+
+            user_answer = student_answers[question_index]
+            is_correct = False
+
+            if question['type'] == 'multiple_choice':
+                # 检查选项是否匹配（考虑字母和数字格式）
+                if isinstance(user_answer, str) and len(user_answer) == 1:
+                    correct_index = int(question['answer'])
+                    user_index = ord(user_answer) - ord('A')
+                    is_correct = correct_index == user_index
+                else:
+                    is_correct = str(user_answer) == str(question['answer'])
+
+            elif question['type'] == 'multiple_select':
+                # 多选题比较（转换为集合进行比较）
+                if isinstance(user_answer, list) and isinstance(question['answer'], list):
+                    user_set = set(str(x) for x in user_answer)
+                    correct_set = set(str(x) for x in question['answer'])
+                    is_correct = user_set == correct_set
+
+            elif question['type'] == 'fill_in_blank':
+                # 填空题比较（考虑多个空的情况）
+                if isinstance(question['answer'], list):
+                    if isinstance(user_answer, list) and len(user_answer) == len(question['answer']):
+                        is_correct = all(
+                            str(u).lower().strip() == str(c).lower().strip()
+                            for u, c in zip(user_answer, question['answer'])
+                        )
+                else:
+                    # 单个答案的情况
+                    if isinstance(user_answer, list):
+                        user_answer = user_answer[0] if user_answer else ''
+                    is_correct = str(user_answer).lower().strip() == str(question['answer']).lower().strip()
+
+            elif question['type'] == 'true_false':
+                # 判断题比较
+                is_correct = str(user_answer).lower() == str(question['answer']).lower()
+
+            # 简答题和论述题需要人工评分
+            elif question['type'] in ['short_answer', 'essay']:
+                pass
+
+            if is_correct:
+                score += section['score_per_question']
+
+            question_index += 1
+
     student_answer.score = score
     
     db.session.add(student_answer)
