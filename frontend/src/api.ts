@@ -117,7 +117,35 @@ export const authAPI = {
 
 // 用户管理API
 export const userAPI = {
-  getUsers: (params?: any) => api.get('/admin/users', { params }),
+  getUsers: (params?: any) => {
+    console.log('调用getUsers API, params:', params);
+    return api.get('/admin/users', { params })
+      .then((response: any) => {
+        console.log('原始API响应:', response);
+        // 检查响应格式
+        if (response && typeof response === 'object') {
+          // 如果直接包含users数组
+          if (Array.isArray(response.users)) {
+            return response;
+          }
+          // 如果包含在data中
+          else if (response.data && Array.isArray(response.data.users)) {
+            return response.data;
+          }
+          // 如果直接是数组
+          else if (Array.isArray(response)) {
+            return { users: response, total: response.length };
+          }
+        }
+        // 如果格式不符合预期，返回一个标准格式
+        console.warn('API响应格式与预期不符:', response);
+        return { users: [], total: 0 };
+      })
+      .catch(error => {
+        console.error('getUsers API错误:', error);
+        throw error;
+      });
+  },
   getUser: (userId: number) => api.get(`/admin/users/${userId}`),
   createUser: (data: any) => api.post('/admin/users', data),
   updateUser: (userId: number, data: any) => api.put(`/admin/users/${userId}`, data),

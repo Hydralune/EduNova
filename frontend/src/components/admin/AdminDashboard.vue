@@ -612,7 +612,13 @@ const isEditingCourse = ref(false);
 
 // 计算属性
 const filteredUsers = computed(() => {
+  if (!users.value || users.value.length === 0) {
+    console.log('No users available for filtering');
+    return [];
+  }
+  
   if (!userSearchQuery.value) return users.value;
+  
   const query = userSearchQuery.value.toLowerCase();
   return users.value.filter(user => 
     user.username.toLowerCase().includes(query) || 
@@ -649,54 +655,70 @@ const formatDate = (dateString: string | undefined) => {
 
 // 加载用户数据
 const loadUsers = async () => {
+  console.log('开始加载用户数据...');
   loading.value = true;
+  
   try {
-    console.log('Fetching users from API...');
+    console.log('尝试从API获取用户数据, 当前页面:', currentPage.value);
     const response = await userAPI.getUsers({
       page: currentPage.value,
       per_page: pageSize.value
     }) as ApiResponse<User[]>;
     
-    console.log('API response:', response);
-    users.value = response.users || [];
-    totalUsers.value = response.total || 0;
+    console.log('API响应成功:', response);
+    
+    if (response && response.users && Array.isArray(response.users)) {
+      users.value = response.users;
+      totalUsers.value = response.total || users.value.length;
+      console.log(`成功加载 ${users.value.length} 个用户`);
+    } else {
+      console.warn('API返回的用户数据格式不符合预期', response);
+      // 如果API返回的数据格式不符合预期，使用模拟数据
+      useMockData();
+    }
   } catch (error) {
     console.error('获取用户列表失败:', error);
     // 使用模拟数据作为备用
-    console.log('使用模拟数据作为备用');
-    users.value = [
-      {
-        id: 1,
-        username: 'admin',
-        email: 'admin@example.com',
-        full_name: '系统管理员',
-        role: 'admin',
-        is_active: true,
-        created_at: '2025-06-24T10:00:00.000000'
-      },
-      {
-        id: 2,
-        username: 'teacher',
-        email: 'teacher@example.com',
-        full_name: '示例教师',
-        role: 'teacher',
-        is_active: true,
-        created_at: '2025-06-24T10:00:00.000000'
-      },
-      {
-        id: 3,
-        username: 'student',
-        email: 'student@example.com',
-        full_name: '示例学生',
-        role: 'student',
-        is_active: true,
-        created_at: '2025-06-24T10:00:00.000000'
-      }
-    ];
-    totalUsers.value = users.value.length;
+    useMockData();
   } finally {
     loading.value = false;
+    console.log('用户数据加载完成，当前用户列表长度:', users.value.length);
   }
+};
+
+// 使用模拟数据的辅助函数
+const useMockData = () => {
+  console.log('使用模拟数据');
+  users.value = [
+    {
+      id: 1,
+      username: 'admin',
+      email: 'admin@example.com',
+      full_name: '系统管理员',
+      role: 'admin',
+      is_active: true,
+      created_at: '2025-06-24T10:00:00.000000'
+    },
+    {
+      id: 2,
+      username: 'teacher',
+      email: 'teacher@example.com',
+      full_name: '示例教师',
+      role: 'teacher',
+      is_active: true,
+      created_at: '2025-06-24T10:00:00.000000'
+    },
+    {
+      id: 3,
+      username: 'student',
+      email: 'student@example.com',
+      full_name: '示例学生',
+      role: 'student',
+      is_active: true,
+      created_at: '2025-06-24T10:00:00.000000'
+    }
+  ];
+  totalUsers.value = users.value.length;
 };
 
 // 加载课程数据
