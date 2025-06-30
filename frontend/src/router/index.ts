@@ -22,6 +22,8 @@ import SubmissionList from '../components/assessment/SubmissionList.vue'
 
 // 导入AI助手组件
 import AIAssistant from '../components/ai/AIAssistant.vue'
+import TestAIAssistantView from '../views/TestAIAssistantView.vue'
+import SimpleTestView from '../views/SimpleTestView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -116,6 +118,18 @@ const router = createRouter({
       path: '/assessments/:id/submissions',
       name: 'assessmentSubmissions',
       component: SubmissionList,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/test-ai-assistant',
+      name: 'testAIAssistant',
+      component: TestAIAssistantView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/simple-test',
+      name: 'simpleTest',
+      component: SimpleTestView,
       meta: { requiresAuth: true }
     },
     {

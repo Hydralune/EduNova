@@ -36,8 +36,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # --- Configurable parameters via environment variables ---
 # Larger chunk reduces number of LLM calls (speed ↑) but increases prompt size.
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))  # default 500 chars as original reliable size
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))  # default 100 chars overlap
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "350"))  # 降低分块大小，适配512 tokens限制
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "80"))
 # Max parallel API calls (respect provider's rate-limit)
 CONCURRENCY_LIMIT = int(os.getenv("LLM_CONCURRENCY", "8"))
 
@@ -88,36 +88,47 @@ class EmbeddingFunction:
         self.batch_size = batch_size
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        all_embeddings = []
-        embedding_dim = None
-
-        # Wrap the range with tqdm for a progress bar
-        for i in tqdm(range(0, len(texts), self.batch_size), desc="Embedding documents"):
-            batch = texts[i:i + self.batch_size]
-            try:
+        """Embed documents using Silicon Flow API with correct dimension"""
+        try:
+            from backend.rag.embedding_util import get_embedding
+            
+            # 分批处理
+            batch_size = self.batch_size
+            all_embeddings = []
+            
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
                 result = get_embedding(batch)
-                embeddings = [item["embedding"] for item in result["data"]]
                 
-                if embedding_dim is None and embeddings:
-                    embedding_dim = len(embeddings[0])
-
-                all_embeddings.extend(embeddings)
-            except Exception as e:
-                print(f"Error embedding batch, using placeholders: {e}")
-                if embedding_dim is not None:
-                    all_embeddings.extend([[0.0] * embedding_dim] * len(batch))
+                if 'data' in result:
+                    batch_embeddings = [item['embedding'] for item in result['data']]
+                    all_embeddings.extend(batch_embeddings)
                 else:
-                    print("Critical error: Could not determine embedding dimension on first batch. Aborting.")
-                    raise e
-        return all_embeddings
+                    raise Exception("Embedding API返回格式错误")
+            
+            # 验证维度（siliconflow BAAI/bge-large-zh-v1.5 = 1024维）
+            embedding_dimension = 1024
+            if all_embeddings and len(all_embeddings[0]) != embedding_dimension:
+                raise Exception(f"Embedding维度不匹配: 期望{embedding_dimension}，实际{len(all_embeddings[0])}")
+            
+            return all_embeddings
+            
+        except Exception as e:
+            print(f"Embedding失败: {e}")
+            # 返回占位符embedding
+            embedding_dimension = 1024
+            return [[0.0] * embedding_dimension] * len(texts)
 
     def embed_query(self, text: str) -> List[float]:
         result = get_embedding(text)
         return result["data"][0]["embedding"]
 
 # --- Helper Functions ---
-def get_or_create_course_db_path(course_id: str, base_persist_dir: str = "./data") -> str:
-    persist_dir = os.path.join(base_persist_dir, course_id)
+def get_or_create_course_db_path(course_id: str, base_persist_dir: str = None) -> str:
+    # 统一知识库路径为 backend/uploads/knowledge_base
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    KNOWLEDGE_BASE_ROOT = os.path.join(project_root, "backend", "uploads", "knowledge_base")
+    persist_dir = os.path.join(KNOWLEDGE_BASE_ROOT, course_id)
     os.makedirs(persist_dir, exist_ok=True)
     return persist_dir
 
@@ -170,11 +181,6 @@ async def process_chunk_for_graph(chunk, graph_extraction_chain):
 
 # --- Main Processing Function ---
 async def process_documents(course_id: str, force_rebuild: bool = False):
-    course_doc_dir = os.path.join("./documents", course_id)
-    if not os.path.exists(course_doc_dir):
-        logging.warning(f"Directory not found for course '{course_id}', skipping.")
-        return
-
     persist_dir = get_or_create_course_db_path(course_id)
     metadata_file = os.path.join(persist_dir, 'metadata.json')
     graph_file_path = os.path.join(persist_dir, 'knowledge_graph.gml')
@@ -189,8 +195,8 @@ async def process_documents(course_id: str, force_rebuild: bool = False):
         processed_files_metadata = {}
 
     files_to_process = []
-    for filename in os.listdir(course_doc_dir):
-        file_path = os.path.join(course_doc_dir, filename)
+    for filename in os.listdir(os.path.join("./documents", course_id)):
+        file_path = os.path.join("./documents", course_id, filename)
         if not os.path.isfile(file_path):
             continue
         current_hash = get_file_hash(file_path)
@@ -206,47 +212,21 @@ async def process_documents(course_id: str, force_rebuild: bool = False):
     all_docs = []
     for filename, file_path in tqdm(files_to_process, desc="Loading documents"):
         try:
-            ext = os.path.splitext(filename)[1].lower()
-            if ext == ".pdf":
+            # Determine file type and load document
+            _, ext = os.path.splitext(filename)
+            ext = ext.lower()
+            
+            if ext == '.pdf':
                 loader = PyMuPDFLoader(file_path)
-            elif ext == ".docx":
-                # Native docx can be handled by docx2txt which is more stable than unstructured for Word files
+            elif ext in ['.docx', '.doc']:
                 loader = Docx2txtLoader(file_path)
-            elif ext == ".doc":
-                # Convert .doc → .pdf in the SAME directory to avoid Windows-specific --outdir issues.
+            elif ext in ['.md', '.markdown']:
+                # 专门处理Markdown文件
                 try:
-                    soffice = os.getenv("UNSTRUCTURED_SOFFICE_PATH", "soffice")
-                    abs_in = os.path.abspath(file_path)
-                    src_dir = os.path.dirname(abs_in)
-
-                    # If PDF already exists (可能是上一次手动转换留下的)，直接复用
-                    converted_pdf = os.path.splitext(abs_in)[0] + ".pdf"
-                    if not os.path.exists(converted_pdf):
-                        cmd = [
-                            soffice,
-                            "--headless",
-                            "--convert-to",
-                            "pdf:writer_pdf_Export",
-                            abs_in,
-                            "--outdir",
-                            src_dir,
-                        ]
-                        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                        if result.returncode != 0:
-                            logging.error("LibreOffice stdout:\n%s\nLibreOffice stderr:\n%s", result.stdout.strip(), result.stderr.strip())
-                            raise RuntimeError("LibreOffice conversion failed")
-
-                        if not os.path.exists(converted_pdf):
-                            # 最后再检查一次
-                            logging.error("Expected PDF %s not found after conversion", converted_pdf)
-                            raise FileNotFoundError(converted_pdf)
-
-                    loader = PyMuPDFLoader(converted_pdf)
-                except Exception as convert_err:
-                    logging.error(
-                        f"LibreOffice PDF conversion failed for {file_path}: {convert_err}. Falling back to Unstructured parser."
-                    )
-                    # Fallback: try Unstructured (may still fail but at least we attempted conversion)
+                    from langchain_community.document_loaders import UnstructuredMarkdownLoader
+                    loader = UnstructuredMarkdownLoader(file_path)
+                except ImportError:
+                    # 如果专门的Markdown加载器不可用，使用通用加载器
                     loader = UnstructuredFileLoader(file_path, mode="single")
             elif ext == ".mp4":
                 try:
@@ -262,7 +242,7 @@ async def process_documents(course_id: str, force_rebuild: bool = False):
                     logging.error(f"Failed to process video {file_path}: {e}")
                     continue
             else:
-                # Fallback to the generic Unstructured loader which supports a wide range of formats
+                # Fallback to generic loader
                 loader = UnstructuredFileLoader(file_path, mode="single")
 
             docs = loader.load()

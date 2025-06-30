@@ -9,6 +9,7 @@ from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.material import Material
 from backend.models.assessment import Assessment, StudentAnswer
+import hashlib
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -354,6 +355,51 @@ def upload_material(course_id):
     file_path = os.path.join(upload_folder, original_filename)
     file.save(file_path)
     
+    # 计算文件哈希值
+    def calculate_file_hash(file_path):
+        """计算文件的SHA256哈希值"""
+        hash_sha256 = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
+    
+    file_hash = calculate_file_hash(file_path)
+    
+    # 检查是否已存在相同哈希值的文件
+    existing_material = Material.query.filter_by(
+        file_hash=file_hash, 
+        course_id=course_id
+    ).first()
+    
+    if existing_material:
+        # 删除刚上传的重复文件
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        # 返回已存在的文件信息
+        material_dict = existing_material.to_dict()
+        
+        # 添加文件大小信息
+        if existing_material.file_path:
+            existing_file_path = os.path.join(current_app.root_path, existing_material.file_path.lstrip('/'))
+            if os.path.exists(existing_file_path):
+                size = os.path.getsize(existing_file_path)
+                size_str = f"{size / 1024:.1f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+                material_dict['size'] = size_str
+            else:
+                material_dict['size'] = '文件不存在'
+        else:
+            material_dict['size'] = '未知'
+        
+        return jsonify({
+            'status': 'duplicate',
+            'message': f'文件 "{original_filename}" 已存在，避免重复上传',
+            'material': material_dict
+        }), 200
+    
     # 获取文件大小
     file_size = os.path.getsize(file_path)
     size_str = ''
@@ -398,6 +444,7 @@ def upload_material(course_id):
         title=original_filename,
         material_type=material_type,
         file_path=f'/uploads/materials/{course_id}/{original_filename}',
+        file_hash=file_hash,  # 添加文件哈希值
         content=f'Original filename: {original_filename}',
         course_id=course_id
     )
@@ -410,7 +457,81 @@ def upload_material(course_id):
     material_dict = new_material.to_dict()
     material_dict['size'] = size_str  # 添加文件大小信息
     
-    return jsonify(material_dict), 201
+    return jsonify({
+        'status': 'success',
+        'message': f'文件 "{original_filename}" 上传成功',
+        'material': material_dict
+    }), 201
+
+# 获取单个课件详情
+@learning_bp.route('/materials/<int:material_id>', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_material(material_id):
+    """获取单个课件详情"""
+    # 查找材料
+    material = Material.query.get(material_id)
+    if not material:
+        return jsonify({'error': 'Material not found'}), 404
+    
+    # 返回材料详情
+    material_dict = material.to_dict()
+    
+    # 添加文件大小信息
+    if material.file_path:
+        file_path = os.path.join(current_app.root_path, material.file_path.lstrip('/'))
+        if os.path.exists(file_path):
+            size = os.path.getsize(file_path)
+            size_str = f"{size / 1024:.1f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+            material_dict['size'] = size_str
+        else:
+            material_dict['size'] = '文件不存在'
+    else:
+        material_dict['size'] = '未知'
+    
+    return jsonify(material_dict)
+
+# 更新课件
+@learning_bp.route('/materials/<int:material_id>', methods=['PUT'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def update_material(material_id):
+    """更新课件信息"""
+    # 查找材料
+    material = Material.query.get(material_id)
+    if not material:
+        return jsonify({'error': 'Material not found'}), 404
+    
+    # 获取请求数据
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    # 更新材料信息
+    if 'title' in data:
+        material.title = data['title']
+    if 'description' in data:
+        material.description = data['description']
+    if 'content' in data:
+        material.content = data['content']
+    
+    # 保存更改
+    db.session.commit()
+    
+    # 返回更新后的材料信息
+    material_dict = material.to_dict()
+    
+    # 添加文件大小信息
+    if material.file_path:
+        file_path = os.path.join(current_app.root_path, material.file_path.lstrip('/'))
+        if os.path.exists(file_path):
+            size = os.path.getsize(file_path)
+            size_str = f"{size / 1024:.1f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+            material_dict['size'] = size_str
+        else:
+            material_dict['size'] = '文件不存在'
+    else:
+        material_dict['size'] = '未知'
+    
+    return jsonify(material_dict)
 
 # 下载课件
 @learning_bp.route('/materials/<int:material_id>/download', methods=['GET'])

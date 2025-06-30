@@ -119,11 +119,28 @@
                 <div>
                   <p class="font-medium">{{ material.title }}</p>
                   <p class="text-sm text-gray-500">{{ material.material_type }} · {{ material.size }}</p>
+                  <!-- 知识库状态显示 -->
+                  <div v-if="material.file_path" class="mt-1">
+                    <span v-if="isSupportedForKnowledgeBase(material)" class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                      支持知识库
+                    </span>
+                    <span v-else class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                      不支持知识库
+                    </span>
+                  </div>
                 </div>
               </div>
               <div class="flex space-x-3">
                 <button @click="previewMaterial(material.id)" class="text-blue-600 hover:text-blue-800">预览</button>
                 <button @click="downloadMaterial(material.id)" class="text-blue-600 hover:text-blue-800">下载</button>
+                <button 
+                  v-if="isSupportedForKnowledgeBase(material)"
+                  @click="addToKnowledgeBase(material)"
+                  class="text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="isProcessingKnowledgeBase(material) || knowledgeBaseProcessing[material.id]"
+                >
+                  {{ getKnowledgeBaseButtonText(material) }}
+                </button>
                 <button @click="confirmDeleteMaterial(material)" class="text-red-600 hover:text-red-800">删除</button>
               </div>
             </div>
@@ -370,9 +387,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '../../stores/auth';
-import { courseAPI, materialAPI } from '../../api';
+import { courseAPI, materialAPI, knowledgeBaseAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
 import AIAssistant from '../ai/AIAssistant.vue';
 import { useRouter } from 'vue-router';
@@ -490,44 +507,14 @@ const materialUploadError = ref('');
 // 评估数据
 const assessments = ref<Assessment[]>([]);
 
-// 从mock数据加载评估
-async function loadMockAssessment() {
-  try {
-    const mockExam = await import('../../assets/mock-exam.json');
-    const data = mockExam.default;
-    
-    // 将mock数据转换为评估列表格式
-    assessments.value = [{
-      id: data.id,
-      title: data.title,
-      type: data.type,
-      question_count: getTotalQuestions(data),
-      time_limit: parseInt(data.duration) || 30,
-      description: data.description,
-      due_date: data.due_date ? new Date(data.due_date).toLocaleDateString() : null,
-      attempts: 0,
-      max_attempts: data.max_attempts,
-    }];
-    
-    console.log('Mock assessment loaded:', assessments.value);
-  } catch (error) {
-    console.error('Failed to load mock assessment:', error);
-  }
-}
+// 知识库相关
+const supportedKnowledgeBaseTypes = ref<string[]>([]);
+const knowledgeBaseQueue = ref<any[]>([]);
+const isLoadingKnowledgeBaseStatus = ref(false);
+const knowledgeBaseProcessing = ref<{[key: string]: boolean}>({});
+let knowledgeBaseStatusInterval: number | undefined;
 
-// 计算题目总数
-function getTotalQuestions(assessment: any): number {
-  let count = 0;
-  if (assessment && assessment.sections) {
-    assessment.sections.forEach((section: any) => {
-      if (section.questions) {
-        count += section.questions.length;
-      }
-    });
-  }
-  return count;
-}
-
+// 学生相关
 const students = ref<Student[]>([]);
 const availableStudents = ref<AvailableStudent[]>([]);
 const selectedStudents = ref<number[]>([]);
@@ -542,6 +529,33 @@ onMounted(async () => {
     await fetchMaterials();
     await fetchStudents();
     await loadMockAssessment(); // 加载模拟评估数据
+    await fetchSupportedKnowledgeBaseTypes();
+    
+    // 如果有课程ID，获取知识库状态
+    if (courseId) {
+      await fetchKnowledgeBaseStatus();
+      
+      // 设置定时刷新
+      knowledgeBaseStatusInterval = window.setInterval(() => {
+        if (activeTab.value === 'materials') {
+          fetchKnowledgeBaseStatus();
+        }
+      }, 2000); // 每2秒刷新一次
+    }
+  }
+});
+
+onUnmounted(() => {
+  // 清除定时器
+  if (knowledgeBaseStatusInterval) {
+    clearInterval(knowledgeBaseStatusInterval);
+  }
+});
+
+// 监听标签切换
+watch(activeTab, (newTab) => {
+  if (newTab === 'materials' && course.value?.id) {
+    fetchKnowledgeBaseStatus();
   }
 });
 
@@ -824,5 +838,178 @@ function startAssessment(assessmentId: string | number) {
   // 导航到评估答题页面
   console.log('Starting assessment:', assessmentId);
   router.push(`/assessments/${assessmentId}/take`);
+}
+
+// 从mock数据加载评估
+async function loadMockAssessment() {
+  try {
+    const mockExam = await import('../../assets/mock-exam.json');
+    const data = mockExam.default;
+    
+    // 将mock数据转换为评估列表格式
+    assessments.value = [{
+      id: data.id,
+      title: data.title,
+      type: data.type,
+      question_count: getTotalQuestions(data),
+      time_limit: parseInt(data.duration) || 30,
+      description: data.description,
+      due_date: data.due_date ? new Date(data.due_date).toLocaleDateString() : null,
+      attempts: 0,
+      max_attempts: data.max_attempts,
+    }];
+    
+    console.log('Mock assessment loaded:', assessments.value);
+  } catch (error) {
+    console.error('Failed to load mock assessment:', error);
+  }
+}
+
+// 计算题目总数
+function getTotalQuestions(assessment: any): number {
+  let count = 0;
+  if (assessment && assessment.sections) {
+    assessment.sections.forEach((section: any) => {
+      if (section.questions) {
+        count += section.questions.length;
+      }
+    });
+  }
+  return count;
+}
+
+// 获取支持的知识库文件类型
+async function fetchSupportedKnowledgeBaseTypes() {
+  try {
+    const response = await knowledgeBaseAPI.getSupportedFileTypes();
+    
+    // 使用类型守卫检查响应
+    const hasTypes = (res: any): res is { supported_types: Array<{ extension: string }> } => 
+      res && typeof res === 'object' && 'supported_types' in res;
+    
+    if (hasTypes(response)) {
+      supportedKnowledgeBaseTypes.value = response.supported_types.map(type => type.extension);
+    }
+  } catch (error) {
+    console.error('获取支持的知识库文件类型失败:', error);
+  }
+}
+
+// 获取知识库状态
+async function fetchKnowledgeBaseStatus() {
+  if (!course.value?.id) return;
+  
+  try {
+    isLoadingKnowledgeBaseStatus.value = true;
+    const courseId = Number(course.value.id); // 确保 courseId 是数字类型
+    const response = await knowledgeBaseAPI.getKnowledgeBaseStatus(courseId);
+    
+    // 使用类型守卫检查响应
+    const hasItems = (res: any): res is { items: any[] } => 
+      res && typeof res === 'object' && 'items' in res;
+    
+    if (hasItems(response)) {
+      knowledgeBaseQueue.value = response.items;
+    }
+  } catch (error) {
+    console.error('获取知识库状态失败:', error);
+  } finally {
+    isLoadingKnowledgeBaseStatus.value = false;
+  }
+}
+
+// 检查文件是否支持添加到知识库
+function isSupportedForKnowledgeBase(material: any) {
+  if (!material.file_path) return false;
+  
+  const fileExtension = material.file_path.substring(material.file_path.lastIndexOf('.')).toLowerCase();
+  return supportedKnowledgeBaseTypes.value.includes(fileExtension);
+}
+
+// 检查文件是否正在处理中
+function isProcessingKnowledgeBase(material: any) {
+  if (!material.file_path) return false;
+  
+  // 检查本地处理状态
+  if (knowledgeBaseProcessing.value[material.id]) {
+    return true;
+  }
+  
+  // 检查队列状态
+  const queueItem = knowledgeBaseQueue.value.find(item => 
+    item.file_path === material.file_path && 
+    (item.status === 'pending' || item.status === 'processing')
+  );
+  
+  return !!queueItem;
+}
+
+// 获取知识库按钮文本
+function getKnowledgeBaseButtonText(material: any) {
+  if (!material.file_path) return '添加到知识库';
+  
+  // 检查是否正在处理
+  if (knowledgeBaseProcessing.value[material.id]) {
+    return '处理中...';
+  }
+  
+  const queueItem = knowledgeBaseQueue.value.find(item => item.file_path === material.file_path);
+  
+  if (!queueItem) return '添加到知识库';
+  
+  switch (queueItem.status) {
+    case 'pending':
+      return '等待处理';
+    case 'processing':
+      return `处理中 ${queueItem.progress ? queueItem.progress.toFixed(1) : 0}%`;
+    case 'completed':
+      return '已添加到知识库';
+    case 'failed':
+      return '处理失败';
+    default:
+      return '添加到知识库';
+  }
+}
+
+// 添加到知识库
+async function addToKnowledgeBase(material: any) {
+  if (!course.value?.id || !material.file_path) return;
+  
+  try {
+    // 设置处理状态
+    knowledgeBaseProcessing.value[material.id] = true;
+    
+    // 修正 filePath 格式，确保不带 /uploads/ 前缀
+    let filePath = material.file_path.replace(/^\/?uploads\//, '');
+    
+    // 调用API添加到知识库
+    const courseId = Number(course.value.id); // 确保 courseId 是数字类型
+    const response = await knowledgeBaseAPI.addToKnowledgeBase(courseId, filePath);
+    
+    // 使用类型守卫检查响应
+    const isSuccessResponse = (res: any): res is { status: string; message?: string } => 
+      res && typeof res === 'object' && 'status' in res;
+    
+    if (isSuccessResponse(response) && response.status === 'success') {
+      console.log('文件已添加到知识库处理队列:', response);
+      
+      // 立即刷新状态
+      await fetchKnowledgeBaseStatus();
+      
+      // 显示成功消息
+      alert('文件已添加到知识库处理队列，请稍候查看处理状态。');
+    } else {
+      const errorMessage = isSuccessResponse(response) && response.message 
+        ? response.message 
+        : '添加到知识库失败';
+      throw new Error(errorMessage);
+    }
+  } catch (error) {
+    console.error('添加到知识库失败:', error);
+    alert(`添加到知识库失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    // 清除处理状态
+    knowledgeBaseProcessing.value[material.id] = false;
+  }
 }
 </script> 
