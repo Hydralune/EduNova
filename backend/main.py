@@ -3,6 +3,10 @@ import sys
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# 禁用 ChromaDB telemetry 以防止崩溃
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "False"
+
 from flask import Flask, jsonify, request, make_response, send_from_directory
 from backend.extensions import db, jwt, cors, migrate
 from flask_cors import CORS
@@ -34,7 +38,7 @@ db.init_app(app)
 jwt.init_app(app)
 migrate.init_app(app, db)
 cors.init_app(app, resources={r"/*": {
-    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
+    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "null"],
     "supports_credentials": True,
     "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -53,6 +57,9 @@ def options_handler(path):
     
     if origin in allowed_origins:
         response.headers.add('Access-Control-Allow-Origin', origin)
+    elif origin == 'null' or not origin:
+        # 允许null origin（直接打开HTML文件的情况）
+        response.headers.add('Access-Control-Allow-Origin', '*')
     else:
         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
         
@@ -81,14 +88,14 @@ from backend.models.config import Config
 from backend.api.user import user_bp
 from backend.api.admin import admin_bp
 from backend.api.learning import learning_bp
-from backend.api.rag_ai import rag_ai_bp
+from backend.api.rag_ai import rag_api
 from backend.api.auth import auth_bp
 
 # Register blueprints
 app.register_blueprint(user_bp, url_prefix='/api/users')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(learning_bp, url_prefix='/api')
-app.register_blueprint(rag_ai_bp, url_prefix='/api/rag')
+app.register_blueprint(rag_api, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
 # Health check endpoint
@@ -216,5 +223,10 @@ def avatar_file(filename):
 
 if __name__ == '__main__':
     create_tables()
+    # 打印所有注册的路由，方便排查 404 问题
+    print('==== 所有注册的路由 ====')
+    for rule in app.url_map.iter_rules():
+        print(rule)
+    print('=======================')
     app.run(host='0.0.0.0', port=5001, debug=True)
 

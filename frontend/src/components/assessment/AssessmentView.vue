@@ -91,7 +91,20 @@
         </div>
         
         <!-- 学生做题模式 -->
-        <div v-else class="assessment-player">
+        <div v-else class="assessment-player max-w-7xl mx-auto">
+          <!-- 返回按钮 -->
+          <div class="mb-4">
+            <button 
+              @click="handleCancel" 
+              class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center"
+              style="width: 40px; height: 40px;"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          
           <!-- 评估头部信息 -->
           <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
             <div class="flex justify-between items-center">
@@ -353,8 +366,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { useRouter, useRoute } from 'vue-router';
 import AssessmentEditor from './AssessmentEditor.vue';
 import { assessmentAPI } from '@/api';
+
+const router = useRouter();
+const route = useRoute();
 
 const props = defineProps({
   assessmentId: {
@@ -371,7 +388,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['submit', 'save-progress']);
+const emit = defineEmits(['submit', 'save-progress', 'cancel']);
 
 // 获取用户角色
 const authStore = useAuthStore();
@@ -794,5 +811,34 @@ const confirmLeave = (e) => {
   e.preventDefault();
   e.returnValue = '您有未保存的答案，确定要离开吗？';
   return e.returnValue;
+};
+
+// 处理返回按钮点击
+const handleCancel = () => {
+  // 检查路由参数和查询参数中是否有courseId
+  const courseIdFromQuery = route.query.courseId;
+  const courseIdFromAssessment = assessment.course_id;
+  
+  // 优先使用查询参数中的courseId，其次使用评估中的course_id
+  const courseId = courseIdFromQuery || courseIdFromAssessment;
+  
+  if (courseId) {
+    // 如果有courseId，返回到课程详情页面
+    router.push({ 
+      path: `/course/${courseId}`, 
+      query: { activeTab: 'assessments' } 
+    });
+  } else {
+    // 根据用户角色返回对应页面
+    const userRole = authStore.user?.role || '';
+    
+    if (userRole === 'teacher') {
+      router.push({ path: '/teacher', query: { activeTab: 'assessments' } });
+    } else if (userRole === 'student') {
+      router.push({ path: '/student', query: { activeTab: 'assessments' } });
+    } else {
+      router.push('/dashboard');
+    }
+  }
 };
 </script> 

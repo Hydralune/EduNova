@@ -1,84 +1,81 @@
-# RAG模块设置指南
+# EduNova RAG Chat Integration Setup
 
-本指南将帮助您正确设置和配置RAG（检索增强生成）模块，以便与EduNova系统集成。
+This document provides instructions for setting up the RAG (Retrieval Augmented Generation) integration with the EduNova chat interface.
 
-## 1. 环境配置
+## Prerequisites
 
-### 创建环境变量文件
-
-1. 在`RAG`目录下创建一个`.env`文件（注意：此文件已被添加到`.gitignore`中，不会被提交到仓库）
-2. 参考`templates/.env.example`文件的格式，添加以下必要配置：
+1. Make sure you have set up the environment variables as described in `RAG/README.md`:
 
 ```
-# LLM API Configuration
-LLM_API_KEY='your-actual-api-key'
+# Create a .env file in the RAG directory with the following contents:
+DEEPSEEK_API_KEY='your-api-key'
+DEEPSEEK_API_BASE='https://api.siliconflow.cn/v1'
+DEEPSEEK_MODEL='deepseek-ai/DeepSeek-V3'
+
+# Or use LLM prefixed variables (these take precedence)
+LLM_API_KEY='your-api-key'
 LLM_API_BASE='https://api.siliconflow.cn/v1'
-LLM_MODEL='Qwen/Qwen3-32B'
-
-# 其他配置项...
+LLM_MODEL='deepseek-ai/DeepSeek-V3'
 ```
 
-### 安装依赖
-
-在`RAG`目录下运行：
+2. Install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 2. 数据准备
+## Creating Course Knowledge Bases
 
-### 文档存储
+Before using the RAG-enhanced chat feature, you need to create a knowledge base for each course:
 
-1. 将教学文档放入`RAG/documents`目录
-2. 私有或敏感文档应放在`RAG/documents/private`目录（此目录已被添加到`.gitignore`中）
+1. Upload course materials through the course detail page in the web interface
+2. The system will automatically process these documents and create a vector database
 
-### 创建向量数据库
-
-运行以下命令创建向量数据库：
+Alternatively, you can manually create a knowledge base for a course using the command line:
 
 ```bash
-python create_db.py --doc_dir ./documents --db_dir ./data
+# Navigate to the RAG directory
+cd RAG
+
+# Create a knowledge base for a specific course
+python create_db.py --course_id 003
 ```
 
-注意：生成的向量数据库将保存在`./data`目录中，该目录已被添加到`.gitignore`中，不会被提交到仓库。
+## Integration Components
 
-## 3. 安全注意事项
+The integration between the chat interface and RAG system involves these components:
 
-为确保API密钥和敏感数据的安全，请遵循以下准则：
+1. **Backend API** (`backend/api/rag_ai.py`): Handles chat requests and integrates with the RAG system
+2. **Frontend Component** (`frontend/src/components/ai/AIAssistant.vue`): Provides the chat interface and passes course context
+3. **RAG Module** (`RAG/rag_query.py`): Performs document retrieval and query processing
 
-1. **不要**将包含实际API密钥的`.env`文件提交到仓库
-2. **不要**将`data`目录（包含向量数据库）提交到仓库
-3. **不要**将`documents/private`目录中的敏感文档提交到仓库
-4. **不要**修改`.gitignore`文件中关于RAG模块的忽略规则
+## Using the RAG Chat
 
-## 4. 与EduNova系统集成
+To use the RAG-enhanced chat:
 
-目前，RAG模块尚未完全集成到EduNova系统中。在完成集成前，您可以独立使用此模块进行以下操作：
+1. Log in to the EduNova platform
+2. Navigate to a course detail page
+3. Click on the "智能助手" (Smart Assistant) tab
+4. Ask questions related to the course materials
 
-### 生成考试题目
+The system will:
+1. Retrieve relevant content from the course materials
+2. Generate a response based on the retrieved content
+3. Display the response with citations to the source materials
 
-```bash
-python generate_exam.py --subject "计算机网络" --difficulty "中等" --count 5
-```
+## Troubleshooting
 
-### 查询知识库
+If you encounter issues with the RAG integration:
 
-```bash
-python rag_query.py --query "什么是TCP协议" --db_dir ./data
-```
+1. **Chat doesn't use RAG**: Check if the course has materials uploaded and processed
+2. **API errors**: Verify your API keys in the .env file
+3. **Missing dependencies**: Make sure all required packages are installed
+4. **Document processing fails**: Check the format of uploaded documents (PDF, DOCX, TXT are supported)
 
-## 5. 故障排除
+## Advanced Configuration
 
-如果遇到以下问题，请尝试相应的解决方案：
+You can adjust the RAG behavior by modifying these parameters:
 
-1. **API密钥错误**：确保`.env`文件中的`LLM_API_KEY`值正确
-2. **向量数据库错误**：删除`./data`目录并重新运行`create_db.py`
-3. **内存不足**：减小`CHUNK_SIZE`或`EMBEDDING_BATCH_SIZE`的值
-
-## 6. 后续开发计划
-
-- 完成与EduNova后端API的集成
-- 添加更多文档处理功能
-- 优化检索算法
-- 实现用户反馈机制 
+- **Number of retrieved documents**: Edit the `search_kwargs={"k": 5}` parameter in `RAG/rag_query.py`
+- **Chunk size**: Set the `CHUNK_SIZE` environment variable (default is 1000 characters)
+- **Model temperature**: Modify the temperature value in the API request (lower for more factual responses) 

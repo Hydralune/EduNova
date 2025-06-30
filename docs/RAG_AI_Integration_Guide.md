@@ -198,12 +198,39 @@ quiz = content_service.create_quiz(
 
 ## 在Flask路由中使用
 
-已经在 `src/routes/rag_ai.py` 中预留了相关API端点：
+已经在 `backend/api/rag_ai.py` 中预留了相关API端点：
 
 - `POST /api/rag/query` - RAG查询
 - `POST /api/ai/grade` - 自动批改
 - `GET /api/ai/analytics/{student_id}` - 学习分析
 - `POST /api/ai/generate-quiz` - 生成测验
+
+## 已实现的RAG聊天功能
+
+我们已经实现了将聊天界面与RAG系统集成的功能：
+
+1. **后端集成**：
+   - 修改了 `backend/api/rag_ai.py` 中的 `chat_with_ai` 函数，使其能够与RAG系统集成
+   - 添加了从RAG目录导入必要模块的代码
+   - 实现了基于课程ID的文档检索和上下文增强
+
+2. **前端集成**：
+   - 更新了 `frontend/src/components/ai/AIAssistant.vue` 组件，使其能够传递课程ID
+   - 添加了处理引用源的功能，以显示回答的来源文档
+   - 改进了欢迎消息，以指示是否已连接到课程知识库
+
+3. **使用流程**：
+   - 用户访问课程详情页面
+   - 点击"智能助手"选项卡
+   - 提问与课程内容相关的问题
+   - 系统检索相关文档，生成基于课程材料的回答
+   - 显示回答及其引用的文档来源
+
+4. **设置步骤**：
+   - 在RAG目录中创建`.env`文件，配置API密钥
+   - 安装必要的依赖项
+   - 上传课程材料，系统会自动处理并创建向量数据库
+   - 也可以通过命令行手动创建课程知识库：`python create_db.py --course_id <课程ID>`
 
 ## 扩展和自定义
 

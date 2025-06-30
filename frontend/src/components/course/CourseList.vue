@@ -202,9 +202,35 @@ onMounted(async () => {
   await fetchCourses();
 });
 
+// 监听筛选条件变化，自动重新获取课程数据
+watch(filters, () => {
+  currentPage.value = 1; // 重置到第一页
+  fetchCourses();
+}, { deep: true });
+
+// 监听搜索框变化，添加防抖
+let searchTimeout: number | null = null;
+watch(() => filters.search, (newSearch) => {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+  searchTimeout = window.setTimeout(() => {
+    currentPage.value = 1; // 重置到第一页
+    fetchCourses();
+  }, 500); // 500ms防抖
+});
+
 async function fetchCourses() {
   loading.value = true;
   try {
+    console.log('开始获取课程列表，筛选参数:', {
+      page: currentPage.value,
+      per_page: 9,
+      search: filters.search,
+      category: filters.category,
+      difficulty: filters.difficulty
+    });
+    
     // 调用API获取课程列表
     const response = await courseAPI.getCourses({
       page: currentPage.value,
@@ -214,12 +240,19 @@ async function fetchCourses() {
       difficulty: filters.difficulty
     });
     
+    console.log('课程API响应:', response);
+    
     // 处理API响应数据
     const responseData = response as any; // 类型断言为any以避免TypeScript错误
     if (responseData && responseData.courses) {
       courses.value = responseData.courses;
       totalPages.value = responseData.pages || 1;
       currentPage.value = responseData.page || 1;
+      console.log('课程数据设置完成:', {
+        课程数量: courses.value.length,
+        总页数: totalPages.value,
+        当前页: currentPage.value
+      });
     } else {
       console.warn('API返回格式不符合预期:', response);
       courses.value = [];

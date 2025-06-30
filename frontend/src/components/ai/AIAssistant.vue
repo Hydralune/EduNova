@@ -56,21 +56,75 @@
     </div>
     
     <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b flex justify-between items-center">
-        <div class="flex items-center">
-          <button 
-            @click="showConversations = true" 
-            class="mr-3 text-gray-500 hover:text-gray-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-          </button>
-          <h3 class="text-lg font-semibold">智能助手</h3>
+      <!-- 聊天页面头部 -->
+      <div class="px-6 py-4 border-b">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center">
+            <button 
+              @click="showConversations = true" 
+              class="mr-3 text-gray-500 hover:text-gray-700"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+              </svg>
+            </button>
+            <h3 class="text-lg font-semibold">智能助手</h3>
+          </div>
+          <div class="flex items-center">
+            <span class="inline-block w-2 h-2 rounded-full mr-2" 
+                  :class="statusIndicatorClass"></span>
+            <span class="text-sm text-gray-500">{{ statusText }}</span>
+          </div>
         </div>
-        <div class="flex items-center">
-          <span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-          <span class="text-sm text-gray-500">在线</span>
+        
+        <!-- 模式选择和课程选择 -->
+        <div class="flex flex-wrap items-center gap-4">
+          <!-- 模式选择 -->
+          <div class="flex items-center">
+            <label class="text-sm text-gray-600 mr-2 whitespace-nowrap">模式:</label>
+            <select 
+              v-model="chatMode" 
+              class="px-3 py-1.5 border rounded-md text-sm bg-white min-w-[120px]"
+              @change="onModeChange"
+            >
+              <option value="general">普通AI问答</option>
+              <option value="rag">知识库增强</option>
+            </select>
+          </div>
+          
+          <!-- 课程选择 - 仅在RAG模式下显示 -->
+          <div v-if="chatMode === 'rag'" class="flex items-center">
+            <label class="text-sm text-gray-600 mr-2 whitespace-nowrap">选择课程:</label>
+            <select 
+              v-model="selectedCourseId" 
+              class="px-3 py-1.5 border rounded-md text-sm bg-white min-w-[200px]"
+            >
+              <option value="">请选择课程</option>
+              <option v-for="course in courses" :key="course.id" :value="course.id">
+                {{ course.name }} (ID: {{ course.id }})
+              </option>
+            </select>
+            <!-- 调试信息 -->
+            <div v-if="courses.length === 0 && !loadingCourses" class="ml-2 text-xs text-red-500">
+              无可用课程
+            </div>
+            <div v-if="courses.length > 0" class="ml-2 text-xs text-green-500">
+              {{ courses.length }}个课程可用
+            </div>
+            <div v-if="loadingCourses" class="ml-2 text-xs text-blue-500">
+              加载中...
+            </div>
+            <!-- 当前选择显示 -->
+            <div v-if="selectedCourseId" class="ml-2 text-xs text-gray-600">
+              已选择: {{ selectedCourseId }}
+            </div>
+          </div>
+          
+          <!-- 加载状态 -->
+          <div v-if="loadingCourses" class="flex items-center text-sm text-gray-500">
+            <div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500 mr-2"></div>
+            加载课程中...
+          </div>
         </div>
       </div>
       
@@ -79,7 +133,7 @@
           <!-- 系统消息 -->
           <div v-if="chatMessages.length === 0" class="flex items-start">
             <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden mt-1">
-              <img src="/src/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
+              <img src="@/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
             </div>
             <div class="ml-3 pl-2 max-w-[80%]">
               <p class="text-gray-800 font-medium">你好！我是智能学习助手。有什么可以帮助你的吗？</p>
@@ -106,30 +160,32 @@
             <!-- 系统回复 -->
             <div v-else class="flex items-start mt-4">
               <div class="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center overflow-hidden mt-1">
-                <img src="/src/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
+                <img src="@/assets/images/atom.png" alt="AI" class="h-full w-full object-cover" />
               </div>
               <div class="ml-3 pl-2 max-w-[80%] relative group">
                 <!-- 使用v-if/v-else来区分是否有内容 -->
-                <div v-if="message.content" class="text-gray-800 font-medium">
-                  <!-- 使用v-html渲染Markdown内容 -->
-                  <div class="markdown-body whitespace-pre-wrap" v-html="renderMarkdown(message.content)"></div>
+                <div v-if="message.content" class="text-gray-800 font-medium bg-gray-100 rounded-lg py-3 px-4 shadow-sm">
+                  <!-- 注释掉Markdown渲染，直接显示纯文本 -->
+                  <!-- <div class="markdown-body whitespace-pre-wrap" v-html="renderMarkdown(message.content)"></div> -->
+                  <div class="whitespace-pre-wrap">{{ message.content }}</div>
+                  
+                  <!-- 如果有引用来源 -->
+                  <div v-if="message.sources && message.sources.length > 0" class="mt-3 pt-2 border-t border-gray-200">
+                    <p class="text-xs text-gray-500 font-medium">参考来源:</p>
+                    <ul class="mt-1 space-y-1">
+                      <li v-for="(source, sIdx) in message.sources" :key="sIdx" class="text-xs">
+                        <a :href="source.url" class="text-blue-600 hover:underline" target="_blank">{{ source.title }}</a>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
                 
                 <!-- 加载中指示器 - 当消息为空时显示 -->
-                <div v-else class="flex space-x-1">
+                <div v-else class="flex items-center">
+                  <span class="text-sm text-gray-500 mr-2">思考中</span>
                   <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                   <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                   <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
-                </div>
-                
-                <!-- 如果有引用来源 -->
-                <div v-if="message.sources && message.sources.length > 0" class="mt-2 pt-2 border-t border-gray-200">
-                  <p class="text-xs text-gray-500 font-medium">参考来源:</p>
-                  <ul class="mt-1 space-y-1">
-                    <li v-for="(source, sIdx) in message.sources" :key="sIdx" class="text-xs">
-                      <a :href="source.url" class="text-blue-600 hover:underline" target="_blank">{{ source.title }}</a>
-                    </li>
-                  </ul>
                 </div>
                 
                 <!-- 复制按钮 - 使用group-hover使其仅在悬停时显示 -->
@@ -160,15 +216,15 @@
           <button 
             type="submit" 
             class="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            :disabled="loading || !userInput.trim()"
+            :disabled="loading || !userInput.trim() || (chatMode === 'rag' && !selectedCourseId)"
           >
-            发送
+            {{ loading ? '发送中...' : '发送' }}
           </button>
         </form>
         
         <div class="flex flex-wrap gap-2 mt-3">
           <button 
-            v-for="(suggestion, index) in suggestions" 
+            v-for="(suggestion, index) in currentSuggestions" 
             :key="index"
             @click="useSuggestion(suggestion)"
             class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-2 py-1 rounded-md"
@@ -189,6 +245,7 @@ import hljs from 'highlight.js';
 import DOMPurify from 'dompurify';
 import 'github-markdown-css/github-markdown.css';
 import 'highlight.js/styles/github.css';
+import { courseAPI, ragAiAPI } from '../../api';
 
 // 定义接口
 interface ChatMessage {
@@ -233,6 +290,15 @@ const showConversations = ref(false);
 const loadingConversations = ref(false);
 const conversations = ref<Conversation[]>([]);
 
+// 课程相关
+const courses = ref<any[]>([]);
+const selectedCourseId = ref<string | number>('');
+const useRag = ref<boolean>(true);
+const loadingCourses = ref<boolean>(false);
+
+// 新增：聊天模式相关
+const chatMode = ref<'general' | 'rag'>('general');
+
 // 提问建议
 const suggestions = [
   '什么是机器学习？',
@@ -241,6 +307,38 @@ const suggestions = [
   '这门课程的难点是什么？',
   '如何准备考试？'
 ];
+
+// RAG模式专用建议
+const ragSuggestions = [
+  '这门课程的主要内容是什么？',
+  '课程中的重点概念有哪些？',
+  '如何理解课程中的难点？',
+  '课程相关的实践项目有哪些？',
+  '这门课程与其他课程有什么联系？'
+];
+
+// 计算当前应该显示的建议
+const currentSuggestions = computed(() => {
+  return chatMode.value === 'rag' ? ragSuggestions : suggestions;
+});
+
+// 状态指示器
+const statusIndicatorClass = computed(() => {
+  if (chatMode.value === 'rag' && !selectedCourseId.value) {
+    return 'bg-yellow-500'; // 黄色：需要选择课程
+  }
+  return 'bg-green-500'; // 绿色：就绪
+});
+
+const statusText = computed(() => {
+  if (chatMode.value === 'rag' && !selectedCourseId.value) {
+    return '请选择课程';
+  }
+  if (chatMode.value === 'rag' && selectedCourseId.value) {
+    return '知识库模式（如无知识库将使用普通模式）';
+  }
+  return '普通模式';
+});
 
 const API_BASE_URL = 'http://localhost:5001/api';
 
@@ -393,23 +491,15 @@ onMounted(async () => {
 
   // 检查AI模块状态
   try {
-    const statusResponse = await axios.get(`${API_BASE_URL}/rag/status`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    console.log('AI模块状态:', statusResponse.data);
+    const statusResponse = await ragAiAPI.getStatus();
+    console.log('AI模块状态:', statusResponse);
     
-    if (!statusResponse.data.ai_enabled) {
+    // 由于响应拦截器已经返回response.data，所以这里直接使用response
+    const responseData = statusResponse as any;
+    if (responseData && !responseData.ai_enabled) {
       chatMessages.value.push({
         role: 'assistant',
         content: '注意：智能助手功能目前不可用。请确保已配置API密钥。'
-      });
-    } else {
-      // AI模块可用，添加欢迎消息
-      chatMessages.value.push({
-        role: 'assistant',
-        content: '你好！我是智能学习助手。有什么可以帮助你的吗？'
       });
     }
   } catch (error) {
@@ -423,6 +513,22 @@ onMounted(async () => {
   // 获取对话列表
   await fetchConversations();
   
+  // 获取课程列表
+  await fetchCourses();
+  
+  // 初始化聊天模式
+  if (props.courseId) {
+    // 如果传入了课程ID，默认使用RAG模式
+    chatMode.value = 'rag';
+    selectedCourseId.value = props.courseId;
+  } else {
+    // 否则使用普通模式
+    chatMode.value = 'general';
+  }
+  
+  // 设置欢迎消息
+  updateWelcomeMessage();
+  
   // 滚动到底部
   scrollToBottom();
 });
@@ -434,6 +540,24 @@ watch(chatMessages, () => {
   });
 });
 
+// 监听课程选择变化
+watch(selectedCourseId, (newCourseId) => {
+  console.log('课程选择变化:', newCourseId);
+  if (chatMode.value === 'rag' && newCourseId) {
+    // 当在RAG模式下选择课程时，更新欢迎消息
+    updateWelcomeMessage();
+  }
+});
+
+// 监听课程数据变化
+watch(courses, (newCourses) => {
+  console.log('课程数据更新:', newCourses);
+  // 如果当前选中的课程不在课程列表中，清空选择
+  if (selectedCourseId.value && !newCourses.find(c => c.id == selectedCourseId.value)) {
+    selectedCourseId.value = '';
+  }
+});
+
 function scrollToBottom() {
   if (chatContainer.value) {
     chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
@@ -441,44 +565,66 @@ function scrollToBottom() {
 }
 
 async function sendMessage() {
-  if (!userInput.value.trim()) return;
+  if (!userInput.value.trim() || loading.value) return;
   
-  // 添加用户消息
-  const userMessage = userInput.value;
-  chatMessages.value.push({
-    role: 'user',
-    content: userMessage
-  });
+  // 在RAG模式下检查是否选择了课程
+  if (chatMode.value === 'rag' && !selectedCourseId.value) {
+    alert('请先选择课程以启用知识库增强功能');
+    return;
+  }
   
-  // 清空输入框
+  const message = userInput.value;
   userInput.value = '';
   
-  // 添加一个空的AI回复消息，用于流式更新
-  const aiMessageIndex = chatMessages.value.length;
+  // 添加用户消息到聊天记录
+  chatMessages.value.push({
+    role: 'user',
+    content: message,
+    timestamp: Date.now()
+  });
+  
+  // 添加一个空的系统回复作为占位符
   chatMessages.value.push({
     role: 'assistant',
     content: '',
-    sources: []
+    timestamp: Date.now()
   });
   
-  // 显示加载状态
+  // 滚动到底部
+  await nextTick();
+  scrollToBottom();
+  
   loading.value = true;
   
   try {
-    // 构建请求URL，包含授权令牌
-    const token = localStorage.getItem('token');
-    const url = `${API_BASE_URL}/rag/chat?` + new URLSearchParams({
-      message: userMessage,
-      conversation_id: conversationId.value || '',
-      stream: 'true'
-    }).toString();
+    // 构建请求参数
+    const params: any = {
+      message,
+      stream: true
+    };
     
-    // 使用fetch API进行流式请求，而不是EventSource
-    const response = await fetch(url, {
-      method: 'GET',
+    // 根据模式设置参数
+    if (chatMode.value === 'rag' && selectedCourseId.value) {
+      params.course_id = selectedCourseId.value;
+      params.use_rag = true; // 尝试使用RAG，如果失败会自动回退到普通模式
+    } else {
+      params.use_rag = false;
+    }
+    
+    // 如果有对话ID，添加到参数中
+    if (conversationId.value) {
+      params.conversation_id = conversationId.value;
+    }
+    
+    console.log('发送聊天请求:', params);
+    
+    const response = await fetch(`${API_BASE_URL}/rag/chat`, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(params)
     });
     
     if (!response.ok) {
@@ -516,10 +662,10 @@ async function sendMessage() {
             // 处理内容更新
             if (data.content) {
               // 如果是第一个内容块且消息当前为空，去除开头的空白
-              if (!chatMessages.value[aiMessageIndex].content) {
-                chatMessages.value[aiMessageIndex].content = data.content.trimStart();
+              if (!chatMessages.value[chatMessages.value.length - 1].content) {
+                chatMessages.value[chatMessages.value.length - 1].content = data.content.trimStart();
               } else {
-                chatMessages.value[aiMessageIndex].content += data.content;
+                chatMessages.value[chatMessages.value.length - 1].content += data.content;
               }
               
               // 实时渲染Markdown：每隔一定时间或内容达到一定长度时渲染
@@ -543,6 +689,11 @@ async function sendMessage() {
                 conversationId.value = data.conversation_id;
               }
               
+              // 添加引用来源
+              if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+                chatMessages.value[chatMessages.value.length - 1].sources = data.sources;
+              }
+              
               // 最后一次渲染，确保所有内容都已渲染
               chatMessages.value = [...chatMessages.value];
               
@@ -561,8 +712,8 @@ async function sendMessage() {
     console.error('发送消息失败:', error);
     
     // 如果已经添加了AI消息，更新为错误消息
-    if (aiMessageIndex < chatMessages.value.length) {
-      chatMessages.value[aiMessageIndex].content = '抱歉，我遇到了一些问题。请稍后再试。';
+    if (chatMessages.value.length > 1) {
+      chatMessages.value[chatMessages.value.length - 1].content = '抱歉，我遇到了一些问题。请稍后再试。';
     } else {
       // 如果没有添加AI消息，添加一个错误消息
       chatMessages.value.push({
@@ -591,17 +742,14 @@ async function fetchConversations() {
   loadingConversations.value = true;
   
   try {
-    const response = await axios.get(`${API_BASE_URL}/rag/conversations`, {
-      params: { course_id: props.courseId },
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+    const response = await ragAiAPI.getConversations(props.courseId);
     
-    if (response.data.status === 'success') {
-      conversations.value = response.data.conversations;
+    // 由于响应拦截器已经返回response.data，所以这里直接使用response
+    const responseData = response as any;
+    if (responseData && responseData.status === 'success') {
+      conversations.value = responseData.conversations || [];
     } else {
-      throw new Error(response.data.message || '未知错误');
+      throw new Error(responseData?.message || '未知错误');
     }
   } catch (error) {
     console.error('获取对话列表失败:', error);
@@ -619,15 +767,12 @@ async function loadConversation(convId: string): Promise<void> {
   }
   
   try {
-    const response = await axios.get(`${API_BASE_URL}/rag/history`, {
-      params: { conversation_id: convId },
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+    const response = await ragAiAPI.getChatHistory(convId);
     
-    if (response.data.status === 'success') {
-      chatMessages.value = response.data.history.map((msg: any) => ({
+    // 由于响应拦截器已经返回response.data，所以这里直接使用response
+    const responseData = response as any;
+    if (responseData && responseData.status === 'success') {
+      chatMessages.value = responseData.history.map((msg: any) => ({
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp
@@ -635,7 +780,7 @@ async function loadConversation(convId: string): Promise<void> {
       conversationId.value = convId;
       showConversations.value = false;
     } else {
-      throw new Error(response.data.message || '未知错误');
+      throw new Error(responseData?.message || '未知错误');
     }
   } catch (error) {
     console.error('加载对话历史失败:', error);
@@ -670,6 +815,93 @@ function setDefaultUserInitial() {
   
   // 如果无法从localStorage获取，使用默认值
   userInitial.value = 'U';
+}
+
+// 获取课程列表
+async function fetchCourses() {
+  loadingCourses.value = true;
+  try {
+    const response = await courseAPI.getCourses();
+    console.log('课程API响应:', response);
+    
+    // 检查响应格式并正确提取课程数据
+    if (response && typeof response === 'object' && 'courses' in response) {
+      courses.value = (response as any).courses || [];
+    } else if (Array.isArray(response)) {
+      courses.value = response;
+    } else {
+      console.warn('课程API响应格式异常:', response);
+      courses.value = [];
+    }
+    
+    console.log('获取到课程列表:', courses.value);
+    
+    // 如果传入了课程ID但课程不在列表中，添加一个占位符
+    if (props.courseId && !courses.value.find(c => c.id == props.courseId)) {
+      courses.value.push({
+        id: props.courseId,
+        name: `课程 #${props.courseId}`,
+        description: '课程信息加载中...'
+      });
+    }
+  } catch (error) {
+    console.error('获取课程列表失败:', error);
+    courses.value = [];
+    
+    // 如果传入了课程ID，至少添加一个占位符
+    if (props.courseId) {
+      courses.value.push({
+        id: props.courseId,
+        name: `课程 #${props.courseId}`,
+        description: '课程信息加载失败'
+      });
+    }
+  } finally {
+    loadingCourses.value = false;
+  }
+}
+
+function onModeChange() {
+  // 模式切换时的逻辑
+  if (chatMode.value === 'general') {
+    // 切换到普通模式时，清空课程选择
+    selectedCourseId.value = '';
+  } else if (chatMode.value === 'rag') {
+    // 切换到RAG模式时，如果有传入的课程ID，自动选择
+    if (props.courseId) {
+      selectedCourseId.value = props.courseId;
+    }
+  }
+  
+  // 清空当前对话，开始新的对话
+  conversationId.value = '';
+  chatMessages.value = [];
+  
+  // 更新欢迎消息
+  updateWelcomeMessage();
+}
+
+function updateWelcomeMessage() {
+  // 清空现有消息
+  chatMessages.value = [];
+  
+  let welcomeMessage = '';
+  if (chatMode.value === 'general') {
+    welcomeMessage = '你好！我是智能学习助手。有什么可以帮助你的吗？';
+  } else {
+    if (selectedCourseId.value) {
+      const course = courses.value.find(c => c.id == selectedCourseId.value);
+      const courseName = course ? course.name : `课程 #${selectedCourseId.value}`;
+      welcomeMessage = `你好！我是智能学习助手。我已连接到"${courseName}"。我将基于课程的知识库回答，请随时提问！`;
+    } else {
+      welcomeMessage = '你好！我是智能学习助手。请选择课程以启用知识库增强功能。';
+    }
+  }
+  
+  chatMessages.value.push({
+    role: 'assistant',
+    content: welcomeMessage
+  });
 }
 </script>
 

@@ -296,11 +296,33 @@ onMounted(async () => {
   if (authStore.user) {
     await loadGlobalData();
   }
+  
+  // 初始化导航历史记录
+  initNavigationHistory();
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+// 初始化导航历史记录
+function initNavigationHistory() {
+  // 监听路由变化，记录导航历史
+  router.afterEach((to, from) => {
+    // 记录当前路由到历史记录
+    const navigationHistory = JSON.parse(sessionStorage.getItem('navigationHistory') || '[]');
+    
+    // 避免重复记录相同路径
+    if (navigationHistory.length === 0 || navigationHistory[navigationHistory.length - 1] !== from.fullPath) {
+      navigationHistory.push(from.fullPath);
+      // 限制历史记录长度，避免过长
+      if (navigationHistory.length > 20) {
+        navigationHistory.shift();
+      }
+      sessionStorage.setItem('navigationHistory', JSON.stringify(navigationHistory));
+    }
+  });
+}
 
 // 全局错误处理
 window.addEventListener('unhandledrejection', (event) => {

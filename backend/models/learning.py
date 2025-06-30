@@ -1,5 +1,7 @@
 from backend.extensions import db
 from datetime import datetime
+import time
+import json
 
 class LearningRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -58,4 +60,40 @@ class ChatHistory(db.Model):
             'role': self.role,
             'message': self.message,
             'timestamp': self.timestamp
+        }
+
+class KnowledgeBaseQueue(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, failed
+    created_at = db.Column(db.Integer, default=lambda: int(time.time()))
+    completed_at = db.Column(db.Integer, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    progress = db.Column(db.Float, default=0.0)  # 0-100%
+    progress_detail = db.Column(db.Text, nullable=True)  # JSON格式的详细进度信息
+    last_updated = db.Column(db.Integer, default=lambda: int(time.time()))
+    
+    # Add relationship
+    course = db.relationship('Course')
+    
+    def to_dict(self):
+        progress_detail_obj = None
+        if self.progress_detail:
+            try:
+                progress_detail_obj = json.loads(self.progress_detail)
+            except:
+                progress_detail_obj = None
+                
+        return {
+            'id': self.id,
+            'course_id': self.course_id,
+            'file_path': self.file_path,
+            'status': self.status,
+            'created_at': self.created_at,
+            'completed_at': self.completed_at,
+            'error_message': self.error_message,
+            'progress': self.progress,
+            'progress_detail': progress_detail_obj,
+            'last_updated': self.last_updated
         } 

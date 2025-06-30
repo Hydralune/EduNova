@@ -260,10 +260,33 @@ export const adminAPI = {
 
 // RAG和AI功能API
 export const ragAiAPI = {
+  // 聊天相关API
+  chat: (data: { 
+    message: string; 
+    course_id?: number | string; 
+    conversation_id?: string; 
+    stream?: boolean; 
+    use_rag?: boolean 
+  }) => api.post('/rag/chat', data),
+  
+  // 获取聊天历史
+  getChatHistory: (conversationId: string) => 
+    api.get('/rag/history', { params: { conversation_id: conversationId } }),
+  
+  // 获取对话列表
+  getConversations: (courseId?: number | string) => 
+    api.get('/rag/conversations', { params: { course_id: courseId } }),
+  
+  // 获取模块状态
+  getStatus: () => api.get('/rag/status'),
+  
+  // 知识库相关API
   getKnowledgeBaseStatus: () => api.get('/rag/knowledge-base/status'),
   uploadToKnowledgeBase: (data: any) => api.post('/rag/knowledge-base/upload', data),
   searchKnowledgeBase: (data: { query: string; top_k?: number }) =>
     api.post('/rag/search', data),
+  
+  // AI生成功能
   generateCourseContent: (data: any) => api.post('/ai/generate-course-content', data),
   generateAssessment: (data: any) => api.post('/ai/generate-assessment', data),
   autoGradeAnswer: (data: any) => api.post('/ai/auto-grade', data),
@@ -274,6 +297,22 @@ export const ragAiAPI = {
 // 健康检查API
 export const healthAPI = {
   check: () => api.get('/health'),
+}
+
+// RAG知识库API
+export const knowledgeBaseAPI = {
+  addToKnowledgeBase: (courseId: number, filePath: string) =>
+    api.post('/rag/knowledge/add', { course_id: courseId, file_path: filePath }),
+  getKnowledgeBaseStatus: (courseId: number) =>
+    api.get(`/rag/knowledge/status?course_id=${courseId}`),
+  getSupportedFileTypes: () =>
+    api.get('/rag/knowledge/supported-types'),
+  removeFromKnowledgeBase: (queueId: number) =>
+    api.delete('/rag/knowledge/remove', { data: { queue_id: queueId } }),
+  clearQueue: (courseId: number) =>
+    api.delete('/rag/knowledge/clear-queue', { data: { course_id: courseId } }),
+  batchRemove: (queueIds: number[]) =>
+    api.delete('/rag/knowledge/batch-remove', { data: { queue_ids: queueIds } }),
 }
 
 export default api

@@ -21,8 +21,11 @@
       <div v-else class="text-center py-4">
         <p class="text-gray-500">暂无课件资源</p>
       </div>
-      <div class="mt-4">
-        <button @click="closePreview" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md w-full">
+      <div class="mt-4 space-y-2">
+        <button @click="closePreview" class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center w-full">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
           返回课程
         </button>
       </div>

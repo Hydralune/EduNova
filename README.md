@@ -10,15 +10,18 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 - **智能备课与设计**：上传课程大纲或知识库，AI 自动设计教学内容、实训活动和时间安排。
 - **智能考核内容生成**：根据知识点一键生成多样化的考核题目、参考答案及评分标准。
 - **学情数据分析**：自动批改学生答案，提供错误定位和修正建议，并可视化分析学生知识掌握情况，生成教学改进建议。
+- **知识库管理**：上传和管理课程资料，系统自动处理并构建知识库，支持智能问答。
 
 ### 👩‍🎓 **学生端**
 - **在线学习助手**：随时随地提问，AI 结合教学内容进行精准、智能的问答。
 - **实时练习与评测**：根据学习进度和个人需求生成练习题，并获得即时的评测反馈和纠错指导。
+- **知识库检索**：基于课程知识库进行智能问答，获取精准的学习支持。
 
 ### ⚙️ **管理端**
 - **用户与角色管理**：精细化的权限控制，确保系统安全。
 - **课程与资源管理**：集中管理所有课程资源，方便查阅、修改和导出。
 - **教学大屏概览**：实时统计分析平台使用情况、教学效率和学生学习效果，为教学管理提供宏观视角。
+- **知识库监控**：监控知识库构建进度和状态，确保系统正常运行。
 
 ## 🏗️ 系统架构
 
@@ -29,6 +32,7 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 - **核心引擎 (Core Engine)**：
   - **LLM 服务模块**: 封装了对大语言模型的调用。
   - **知识库与 RAG 模块**: 负责知识的存储、向量化和检索，为 LLM 提供生成所需的核心上下文。
+  - **队列管理系统**: 处理文档的异步处理和状态跟踪，确保大文件处理不阻塞主应用。
 - **数据库 (Database)**：使用SQLite持久化存储所有关键数据，如用户信息、课程资料、考核结果等。
 
 ## 🚀 本地开发指南
@@ -40,48 +44,61 @@ EduNova 的功能设计围绕三大核心用户群体：教师、学生和管理
 - **Node.js**: 用于运行前端项目 (推荐 v18 或更高版本)。
 - **Python**: 用于运行后端项目 (推荐 v3.9 或更高版本)。
 
-### 2. 后端设置 (Backend)
+### 2. 快速安装与设置
 
-进入 `backend` 目录，所有后续的后端命令都在此目录下执行。
+您可以使用我们提供的安装脚本一键完成所有依赖安装和初始化：
+
 ```bash
-cd backend
+# 在项目根目录执行
+python setup.py
 ```
+
+或者，您可以按照以下步骤手动安装：
+
+详细的依赖说明和安装指南请参阅 [DEPENDENCIES.md](DEPENDENCIES.md)。
 
 #### a. 安装 Python 依赖
 ```bash
+# 在项目根目录执行
 pip install -r requirements.txt
 ```
 
-#### b. 初始化数据库
+#### b. 安装 Node.js 依赖
 ```bash
-python init_db.py
-```
-
-#### c. 运行后端服务器
-```bash
-python main.py
-```
-后端服务将会在 `http://127.0.0.1:5001` 上运行。
-
----
-
-### 3. 前端设置 (Frontend)
-
-打开一个**新的终端窗口**，进入 `frontend` 目录。
-```bash
-cd frontend
-```
-
-#### a. 安装 Node.js 依赖
-```bash
+# 在项目根目录执行
 npm install
 ```
 
+#### c. 初始化数据库
+```bash
+cd backend
+python init_db.py
+```
+
+### 3. 运行应用
+
+#### a. 运行后端服务器
+```bash
+# 在项目根目录执行
+npm run start:backend
+# 或者: cd backend && python run.py
+```
+后端服务将会在 `http://127.0.0.1:5001` 上运行。
+
 #### b. 运行前端开发服务器
 ```bash
-npm run dev
+# 在项目根目录执行
+npm run start:frontend
+# 或者: cd frontend && npm run dev
 ```
 前端应用将会在一个新端口上运行 (例如 `http://localhost:5173/`)，并会在终端中显示具体的地址。
+
+#### c. 运行知识库处理队列
+```bash
+# 在项目根目录执行
+python process_queue.py
+```
+这将处理所有待处理的知识库文档。更多选项请参阅 [RAG_Queue_Management.md](docs/RAG_Queue_Management.md)。
 
 ### 4. 访问应用
 
@@ -114,12 +131,17 @@ EduNova/
 │   │   ├── learning.py    # 学习记录模型
 │   │   ├── material.py    # 课程资料模型
 │   │   └── user.py        # 用户模型
+│   ├── rag/               # RAG模块
+│   │   ├── create_db.py   # 知识库创建
+│   │   ├── embedding_util.py # 嵌入工具
+│   │   └── rag_query.py   # 知识库查询
+│   ├── tasks/             # 后台任务
+│   │   └── rag_processor.py # RAG处理器
 │   ├── utils/             # 工具函数
 │   ├── extensions.py      # Flask扩展初始化
 │   ├── init_db.py         # 数据库初始化脚本
 │   ├── main.py            # 应用主入口
-│   ├── requirements.txt   # Python依赖
-│   └── run_server.py      # 服务器启动脚本
+│   └── run.py             # 服务器启动脚本
 │
 ├── frontend/              # 前端项目目录
 │   ├── public/            # 静态资源
@@ -137,17 +159,34 @@ EduNova/
 │   │   ├── stores/        # 状态管理
 │   │   └── views/         # 页面视图
 │   ├── index.html         # HTML入口
-│   ├── package.json       # Node.js依赖
+│   ├── package.json       # 前端依赖
 │   ├── tailwind.config.js # Tailwind CSS配置
 │   └── vite.config.ts     # Vite配置
 │
 ├── docs/                  # 项目文档
 │   ├── 智能教学系统 - 完整项目文档.md
 │   ├── RAG_AI_Integration_Guide.md
-│   └── 需求分析.md
+│   ├── RAG_Queue_Management.md # 队列管理文档
+│   ├── 需求分析.md
+│   └── DEPENDENCIES.md    # 依赖说明文档
 │
+├── process_queue.py       # 知识库队列处理脚本
+├── test_rag_upload.py     # RAG上传测试脚本
+├── requirements.txt       # 统一的Python依赖
+├── package.json           # 项目根依赖和脚本
 └── README.md              # 本文档
 ```
+
+## 💡 RAG知识库系统
+
+EduNova 的核心功能之一是基于 RAG (Retrieval-Augmented Generation) 的知识库系统，它允许：
+
+1. **上传课程资料**：支持PDF、Word、文本等多种格式
+2. **自动构建知识库**：系统自动处理文档，构建向量数据库和知识图谱
+3. **智能问答**：学生可以针对课程内容提问，获得精准回答
+4. **知识库管理**：教师可以管理知识库内容，添加或移除资料
+
+详细的队列管理系统文档请参阅 [RAG_Queue_Management.md](docs/RAG_Queue_Management.md)。
 
 ## 📝 许可证
 

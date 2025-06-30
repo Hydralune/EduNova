@@ -182,8 +182,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { useRoute } from 'vue-router';
 import CourseList from '@/components/course/CourseList.vue';
 import AIAssistant from '@/components/ai/AIAssistant.vue';
 import LearningAnalytics from '@/components/analytics/LearningAnalytics.vue';
@@ -192,6 +193,7 @@ import WelcomeMessage from '@/components/WelcomeMessage.vue';
 import AssessmentList from '@/components/assessment/AssessmentList.vue';
 
 const authStore = useAuthStore();
+const route = useRoute();
 const userId = computed(() => authStore.user?.id);
 
 // 标签页
@@ -204,6 +206,13 @@ const tabs = [
   { id: 'knowledge-base', name: '知识库' }
 ];
 const activeTab = ref('dashboard');
+
+// 监听路由查询参数变化，更新活动标签
+watch(() => route.query.activeTab, (newTab) => {
+  if (newTab && typeof newTab === 'string' && tabs.some(tab => tab.id === newTab)) {
+    activeTab.value = newTab;
+  }
+}, { immediate: true });
 
 // 示例数据
 const coursesCount = ref(3);
