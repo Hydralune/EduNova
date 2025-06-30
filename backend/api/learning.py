@@ -803,22 +803,49 @@ def remove_student_from_course(course_id, student_id):
 # @jwt_required()  # 暂时禁用JWT认证要求
 def get_assessments():
     """获取评估列表"""
+    print("\n=== 获取评估列表 ===")
     # 获取查询参数
-    course_id = request.args.get('course_id')
-    is_active = request.args.get('is_active')
+    course_id = request.args.get('course_id', type=int)
+    status = request.args.get('status')
+    search = request.args.get('search')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
+    
+    print(f"查询参数: course_id={course_id}, status={status}, search={search}, page={page}, per_page={per_page}")
     
     # 构建查询
     query = Assessment.query
     
     # 应用过滤条件
     if course_id:
+        print(f"过滤课程: {course_id}")
         query = query.filter_by(course_id=course_id)
     
-    if is_active is not None:
-        is_active_bool = is_active.lower() == 'true'
-        query = query.filter_by(is_active=is_active_bool)
+    if status:
+        print(f"过滤状态: {status}")
+        if status == 'active':
+            query = query.filter_by(is_active=True, is_published=True)
+        elif status == 'upcoming':
+            query = query.filter(
+                Assessment.start_date > datetime.utcnow(),
+                Assessment.is_published == True
+            )
+        elif status == 'past':
+            query = query.filter(
+                Assessment.due_date < datetime.utcnow(),
+                Assessment.is_published == True
+            )
+    else:
+        # 默认显示所有评估，包括未发布的
+        print("显示所有评估")
+    
+    if search:
+        print(f"搜索关键词: {search}")
+        search_term = f"%{search}%"
+        query = query.filter(Assessment.title.ilike(search_term))
+    
+    # 按创建时间倒序排序
+    query = query.order_by(Assessment.created_at.desc())
     
     # 执行分页查询
     assessments_pagination = query.paginate(page=page, per_page=per_page)
@@ -827,7 +854,13 @@ def get_assessments():
     assessments_data = []
     for assessment in assessments_pagination.items:
         assessment_dict = assessment.to_dict()
+        # 添加提交数量信息
+        assessment_dict['submission_count'] = len(assessment.student_answers)
         assessments_data.append(assessment_dict)
+    
+    print(f"找到 {len(assessments_data)} 个评估")
+    for assessment in assessments_data:
+        print(f"- {assessment['title']} (ID: {assessment['id']})")
     
     return jsonify({
         'assessments': assessments_data,
@@ -956,18 +989,73 @@ def submit_assessment(assessment_id):
         submitted_at=datetime.utcnow()
     )
     
-    # 自动评分逻辑（简单版本）
+    # 自动评分逻辑
     score = 0
-    assessment_questions = json.loads(assessment.questions)
-    student_answers = data.get('answers', {})
+    assessment_data = json.loads(assessment.questions)
+    student_answers = data.get('answers', [])
     
-    # 这里需要根据实际的数据结构进行调整
-    # 简单示例：
-    # for question_id, answer in student_answers.items():
-    #     correct_answer = next((q for q in assessment_questions if q['id'] == int(question_id)), {}).get('answer')
-    #     if answer == correct_answer:
-    #         score += 1
-    
+    # 确保assessment_data是一个字典，包含sections字段
+    if isinstance(assessment_data, dict) and 'sections' in assessment_data:
+        sections = assessment_data['sections']
+    else:
+        # 如果不是新格式，将问题列表转换为单个section
+        sections = [{
+            'questions': assessment_data if isinstance(assessment_data, list) else [],
+            'score_per_question': assessment.total_score / len(assessment_data) if isinstance(assessment_data, list) and len(assessment_data) > 0 else 0
+        }]
+
+    question_index = 0
+    for section in sections:
+        for question in section['questions']:
+            if question_index >= len(student_answers):
+                break
+
+            user_answer = student_answers[question_index]
+            is_correct = False
+
+            if question['type'] == 'multiple_choice':
+                # 检查选项是否匹配（考虑字母和数字格式）
+                if isinstance(user_answer, str) and len(user_answer) == 1:
+                    correct_index = int(question['answer'])
+                    user_index = ord(user_answer) - ord('A')
+                    is_correct = correct_index == user_index
+                else:
+                    is_correct = str(user_answer) == str(question['answer'])
+
+            elif question['type'] == 'multiple_select':
+                # 多选题比较（转换为集合进行比较）
+                if isinstance(user_answer, list) and isinstance(question['answer'], list):
+                    user_set = set(str(x) for x in user_answer)
+                    correct_set = set(str(x) for x in question['answer'])
+                    is_correct = user_set == correct_set
+
+            elif question['type'] == 'fill_in_blank':
+                # 填空题比较（考虑多个空的情况）
+                if isinstance(question['answer'], list):
+                    if isinstance(user_answer, list) and len(user_answer) == len(question['answer']):
+                        is_correct = all(
+                            str(u).lower().strip() == str(c).lower().strip()
+                            for u, c in zip(user_answer, question['answer'])
+                        )
+                else:
+                    # 单个答案的情况
+                    if isinstance(user_answer, list):
+                        user_answer = user_answer[0] if user_answer else ''
+                    is_correct = str(user_answer).lower().strip() == str(question['answer']).lower().strip()
+
+            elif question['type'] == 'true_false':
+                # 判断题比较
+                is_correct = str(user_answer).lower() == str(question['answer']).lower()
+
+            # 简答题和论述题需要人工评分
+            elif question['type'] in ['short_answer', 'essay']:
+                pass
+
+            if is_correct:
+                score += section['score_per_question']
+
+            question_index += 1
+
     student_answer.score = score
     
     db.session.add(student_answer)
@@ -1080,5 +1168,30 @@ def grade_submission(submission_id):
     return jsonify({
         'message': 'Submission graded successfully',
         'submission': submission.to_dict()
+    })
+
+@learning_bp.route('/courses/<int:course_id>/assessments', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_course_assessments(course_id):
+    """获取课程的所有评估"""
+    # 检查课程是否存在
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取课程的所有评估
+    assessments = Assessment.query.filter_by(course_id=course_id).all()
+    
+    # 准备响应数据
+    assessments_data = []
+    for assessment in assessments:
+        assessment_dict = assessment.to_dict()
+        # 添加提交次数信息
+        assessment_dict['submission_count'] = StudentAnswer.query.filter_by(assessment_id=assessment.id).count()
+        assessments_data.append(assessment_dict)
+    
+    return jsonify({
+        'assessments': assessments_data,
+        'total': len(assessments_data)
     })
 

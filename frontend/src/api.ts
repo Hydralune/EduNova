@@ -187,17 +187,55 @@ export const materialAPI = {
 
 // 评估管理API
 export const assessmentAPI = {
-  getAssessments: (courseId: number) => api.get(`/courses/${courseId}/assessments`),
-  getAssessment: (assessmentId: number) => api.get(`/assessments/${assessmentId}`),
-  createAssessment: (courseId: number, data: any) =>
-    api.post(`/courses/${courseId}/assessments`, data),
-  submitAnswer: (assessmentId: number, data: any) =>
-    api.post(`/assessments/${assessmentId}/submit`, data),
-  getAssessmentAnswers: (assessmentId: number) =>
-    api.get(`/assessments/${assessmentId}/answers`),
-  gradeAnswer: (answerId: number, data: any) =>
-    api.post(`/answers/${answerId}/grade`, data),
-  getMyAnswers: () => api.get('/my-answers'),
+  // 获取评估列表
+  getAssessments: (courseId?: number, params?: any) => {
+    return api.get('/assessments', { params: { course_id: courseId, ...params } });
+  },
+
+  // 获取单个评估
+  getAssessment: (assessmentId: number) => {
+    return api.get(`/assessments/${assessmentId}`);
+  },
+
+  // 获取课程的评估列表
+  getCourseAssessments: (courseId: number): Promise<{ assessments: any[]; total: number }> => {
+    return api.get(`/courses/${courseId}/assessments`);
+  },
+
+  // 创建评估
+  createAssessment: (data: any) => {
+    return api.post('/assessments', data);
+  },
+
+  // 更新评估
+  updateAssessment: (assessmentId: number, data: any) => {
+    return api.put(`/assessments/${assessmentId}`, data);
+  },
+
+  // 删除评估
+  deleteAssessment: (assessmentId: number) => {
+    return api.delete(`/assessments/${assessmentId}`);
+  },
+
+  // 提交评估答案
+  submitAssessment: (assessmentId: number, data: any) => {
+    return api.post(`/assessments/${assessmentId}/submit`, data);
+  },
+
+  // 获取我的答案
+  getMyAnswers: () => {
+    return api.get('/assessments/my-answers');
+  },
+
+  // 获取评估的提交记录
+  getSubmissionsByAssessment: (assessmentId: number) => {
+    return api.get(`/assessments/${assessmentId}/submissions`);
+  },
+
+  // 获取评估的提交数量
+  getSubmissionCount: (assessmentId: number) => {
+    return api.get(`/assessments/${assessmentId}/submission-count`);
+  }
 }
 
 // 学习助手API

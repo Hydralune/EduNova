@@ -106,6 +106,7 @@ const router = createRouter({
       path: '/assessments/:id',
       name: 'assessmentDetail',
       component: AssessmentView,
+      props: route => ({ assessmentId: parseInt(route.params.id) }),
       meta: { requiresAuth: true }
     },
     {

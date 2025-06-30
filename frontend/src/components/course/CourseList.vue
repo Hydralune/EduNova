@@ -13,14 +13,14 @@
     
     <div class="mb-4 flex justify-between">
       <div class="flex gap-2">
-        <select v-model="filters.category" class="border rounded-md px-3 py-2">
+        <select v-model="filters.category" class="border rounded-md px-3 py-2 min-w-[120px]">
           <option value="">所有分类</option>
           <option value="计算机科学">计算机科学</option>
           <option value="数学">数学</option>
           <option value="语言">语言</option>
           <option value="自然科学">自然科学</option>
         </select>
-        <select v-model="filters.difficulty" class="border rounded-md px-3 py-2">
+        <select v-model="filters.difficulty" class="border rounded-md px-3 py-2 min-w-[120px]">
           <option value="">所有难度</option>
           <option value="beginner">初级</option>
           <option value="intermediate">中级</option>
@@ -154,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, computed, watch, onBeforeUnmount } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI } from '../../api';
 
@@ -376,4 +376,36 @@ async function confirmDeleteCourse(course: Course) {
     }
   }
 }
+
+// 在script setup部分添加watch
+watch(
+  [() => filters.category, () => filters.difficulty, () => filters.search],
+  () => {
+    currentPage.value = 1; // 重置页码
+    fetchCourses();
+  },
+  { deep: true }
+);
+
+// 添加防抖处理搜索
+const debouncedSearch = ref('');
+watch(
+  () => filters.search,
+  (newVal) => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      debouncedSearch.value = newVal;
+      currentPage.value = 1;
+      fetchCourses();
+    }, 300);
+  }
+);
+
+let searchDebounceTimer: NodeJS.Timeout | null = null;
+
+onBeforeUnmount(() => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+});
 </script> 

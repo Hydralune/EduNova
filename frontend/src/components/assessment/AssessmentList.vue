@@ -14,7 +14,7 @@
     
     <!-- 过滤器 -->
     <div class="bg-white p-4 rounded-lg shadow-md mb-6">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">课程</label>
           <select 
@@ -25,18 +25,6 @@
             <option v-for="course in courses" :key="course.id" :value="course.id">
               {{ course.name }}
             </option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">状态</label>
-          <select 
-            v-model="filters.status"
-            class="w-full px-3 py-2 border rounded-md"
-          >
-            <option value="">全部状态</option>
-            <option value="active">进行中</option>
-            <option value="upcoming">即将开始</option>
-            <option value="past">已结束</option>
           </select>
         </div>
         <div>
@@ -210,12 +198,25 @@
         </button>
       </div>
     </div>
+    
+    <!-- 添加评估编辑器模态框 -->
+    <div v-if="showEditor" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <AssessmentEditor 
+          :assessment="currentAssessment"
+          @save="handleSaveAssessment"
+          @cancel="showEditor = false"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import AssessmentEditor from './AssessmentEditor.vue';
+import { courseAPI, assessmentAPI } from '@/api';
 
 const props = defineProps({
   courseId: {
@@ -244,7 +245,6 @@ const itemsPerPage = ref(10);
 // 过滤器
 const filters = ref({
   courseId: props.courseId || '',
-  status: '',
   search: ''
 });
 
@@ -279,79 +279,29 @@ const paginationRange = computed(() => {
   return range;
 });
 
+// 添加新的状态变量
+const showEditor = ref(false);
+const currentAssessment = ref(null);
+
 // 方法
 const fetchAssessments = async () => {
   loading.value = true;
   
   try {
     // 构建查询参数
-    const params = new URLSearchParams();
-    params.append('page', currentPage.value);
-    params.append('per_page', itemsPerPage.value);
-    
-    if (filters.value.courseId) {
-      params.append('course_id', filters.value.courseId);
-    }
-    
-    if (filters.value.status === 'active') {
-      params.append('is_active', 'true');
-    } else if (filters.value.status === 'inactive') {
-      params.append('is_active', 'false');
-    }
-    
-    if (filters.value.search) {
-      params.append('search', filters.value.search);
-    }
-    
-    // 发送请求
-    // 实际应用中，这里应该调用API
-    // const response = await fetch(`/api/assessments?${params.toString()}`);
-    // const data = await response.json();
-    
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const data = {
-      assessments: [
-        {
-          id: 1,
-          title: '第一章测验',
-          description: '测试对第一章内容的理解',
-          course_id: 1,
-          total_score: 100,
-          duration: '30分钟',
-          due_date: '2025-07-15T23:59:59Z',
-          start_date: '2025-06-01T09:00:00Z',
-          max_attempts: 3,
-          is_active: true,
-          created_at: '2025-06-01T10:00:00Z',
-          updated_at: '2025-06-01T10:00:00Z',
-          submission_count: 5
-        },
-        {
-          id: 2,
-          title: '期中考试',
-          description: '涵盖第1-5章内容',
-          course_id: 1,
-          total_score: 100,
-          duration: '120分钟',
-          due_date: '2025-08-15T23:59:59Z',
-          start_date: '2025-08-15T09:00:00Z',
-          max_attempts: 1,
-          is_active: false,
-          created_at: '2025-06-01T10:00:00Z',
-          updated_at: '2025-06-01T10:00:00Z',
-          submission_count: 0
-        }
-      ],
-      total: 2,
-      pages: 1,
-      current_page: 1
+    const params = {
+      page: currentPage.value,
+      per_page: itemsPerPage.value,
+      search: filters.value.search || undefined
     };
     
-    assessments.value = data.assessments;
-    totalItems.value = data.total;
-    totalPages.value = data.pages;
-    currentPage.value = data.current_page;
+    // 获取评估列表
+    const response = await assessmentAPI.getAssessments(filters.value.courseId || undefined, params);
+    
+    assessments.value = response.assessments || [];
+    totalItems.value = response.total || 0;
+    totalPages.value = response.pages || 1;
+    currentPage.value = response.current_page || 1;
     
     // 如果是学生，获取提交状态
     if (isStudent.value) {
@@ -366,19 +316,8 @@ const fetchAssessments = async () => {
 
 const fetchCourses = async () => {
   try {
-    // 实际应用中，这里应该调用API
-    // const response = await fetch('/api/courses');
-    // const data = await response.json();
-    
-    // 模拟数据
-    const data = {
-      courses: [
-        { id: 1, name: 'Web开发基础' },
-        { id: 2, name: '前端框架进阶' }
-      ]
-    };
-    
-    courses.value = data.courses;
+    const response = await courseAPI.getMyCourses();
+    courses.value = response.courses || [];
   } catch (error) {
     console.error('获取课程列表失败:', error);
   }
@@ -432,8 +371,16 @@ const getCourseNameById = (courseId) => {
 };
 
 const getTotalQuestions = (assessment) => {
-  // 实际应用中，应该从评估的questions字段中计算题目数量
-  return 10; // 示例值
+  if (!assessment) return 0;
+  if (assessment.questions && Array.isArray(assessment.questions)) {
+    return assessment.questions.length;
+  }
+  if (assessment.sections && Array.isArray(assessment.sections)) {
+    return assessment.sections.reduce((total, section) => {
+      return total + (section.questions ? section.questions.length : 0);
+    }, 0);
+  }
+  return 0;
 };
 
 const formatDate = (dateString) => {
@@ -501,16 +448,46 @@ const canTakeAssessment = (assessment) => {
 };
 
 const createNewAssessment = () => {
-  emit('create');
+  currentAssessment.value = {
+    title: '',
+    description: '',
+    course_id: props.courseId || '',
+    total_score: 100,
+    questions: [],
+    is_active: false
+  };
+  showEditor.value = true;
+};
+
+const handleSaveAssessment = async (assessment) => {
+  try {
+    if (assessment.id) {
+      // 更新评估
+      await assessmentAPI.updateAssessment(assessment.id, assessment);
+    } else {
+      // 创建评估
+      await assessmentAPI.createAssessment(assessment);
+    }
+    showEditor.value = false;
+    await fetchAssessments();
+  } catch (error) {
+    console.error('保存评估失败:', error);
+  }
 };
 
 const editAssessment = (assessment) => {
-  emit('edit', assessment);
+  currentAssessment.value = { ...assessment };
+  showEditor.value = true;
 };
 
-const deleteAssessment = (assessment) => {
-  if (confirm(`确定要删除评估 "${assessment.title}" 吗？`)) {
-    emit('delete', assessment);
+const deleteAssessment = async (assessment) => {
+  if (!confirm('确定要删除这个评估吗？')) return;
+  
+  try {
+    await assessmentAPI.deleteAssessment(assessment.id);
+    await fetchAssessments();
+  } catch (error) {
+    console.error('删除评估失败:', error);
   }
 };
 
@@ -546,4 +523,9 @@ onMounted(() => {
   fetchCourses();
   fetchAssessments();
 });
+
+// 监听过滤器变化
+watch(filters, () => {
+  fetchAssessments();
+}, { deep: true });
 </script> 
