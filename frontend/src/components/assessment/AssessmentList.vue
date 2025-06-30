@@ -371,8 +371,16 @@ const getCourseNameById = (courseId) => {
 };
 
 const getTotalQuestions = (assessment) => {
-  // 实际应用中，应该从评估的questions字段中计算题目数量
-  return 10; // 示例值
+  if (!assessment) return 0;
+  if (assessment.questions && Array.isArray(assessment.questions)) {
+    return assessment.questions.length;
+  }
+  if (assessment.sections && Array.isArray(assessment.sections)) {
+    return assessment.sections.reduce((total, section) => {
+      return total + (section.questions ? section.questions.length : 0);
+    }, 0);
+  }
+  return 0;
 };
 
 const formatDate = (dateString) => {

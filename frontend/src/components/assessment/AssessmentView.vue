@@ -17,31 +17,31 @@
 
         <!-- 教师查看模式 -->
         <div v-else-if="isTeacher && !editMode">
-          <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
-            <div class="flex justify-between items-center mb-4">
-              <div>
-                <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
-                <p class="text-gray-600">{{ assessment.description }}</p>
-              </div>
-              <div class="text-right">
-                <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
-                <p class="text-sm text-gray-600">时间限制: {{ assessment.duration }}</p>
-                <p v-if="assessment.due_date" class="text-sm text-gray-600">截止日期: {{ formatDate(assessment.due_date) }}</p>
-              </div>
-            </div>
-          </div>
-
+    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
+          <p class="text-gray-600">{{ assessment.description }}</p>
+        </div>
+        <div class="text-right">
+          <p class="text-sm text-gray-600">总分: {{ assessment.total_score }} 分</p>
+          <p class="text-sm text-gray-600">时间限制: {{ assessment.duration }}</p>
+          <p v-if="assessment.due_date" class="text-sm text-gray-600">截止日期: {{ formatDate(assessment.due_date) }}</p>
+        </div>
+      </div>
+        </div>
+        
           <!-- 题目预览 -->
           <div class="space-y-8">
-            <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-              <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
-              <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
-              
+      <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
+        <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
+        
               <div class="space-y-6">
-                <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
-                  <div class="flex">
-                    <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
-                    <div class="flex-1">
+          <div v-for="(question, qIndex) in section.questions" :key="qIndex" class="border-b pb-4 last:border-b-0">
+            <div class="flex">
+              <span class="font-medium mr-2">{{ qIndex + 1 }}.</span>
+              <div class="flex-1">
                       <p class="mb-3" v-html="question.stem"></p>
                       
                       <!-- 选择题选项 -->
@@ -51,7 +51,13 @@
                           <span v-html="option"></span>
                         </div>
                         <p class="text-sm text-gray-600 mt-2">
-                          正确答案: {{ Array.isArray(question.answer) ? question.answer.join(', ') : question.answer }}
+                          正确答案: {{ 
+                            Array.isArray(question.answer) 
+                              ? question.answer.map(ans => String.fromCharCode(65 + Number(ans))).join(', ') 
+                              : question.answer !== null && question.answer !== undefined 
+                                ? String.fromCharCode(65 + Number(question.answer))
+                                : '未设置'
+                          }}
                         </p>
                       </div>
 
@@ -83,7 +89,7 @@
             </div>
           </div>
         </div>
-
+        
         <!-- 学生做题模式 -->
         <div v-else class="assessment-player">
           <!-- 评估头部信息 -->
@@ -211,12 +217,12 @@
                 >
                   <div class="w-6 h-6 flex items-center justify-center border rounded mr-3">
                     {{ String.fromCharCode(65 + optIndex) }}
-                  </div>
+            </div>
                   <div v-html="option"></div>
-                </div>
-              </div>
-
-              <!-- 填空题 -->
+          </div>
+        </div>
+        
+        <!-- 填空题 -->
               <div v-if="currentQuestion.type === 'fill_in_blank'" class="space-y-4">
                 <div 
                   v-for="(_, blankIndex) in currentAnswers[currentQuestionIndex]" 
@@ -229,10 +235,10 @@
                     v-model="currentAnswers[currentQuestionIndex][blankIndex]"
                     class="border rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-              </div>
-
-              <!-- 判断题 -->
+          </div>
+        </div>
+        
+        <!-- 判断题 -->
               <div v-if="currentQuestion.type === 'true_false'" class="space-y-3">
                 <div 
                   v-for="(option, value) in { true: '正确', false: '错误' }" 
@@ -245,19 +251,19 @@
                 >
                   <div class="w-6 h-6 flex items-center justify-center border rounded-full mr-3"></div>
                   <div>{{ option }}</div>
-                </div>
-              </div>
-
-              <!-- 简答题 -->
+          </div>
+        </div>
+        
+        <!-- 简答题 -->
               <div v-if="currentQuestion.type === 'short_answer'" class="mt-4">
                 <textarea 
                   v-model="currentAnswers[currentQuestionIndex]"
-                  rows="4"
+                  rows="4" 
                   class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="请输入您的答案"
                 ></textarea>
-              </div>
-
+        </div>
+        
               <!-- 论述题 -->
               <div v-if="currentQuestion.type === 'essay'" class="mt-4">
                 <textarea 
@@ -266,8 +272,8 @@
                   class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="请输入您的答案"
                 ></textarea>
-              </div>
-
+      </div>
+      
               <!-- 导航按钮 -->
               <div class="flex justify-between mt-8">
                 <button 
@@ -280,19 +286,19 @@
                 >
                   上一题
                 </button>
-                <button 
-                  @click="saveProgress"
-                  class="px-4 py-2 border rounded-md hover:bg-gray-50"
-                >
-                  保存进度
-                </button>
-                <button 
+        <button 
+          @click="saveProgress" 
+          class="px-4 py-2 border rounded-md hover:bg-gray-50"
+        >
+          保存进度
+        </button>
+        <button 
                   v-if="currentQuestionIndex === totalQuestions - 1"
                   @click="showSubmitConfirm = true"
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  提交答案
-                </button>
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          提交答案
+        </button>
                 <button 
                   v-else
                   @click="nextQuestion"
@@ -301,46 +307,46 @@
                   下一题
                 </button>
               </div>
-            </div>
-          </div>
-
-          <!-- 结果展示 -->
-          <div v-if="submitted && showResults" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4">评估结果</h3>
-            <div class="flex justify-between items-center mb-6">
-              <div>
-                <p class="text-lg">得分: <span class="font-bold">{{ score }}</span> / {{ assessment.total_score }}</p>
-              </div>
-              <div>
-                <p class="text-sm text-gray-600">提交时间: {{ formatDate(submissionTime) }}</p>
-              </div>
-            </div>
-          </div>
+      </div>
+    </div>
+    
+    <!-- 结果展示 -->
+    <div v-if="submitted && showResults" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <h3 class="text-xl font-semibold mb-4">评估结果</h3>
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <p class="text-lg">得分: <span class="font-bold">{{ score }}</span> / {{ assessment.total_score }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-600">提交时间: {{ formatDate(submissionTime) }}</p>
         </div>
       </div>
-
-      <!-- 确认提交对话框 -->
-      <div v-if="showSubmitConfirm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md">
-          <h3 class="text-xl font-bold mb-4">确认提交</h3>
-          <p class="mb-4">您确定要提交此评估吗？提交后将无法修改答案。</p>
-          <div class="flex justify-end gap-3">
-            <button 
-              @click="showSubmitConfirm = false"
-              class="px-4 py-2 border rounded-md hover:bg-gray-50"
-            >
-              取消
-            </button>
-            <button 
-              @click="confirmSubmit"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              确认提交
-            </button>
           </div>
+      </div>
+    </div>
+    
+    <!-- 确认提交对话框 -->
+    <div v-if="showSubmitConfirm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 class="text-xl font-bold mb-4">确认提交</h3>
+        <p class="mb-4">您确定要提交此评估吗？提交后将无法修改答案。</p>
+        <div class="flex justify-end gap-3">
+          <button 
+            @click="showSubmitConfirm = false" 
+              class="px-4 py-2 border rounded-md hover:bg-gray-50"
+          >
+            取消
+          </button>
+          <button 
+            @click="confirmSubmit" 
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            确认提交
+          </button>
         </div>
       </div>
     </div>
+  </div>
   </main>
 </template>
 
@@ -491,7 +497,7 @@ const fetchAssessment = async () => {
         stem: q.content || q.stem || '',  // 兼容不同的题目格式
         options: q.options || [],
         type: q.type || 'multiple_choice',
-        answer: q.answer || '',
+        answer: q.answer,  // 不设置默认值，保持原始值
         // 确保判断题的答案是字符串类型
         ...(q.type === 'true_false' ? { answer: String(q.answer) } : {})
       }))
