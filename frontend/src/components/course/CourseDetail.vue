@@ -312,7 +312,7 @@
               <thead class="bg-gray-50">
                 <tr>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">进度</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">评估完成情况</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后活动</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                 </tr>
@@ -330,11 +330,17 @@
                       </div>
                     </div>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="w-full bg-gray-200 rounded-full h-2.5">
-                      <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${student.progress}%`"></div>
+                  <td class="px-6 py-4">
+                    <div v-if="student.assessments && student.assessments.length > 0" class="space-y-2">
+                      <div v-for="assessment in student.assessments" :key="assessment.assessment_id" class="flex items-center gap-2">
+                        <span class="text-sm truncate max-w-xs" :title="assessment.title">{{ assessment.title }}:</span>
+                        <span v-if="assessment.completed" class="text-sm text-green-600">
+                          {{ assessment.score }}/{{ assessment.total_score }}
+                        </span>
+                        <span v-else class="text-sm text-gray-500">未完成</span>
                     </div>
-                    <div class="text-xs text-gray-500 mt-1">{{ student.progress }}%</div>
+                    </div>
+                    <div v-else class="text-sm text-gray-500">暂无评估</div>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {{ student.last_activity }}
@@ -448,7 +454,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI, materialAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
@@ -479,11 +485,19 @@ interface Material {
   updated_at: string;
 }
 
+interface Assessment {
+  assessment_id: number;
+  title: string;
+  completed: boolean;
+  score: number;
+  total_score: number;
+}
+
 interface Student {
   id: number;
   name: string;
   email: string;
-  progress: number;
+  assessments: Assessment[];
   last_activity: string;
 }
 
@@ -596,8 +610,10 @@ const router = useRouter();
 onMounted(async () => {
   try {
     loading.value = true;
+    // 首先获取课程信息
+    await fetchCourse();
+    // 然后并行获取其他数据
     await Promise.all([
-      fetchCourse(),
       fetchMaterials(),
       fetchStudents(),
       fetchAssessments()
@@ -775,14 +791,24 @@ function getMaterialIcon(materialType: string) {
   }
 }
 
+import { debounce } from 'lodash-es';
+
 const students = ref<Student[]>([]);
 const availableStudents = ref<AvailableStudent[]>([]);
 const selectedStudents = ref<number[]>([]);
 const isLoadingStudents = ref(false);
 const studentError = ref('');
 
+// 添加 watch 处理器
+watch(studentSearch, debounce(() => {
+  filterStudents();
+}, 300));
+
 async function fetchStudents() {
-  if (!course.value) return;
+  if (!course.value?.id) {
+    console.error('课程信息不存在，无法获取学生列表');
+    return;
+  }
   
   isLoadingStudents.value = true;
   studentError.value = '';
@@ -790,10 +816,28 @@ async function fetchStudents() {
   try {
     const response = await courseAPI.getCourseStudents(course.value.id);
     const responseData = response as any;
-    students.value = responseData.students as Student[];
+    if (responseData && Array.isArray(responseData.students)) {
+      const allStudents = responseData.students as Student[];
+      
+      // 如果有搜索关键词，进行本地过滤
+      if (studentSearch.value.trim()) {
+        const searchTerm = studentSearch.value.toLowerCase().trim();
+        students.value = allStudents.filter(student => 
+          student.name.toLowerCase().includes(searchTerm) ||
+          student.email.toLowerCase().includes(searchTerm)
+        );
+      } else {
+        students.value = allStudents;
+      }
+    } else {
+      console.error('获取学生列表返回的数据格式不正确:', responseData);
+      studentError.value = '获取学生列表失败';
+      students.value = [];
+    }
   } catch (error) {
     console.error('获取学生列表失败:', error);
     studentError.value = '获取学生列表失败';
+    students.value = [];
   } finally {
     isLoadingStudents.value = false;
   }
@@ -870,11 +914,33 @@ function openAddStudentModal() {
   fetchAvailableStudents();
 }
 
-function filterStudents() {
+async function filterStudents() {
   if (!course.value) return;
   
-  // 使用搜索参数重新获取学生列表
-  fetchStudents();
+  isLoadingStudents.value = true;
+  studentError.value = '';
+  
+  try {
+    const response = await courseAPI.getCourseStudents(course.value.id);
+    const responseData = response as any;
+    const allStudents = responseData.students as Student[];
+    
+    // 如果有搜索关键词，进行本地过滤
+    if (studentSearch.value.trim()) {
+      const searchTerm = studentSearch.value.toLowerCase().trim();
+      students.value = allStudents.filter(student => 
+        student.name.toLowerCase().includes(searchTerm) ||
+        student.email.toLowerCase().includes(searchTerm)
+      );
+    } else {
+      students.value = allStudents;
+    }
+  } catch (error) {
+    console.error('获取学生列表失败:', error);
+    studentError.value = '获取学生列表失败';
+  } finally {
+    isLoadingStudents.value = false;
+  }
 }
 
 function previewMaterial(materialId: number) {

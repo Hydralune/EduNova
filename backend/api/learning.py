@@ -503,6 +503,9 @@ def get_course_students(course_id):
                 filtered_students.append(student)
         students = filtered_students
     
+    # 获取课程的所有评估
+    assessments = Assessment.query.filter_by(course_id=course_id).all()
+    
     # 准备响应数据
     students_data = []
     for student in students:
@@ -512,23 +515,40 @@ def get_course_students(course_id):
             course_id=course_id
         ).order_by(LearningRecord.timestamp.desc()).first()
         
-        # 计算学生进度（这里简化为随机值，实际应用中应该基于完成的材料和评估）
-        progress = 0
-        if learning_records:
-            # 这里可以实现更复杂的进度计算逻辑
-            progress = 50  # 示例值
-        
         # 获取最后活动时间
         last_activity = None
         if learning_records:
             last_activity = learning_records.timestamp.strftime('%Y-%m-%d %H:%M')
+        
+        # 获取学生的评估完成情况
+        assessment_status = []
+        for assessment in assessments:
+            # 获取学生的最新提交
+            latest_submission = StudentAnswer.query.filter_by(
+                student_id=student.id,
+                assessment_id=assessment.id
+            ).order_by(StudentAnswer.submitted_at.desc()).first()
+            
+            status = {
+                'assessment_id': assessment.id,
+                'title': assessment.title,
+                'completed': False,
+                'score': 0,
+                'total_score': assessment.total_score
+            }
+            
+            if latest_submission:
+                status['completed'] = True
+                status['score'] = latest_submission.score
+            
+            assessment_status.append(status)
         
         # 构建学生数据
         student_data = {
             'id': student.id,
             'name': student.full_name or student.username,
             'email': student.email,
-            'progress': progress,
+            'assessments': assessment_status,
             'last_activity': last_activity or '未活动'
         }
         students_data.append(student_data)

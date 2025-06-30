@@ -627,7 +627,7 @@ const confirmSubmit = () => {
   showResults.value = true;
 };
 
-  // 计算得分（简单模拟）
+// 计算得分（简单模拟）
 const calculateScore = () => {
   let totalScore = 0;
   let questionIndex = 0;
@@ -654,7 +654,7 @@ const calculateScore = () => {
           break;
 
         case 'fill_in_blank':
-          if (Array.isArray(question.answer)) {
+        if (Array.isArray(question.answer)) {
             isCorrect = question.answer.every((ans, i) => 
               userAnswer[i]?.toLowerCase().trim() === ans.toLowerCase().trim()
             );
@@ -674,7 +674,7 @@ const calculateScore = () => {
       }
 
       if (isCorrect) {
-        totalScore += section.score_per_question;
+          totalScore += section.score_per_question;
       }
       questionIndex++;
     });
