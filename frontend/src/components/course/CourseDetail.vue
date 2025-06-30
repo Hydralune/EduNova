@@ -62,13 +62,35 @@
         <div v-if="activeTab === 'chapters'" class="p-6">
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg font-semibold">章节内容</h3>
-            <button 
-              v-if="canEdit" 
-              @click="showAddChapterModal = true"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md"
-            >
-              添加章节
-            </button>
+            <div class="flex space-x-2">
+              <button 
+                v-if="canEdit && course.chapters && course.chapters.length > 0" 
+                @click="openEditChapterModal"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+                修改章节
+              </button>
+              <button 
+                v-if="canEdit && course.chapters && course.chapters.length > 0" 
+                @click="generateChaptersWithAI"
+                class="px-4 py-2 bg-green-600 text-white rounded-md flex items-center"
+                :disabled="isGeneratingChapters"
+              >
+                <span v-if="isGeneratingChapters" class="mr-1">
+                  <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 011-1h.5a1.5 1.5 0 000-3H6a1 1 0 01-1-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z" />
+                </svg>
+                {{ isGeneratingChapters ? '生成中...' : '使用AI重新生成' }}
+              </button>
+            </div>
           </div>
 
           <div v-if="course.chapters && course.chapters.length > 0" class="space-y-4">
@@ -90,13 +112,35 @@
           </div>
           <div v-else class="text-center py-10">
             <p class="text-gray-500">暂无章节内容</p>
-            <button 
-              v-if="canEdit" 
-              @click="showAddChapterModal = true"
-              class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md"
-            >
-              添加章节
-            </button>
+            <div class="flex justify-center mt-4 space-x-3">
+              <button 
+                v-if="canEdit" 
+                @click="showAddChapterModal = true"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                添加章节
+              </button>
+              <button 
+                v-if="canEdit" 
+                @click="generateChaptersWithAI"
+                class="px-4 py-2 bg-green-600 text-white rounded-md flex items-center"
+                :disabled="isGeneratingChapters"
+              >
+                <span v-if="isGeneratingChapters" class="mr-1">
+                  <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 011-1h.5a1.5 1.5 0 000-3H6a1 1 0 01-1-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z" />
+                </svg>
+                {{ isGeneratingChapters ? '生成中...' : '使用AI生成章节' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -297,8 +341,21 @@
           </div>
           <div class="mb-4">
             <label class="block text-gray-700 text-sm font-bold mb-2">选择文件 <span class="text-red-500">*</span></label>
-            <input type="file" @change="handleFileChange" class="w-full px-3 py-2 border rounded-md" required />
-            <p v-if="materialFile" class="mt-2 text-sm text-gray-500">
+            <div class="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-all cursor-pointer"
+              @click="triggerFileInput" 
+              @dragover.prevent 
+              @drop.prevent="handleFileDrop">
+              <input type="file" @change="handleFileChange" class="hidden" ref="fileInput" required />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p class="mt-2 text-sm text-gray-600">点击或拖拽文件到此处上传</p>
+              <p class="text-xs text-gray-500 mt-1">支持 PDF、Word、PPT、图片等格式</p>
+            </div>
+            <p v-if="materialFile" class="mt-2 text-sm text-gray-500 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
               已选择: {{ materialFile.name }} ({{ (materialFile.size / 1024).toFixed(1) }}KB)
             </p>
           </div>
@@ -371,6 +428,249 @@
         </div>
       </div>
     </div>
+
+    <!-- 添加章节模态框 -->
+    <div v-if="showAddChapterModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
+        <h3 class="text-xl font-bold mb-4">添加章节</h3>
+        <div class="mb-6">
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">章节标题</label>
+            <input 
+              v-model="newChapter.title" 
+              type="text" 
+              class="w-full px-3 py-2 border rounded-md" 
+              placeholder="输入章节标题"
+              required
+            />
+          </div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2">章节时长（分钟）</label>
+            <input 
+              v-model="newChapter.duration" 
+              type="number" 
+              class="w-full px-3 py-2 border rounded-md" 
+              placeholder="输入章节时长"
+              min="1"
+            />
+          </div>
+          
+          <div class="mb-2">
+            <div class="flex justify-between items-center">
+              <label class="block text-gray-700 text-sm font-bold mb-2">小节列表</label>
+              <button 
+                @click="addSection" 
+                class="text-sm px-2 py-1 bg-blue-600 text-white rounded-md flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                添加小节
+              </button>
+            </div>
+            
+            <div v-if="newChapter.sections.length > 0" class="space-y-4 mt-2">
+              <div v-for="(section, index) in newChapter.sections" :key="index" class="border p-4 rounded-md relative">
+                <button 
+                  @click="removeSection(index)" 
+                  class="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <div class="mb-2">
+                  <label class="block text-gray-700 text-sm font-bold mb-1">小节标题</label>
+                  <input 
+                    v-model="section.title" 
+                    type="text" 
+                    class="w-full px-3 py-2 border rounded-md" 
+                    placeholder="输入小节标题"
+                  />
+                </div>
+                <div class="mb-2">
+                  <label class="block text-gray-700 text-sm font-bold mb-1">小节时长（分钟）</label>
+                  <input 
+                    v-model="section.duration" 
+                    type="number" 
+                    class="w-full px-3 py-2 border rounded-md" 
+                    placeholder="输入小节时长"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label class="block text-gray-700 text-sm font-bold mb-1">内容简介</label>
+                  <textarea 
+                    v-model="section.content" 
+                    class="w-full px-3 py-2 border rounded-md" 
+                    placeholder="输入小节内容简介"
+                    rows="2"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-center py-4 border rounded-md bg-gray-50">
+              <p class="text-gray-500">暂无小节，请添加小节</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex justify-end gap-2">
+          <button 
+            type="button" 
+            @click="cancelAddChapter" 
+            class="px-4 py-2 border rounded-md"
+          >
+            取消
+          </button>
+          <button 
+            type="submit" 
+            @click="saveChapter" 
+            class="px-4 py-2 bg-blue-600 text-white rounded-md"
+            :disabled="!isChapterValid"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 修改章节模态框 -->
+    <div v-if="showEditChapterModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h3 class="text-xl font-bold mb-4">修改章节</h3>
+        <div class="mb-6 space-y-6">
+          <div v-for="(chapter, chapterIndex) in editChapters" :key="`chapter-${chapterIndex}`" class="border p-4 rounded-md">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="font-bold">章节 {{ chapterIndex + 1 }}</h4>
+              <div class="space-x-2">
+                <button
+                  v-if="editChapters.length > 1"
+                  @click="removeChapter(chapterIndex)"
+                  class="text-red-600 hover:text-red-800"
+                >
+                  删除章节
+                </button>
+              </div>
+            </div>
+            
+            <div class="mb-4">
+              <label class="block text-gray-700 text-sm font-bold mb-2">章节标题</label>
+              <input 
+                v-model="chapter.title" 
+                type="text" 
+                class="w-full px-3 py-2 border rounded-md" 
+                placeholder="输入章节标题"
+                required
+              />
+            </div>
+            <div class="mb-4">
+              <label class="block text-gray-700 text-sm font-bold mb-2">章节时长（分钟）</label>
+              <input 
+                v-model="chapter.duration" 
+                type="number" 
+                class="w-full px-3 py-2 border rounded-md" 
+                placeholder="输入章节时长"
+                min="1"
+              />
+            </div>
+            
+            <div class="mb-2">
+              <div class="flex justify-between items-center">
+                <label class="block text-gray-700 text-sm font-bold mb-2">小节列表</label>
+                <button 
+                  @click="addSectionToChapter(chapterIndex)" 
+                  class="text-sm px-2 py-1 bg-blue-600 text-white rounded-md flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                  </svg>
+                  添加小节
+                </button>
+              </div>
+              
+              <div v-if="chapter.sections && chapter.sections.length > 0" class="space-y-4 mt-2">
+                <div 
+                  v-for="(section, sectionIndex) in chapter.sections" 
+                  :key="`section-${chapterIndex}-${sectionIndex}`" 
+                  class="border p-4 rounded-md relative"
+                >
+                  <button 
+                    @click="removeSectionFromChapter(chapterIndex, sectionIndex)" 
+                    class="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  <div class="mb-2">
+                    <label class="block text-gray-700 text-sm font-bold mb-1">小节标题</label>
+                    <input 
+                      v-model="section.title" 
+                      type="text" 
+                      class="w-full px-3 py-2 border rounded-md" 
+                      placeholder="输入小节标题"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="block text-gray-700 text-sm font-bold mb-1">小节时长（分钟）</label>
+                    <input 
+                      v-model="section.duration" 
+                      type="number" 
+                      class="w-full px-3 py-2 border rounded-md" 
+                      placeholder="输入小节时长"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-1">内容简介</label>
+                    <textarea 
+                      v-model="section.content" 
+                      class="w-full px-3 py-2 border rounded-md" 
+                      placeholder="输入小节内容简介"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-center py-4 border rounded-md bg-gray-50">
+                <p class="text-gray-500">暂无小节，请添加小节</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-center">
+            <button 
+              @click="addNewChapter" 
+              class="px-4 py-2 bg-green-600 text-white rounded-md flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+              </svg>
+              添加新章节
+            </button>
+          </div>
+        </div>
+        
+        <div class="flex justify-end gap-2">
+          <button 
+            type="button" 
+            @click="showEditChapterModal = false" 
+            class="px-4 py-2 border rounded-md"
+          >
+            取消
+          </button>
+          <button 
+            type="submit" 
+            @click="saveEditedChapters" 
+            class="px-4 py-2 bg-blue-600 text-white rounded-md"
+            :disabled="!isEditChaptersValid"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -398,18 +698,18 @@ interface Course {
   cover_image?: string;
 }
 
-interface Chapter {
-  id?: number;
-  title: string;
-  duration: number;
-  sections?: Section[];
-}
-
 interface Section {
   id?: number;
   title: string;
   duration: number;
-  content?: string;
+  content: string;
+}
+
+interface Chapter {
+  id?: number;
+  title: string;
+  duration: number;
+  sections: Section[];
 }
 
 interface Material {
@@ -449,6 +749,12 @@ interface Assessment {
   submission_count?: number;
 }
 
+// 定义文件类型接口
+interface FileType {
+  extension: string;
+  description: string;
+}
+
 // 路由参数
 const route = useRoute();
 const router = useRouter();
@@ -472,10 +778,10 @@ const showAddChapterModal = ref(false);
 const showAddMaterialModal = ref(false);
 const showAddStudentsModal = ref(false);
 const showMaterialPreview = ref(false);
-const previewMaterialId = ref<number | undefined>();
+const previewMaterialId = ref<number | null>(null);
 
 // 知识库相关
-const supportedKnowledgeBaseTypes = ref<string[]>([]);
+const supportedKnowledgeBaseTypes = ref<FileType[]>([]);
 const knowledgeBaseProcessing = ref<Record<number, boolean>>({});
 
 // 添加缺失的材料上传相关属性
@@ -483,6 +789,11 @@ const materialTitle = ref('');
 const materialFile = ref<File | null>(null);
 const materialUploadProgress = ref(0);
 const materialUploadError = ref('');
+const fileInput = ref<HTMLInputElement | null>(null);
+
+// 在状态部分添加
+const isGeneratingChapters = ref(false);
+const showEditChapterModal = ref(false);
 
 // 选项卡定义
 const tabs = [
@@ -514,12 +825,17 @@ watch(activeTab, async (newTab) => {
 onMounted(async () => {
   try {
     loading.value = true;
-    await Promise.all([
-      fetchCourse(),
-      fetchMaterials(),
-      fetchStudents(),
-      fetchAssessments()
-    ]);
+    await fetchCourse(); // 先获取课程信息
+    
+    // 课程加载完成后，再获取其他数据
+    if (course.value) {
+      await Promise.all([
+        fetchMaterials(),
+        fetchStudents(),
+        fetchAssessments(),
+        fetchChapters()
+      ]);
+    }
   } catch (error) {
     console.error('加载数据失败:', error);
   } finally {
@@ -645,7 +961,7 @@ function editAssessment(assessment: Assessment) {
 // 获取知识库支持的文件类型
 async function fetchKnowledgeBaseStatus() {
   try {
-    const response = await fetch('http://localhost:5001/api/rag/supported-types');
+    const response = await fetch('http://localhost:5001/api/rag/knowledge/supported-types');
     const data = await response.json();
     supportedKnowledgeBaseTypes.value = data.supported_types || [];
   } catch (error) {
@@ -656,7 +972,9 @@ async function fetchKnowledgeBaseStatus() {
 // 判断文件是否支持添加到知识库
 function isSupportedForKnowledgeBase(material: Material): boolean {
   const fileExtension = material.file_path.split('.').pop()?.toLowerCase();
-  return supportedKnowledgeBaseTypes.value.includes(fileExtension || '');
+  return supportedKnowledgeBaseTypes.value.some(type => 
+    type.extension.toLowerCase().includes(`.${fileExtension}`)
+  );
 }
 
 // 获取知识库按钮文本
@@ -687,7 +1005,7 @@ async function addToKnowledgeBase(material: Material) {
   try {
     knowledgeBaseProcessing.value[material.id] = true;
     
-    const response = await fetch('http://localhost:5001/api/rag/add-to-knowledge-base', {
+    const response = await fetch('http://localhost:5001/api/rag/knowledge/add', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -908,6 +1226,375 @@ function toggleStudentSelection(studentId: number) {
     selectedStudents.value.push(studentId);
   } else {
     selectedStudents.value.splice(index, 1);
+  }
+}
+
+// 获取课程章节
+async function fetchChapters() {
+  if (!courseId.value || !course.value) {
+    console.error('课程ID或课程对象为空，无法获取章节');
+    return;
+  }
+  
+  try {
+    console.log('获取章节数据...', courseId.value);
+    const response = await fetch(`http://localhost:5001/api/courses/${courseId.value}/chapters`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      mode: 'cors'
+    });
+    
+    if (!response.ok) {
+      console.error('获取章节响应错误:', response.status, response.statusText);
+      return;
+    }
+    
+    const data = await response.json();
+    console.log('章节数据:', data);
+    
+    if (data.status === 'success' && data.chapters && data.chapters.length > 0) {
+      course.value = {
+        ...course.value,
+        chapters: data.chapters
+      };
+      console.log('章节数据已更新:', course.value.chapters);
+    } else {
+      console.log('没有章节数据或数据为空');
+      // 确保chapters至少是空数组
+      course.value.chapters = course.value.chapters || [];
+    }
+  } catch (error) {
+    console.error('获取章节失败:', error);
+    // 确保chapters至少是空数组
+    if (course.value) {
+      course.value.chapters = course.value.chapters || [];
+    }
+  }
+}
+
+// 使用AI生成章节
+async function generateChaptersWithAI() {
+  if (!course.value || isGeneratingChapters.value) {
+    console.error('课程对象为空或正在生成中，无法生成章节');
+    return;
+  }
+  
+  try {
+    isGeneratingChapters.value = true;
+    
+    // 强制删除已有章节文件，以便重新生成
+    console.log('清除已有章节数据...');
+    try {
+      // 首先尝试删除章节文件
+      const deleteResponse = await fetch(`http://localhost:5001/api/courses/${courseId.value}/chapters?force=true`, {
+        method: 'DELETE',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      console.log('删除章节响应:', deleteResponse.status);
+    } catch (error) {
+      // 忽略删除错误，继续生成
+      console.log('删除章节错误 (忽略):', error);
+    }
+    
+    // 生成新章节
+    console.log('开始生成章节...');
+    const response = await fetch(`http://localhost:5001/api/courses/${courseId.value}/generate-chapters`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      },
+      mode: 'cors',
+      body: JSON.stringify({
+        course_name: course.value.name,
+        description: course.value.description || ''
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('生成章节响应错误:', response.status, response.statusText);
+      throw new Error(`服务器响应错误: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('生成章节响应:', data);
+    
+    if (data.status === 'success' && data.chapters) {
+      course.value = {
+        ...course.value,
+        chapters: data.chapters
+      };
+      console.log('章节数据已更新:', course.value.chapters);
+      
+      // 保存到服务器以确保持久化
+      await saveChaptersToServer();
+    } else {
+      alert('生成章节失败: ' + (data.message || '未知错误'));
+    }
+  } catch (error) {
+    console.error('生成章节失败:', error);
+    alert('生成章节失败，请稍后重试: ' + (error instanceof Error ? error.message : String(error)));
+  } finally {
+    isGeneratingChapters.value = false;
+  }
+}
+
+// 在script部分的状态定义区域添加
+const newChapter = ref<Chapter>({
+  title: '',
+  duration: 60,
+  sections: []
+});
+
+const editChapters = ref<Chapter[]>([]);
+
+const isChapterValid = computed(() => {
+  return newChapter.value.title.trim() !== '' && 
+         newChapter.value.duration > 0 && 
+         newChapter.value.sections.length > 0 &&
+         newChapter.value.sections.every(section => 
+           section.title.trim() !== '' && 
+           section.duration > 0
+         );
+});
+
+const isEditChaptersValid = computed(() => {
+  return editChapters.value.length > 0 &&
+         editChapters.value.every(chapter => 
+           chapter.title.trim() !== '' && 
+           chapter.duration > 0 && 
+           chapter.sections && 
+           chapter.sections.length > 0 &&
+           chapter.sections.every(section => 
+             section.title.trim() !== '' && 
+             section.duration > 0
+           )
+         );
+});
+
+// 重置新章节表单
+function resetNewChapter() {
+  newChapter.value = {
+    title: '',
+    duration: 60,
+    sections: []
+  };
+}
+
+// 添加小节到新章节
+function addSection() {
+  if (!newChapter.value.sections) {
+    newChapter.value.sections = [];
+  }
+  
+  newChapter.value.sections.push({
+    title: '',
+    duration: 20,
+    content: ''
+  });
+}
+
+// 从新章节中移除小节
+function removeSection(index: number) {
+  if (!newChapter.value.sections) {
+    return;
+  }
+  
+  newChapter.value.sections.splice(index, 1);
+}
+
+// 取消添加章节
+function cancelAddChapter() {
+  showAddChapterModal.value = false;
+  resetNewChapter();
+}
+
+// 保存新章节
+async function saveChapter() {
+  if (!isChapterValid.value || !course.value) return;
+  
+  try {
+    console.log('保存章节...');
+    // 如果课程还没有章节数组，初始化它
+    if (!course.value.chapters) {
+      course.value.chapters = [];
+    }
+    
+    // 添加新章节
+    course.value.chapters.push(JSON.parse(JSON.stringify(newChapter.value)));
+    
+    // 保存章节到后端
+    await saveChaptersToServer();
+    console.log('章节保存成功');
+    
+    // 关闭模态框并重置表单
+    showAddChapterModal.value = false;
+    resetNewChapter();
+  } catch (error) {
+    console.error('保存章节失败:', error);
+    alert('保存章节失败，请稍后重试');
+  }
+}
+
+// 打开编辑章节模态框
+function openEditChapterModal() {
+  if (course.value && course.value.chapters) {
+    // 深拷贝章节，避免直接修改
+    editChapters.value = JSON.parse(JSON.stringify(course.value.chapters));
+    showEditChapterModal.value = true;
+  }
+}
+
+// 添加小节到指定章节
+function addSectionToChapter(chapterIndex: number) {
+  if (!editChapters.value[chapterIndex].sections) {
+    editChapters.value[chapterIndex].sections = [];
+  }
+  
+  editChapters.value[chapterIndex].sections.push({
+    title: '',
+    duration: 20,
+    content: ''
+  });
+}
+
+// 从章节中移除小节
+function removeSectionFromChapter(chapterIndex: number, sectionIndex: number) {
+  if (!editChapters.value[chapterIndex]?.sections) {
+    console.error('章节或小节不存在');
+    return;
+  }
+  
+  editChapters.value[chapterIndex].sections.splice(sectionIndex, 1);
+}
+
+// 添加新章节（编辑模式）
+function addNewChapter() {
+  editChapters.value.push({
+    title: `第${editChapters.value.length + 1}章`,
+    duration: 60,
+    sections: [{
+      title: '第一节',
+      duration: 20,
+      content: '简介'
+    }]
+  });
+}
+
+// 移除章节（编辑模式）
+function removeChapter(chapterIndex: number) {
+  if (editChapters.value.length > 1) {
+    editChapters.value.splice(chapterIndex, 1);
+  }
+}
+
+// 保存编辑后的章节
+async function saveEditedChapters() {
+  if (!isEditChaptersValid.value || !course.value) return;
+  
+  try {
+    console.log('保存编辑后的章节...');
+    // 更新课程章节
+    course.value.chapters = JSON.parse(JSON.stringify(editChapters.value));
+    console.log('章节数据已更新:', course.value.chapters);
+    
+    // 保存章节到后端
+    await saveChaptersToServer();
+    console.log('编辑后的章节保存成功');
+    
+    // 关闭模态框
+    showEditChapterModal.value = false;
+  } catch (error) {
+    console.error('保存章节失败:', error);
+    alert('保存章节失败，请稍后重试');
+  }
+}
+
+// 保存章节到服务器
+async function saveChaptersToServer() {
+  if (!course.value) {
+    console.error('课程对象为空，无法保存');
+    alert('无法保存章节：课程信息丢失');
+    return;
+  }
+  
+  if (!course.value.chapters) {
+    course.value.chapters = [];
+  }
+  
+  if(!courseId.value) {
+    console.error('课程ID为空，无法保存');
+    alert('无法保存章节：课程ID丢失');
+    return;
+  }
+  
+  console.log('保存章节到服务器...', { courseId: courseId.value, chapters: course.value.chapters });
+  try {
+    const apiUrl = `http://localhost:5001/api/courses/${courseId.value}/chapters`;
+    console.log('发送请求到:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        chapters: course.value.chapters
+      }),
+      mode: 'cors'
+    });
+    
+    console.log('服务器响应状态:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      console.error('服务器响应错误:', response.status, response.statusText);
+      alert(`保存失败: HTTP错误 ${response.status}`);
+      throw new Error(`服务器响应错误: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('服务器响应数据:', data);
+    
+    if (!data.status || data.status !== 'success') {
+      alert(data.message || '保存失败');
+      throw new Error(data.message || '保存失败');
+    }
+    
+    // 显示成功提示
+    alert('章节保存成功');
+    
+    // 保存成功后重新获取章节
+    await fetchChapters();
+    
+    return data;
+  } catch (error) {
+    console.error('保存章节到服务器失败:', error);
+    alert(`保存章节到服务器失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    throw error;
+  }
+}
+
+// 触发文件选择框
+function triggerFileInput() {
+  if (fileInput.value) {
+    fileInput.value.click();
+  }
+}
+
+// 处理拖拽文件
+function handleFileDrop(event: DragEvent) {
+  if (event.dataTransfer && event.dataTransfer.files.length > 0) {
+    materialFile.value = event.dataTransfer.files[0];
+    if (!materialTitle.value) {
+      materialTitle.value = materialFile.value.name;
+    }
   }
 }
 </script> 

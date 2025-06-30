@@ -10,6 +10,7 @@ from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.material import Material
 from backend.models.assessment import Assessment, StudentAnswer
 import hashlib
+import requests
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -1193,5 +1194,769 @@ def get_course_assessments(course_id):
     return jsonify({
         'assessments': assessments_data,
         'total': len(assessments_data)
+    })
+
+# 删除课程章节
+@learning_bp.route('/courses/<int:course_id>/chapters', methods=['DELETE'])
+def delete_course_chapters(course_id):
+    """删除课程章节"""
+    current_app.logger.info(f"删除课程章节: 课程ID = {course_id}")
+    
+    # 查找课程
+    course = Course.query.get(course_id)
+    if not course:
+        current_app.logger.error(f"课程不存在: ID = {course_id}")
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取force参数
+    force = request.args.get('force', 'false').lower() == 'true'
+    
+    # 章节文件路径
+    chapters_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'chapters')
+    course_chapters_folder = os.path.join(chapters_folder, str(course_id))
+    chapters_file_path = os.path.join(course_chapters_folder, 'chapters.json')
+    current_app.logger.info(f"章节文件路径: {chapters_file_path}")
+    
+    # 如果章节文件存在，则删除
+    if os.path.exists(chapters_file_path):
+        try:
+            # 删除文件
+            os.remove(chapters_file_path)
+            current_app.logger.info(f"成功删除章节文件: {chapters_file_path}")
+            return jsonify({
+                'status': 'success',
+                'message': 'Chapters deleted successfully'
+            })
+        except Exception as e:
+            current_app.logger.error(f"删除章节文件失败: {str(e)}")
+            return jsonify({
+                'status': 'error',
+                'message': f'删除章节文件失败: {str(e)}'
+            }), 500
+    else:
+        # 如果是强制删除，则返回成功
+        if force:
+            current_app.logger.info(f"章节文件不存在，但强制参数为true，返回成功")
+            return jsonify({
+                'status': 'success',
+                'message': 'Chapters file does not exist, nothing to delete'
+            })
+        else:
+            current_app.logger.warning(f"章节文件不存在: {chapters_file_path}")
+            return jsonify({
+                'status': 'warning',
+                'message': 'Chapters file does not exist'
+            }), 404
+
+# 修改生成章节函数，使其能使用课程名称和描述作为输入
+@learning_bp.route('/courses/<int:course_id>/generate-chapters', methods=['OPTIONS', 'POST'])
+def generate_course_chapters(course_id):
+    """使用AI生成课程章节"""
+    current_app.logger.info(f"收到课程章节生成请求: 课程ID = {course_id}, 方法 = {request.method}")
+    
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Cache-Control')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Access-Control-Max-Age', '3600')
+        current_app.logger.info("处理OPTIONS请求")
+        return response
+    
+    # 查找课程
+    course = Course.query.get(course_id)
+    if not course:
+        current_app.logger.error(f"课程不存在: ID = {course_id}")
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取请求数据
+    data = request.json or {}
+    course_name = data.get('course_name') or course.name
+    description = data.get('description') or course.description or ''
+    
+    current_app.logger.info(f"课程名称: {course_name}, 描述长度: {len(description)}")
+    
+    # 检查章节文件夹是否存在，不存在则创建
+    chapters_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'chapters')
+    os.makedirs(chapters_folder, exist_ok=True)
+    current_app.logger.info(f"章节文件夹路径: {chapters_folder}")
+    
+    # 检查课程章节文件夹是否存在，不存在则创建
+    course_chapters_folder = os.path.join(chapters_folder, str(course_id))
+    os.makedirs(course_chapters_folder, exist_ok=True)
+    current_app.logger.info(f"课程章节文件夹路径: {course_chapters_folder}")
+    
+    # 章节文件路径
+    chapters_file_path = os.path.join(course_chapters_folder, 'chapters.json')
+    current_app.logger.info(f"章节文件路径: {chapters_file_path}")
+    
+    try:
+        current_app.logger.info(f"开始生成章节数据")
+        
+        # 根据课程名称和描述进行定制
+        course_type = "通用"
+        
+        # 简单的关键词匹配，用于确定课程类型
+        if any(keyword in course_name.lower() or (description and keyword in description.lower()) for keyword in ["python", "编程", "程序", "代码", "开发"]):
+            course_type = "编程"
+        elif any(keyword in course_name.lower() or (description and keyword in description.lower()) for keyword in ["math", "数学", "物理", "chemistry", "化学"]):
+            course_type = "理科"
+        elif any(keyword in course_name.lower() or (description and keyword in description.lower()) for keyword in ["历史", "文学", "哲学", "艺术", "音乐"]):
+            course_type = "文科"
+        elif any(keyword in course_name.lower() or (description and keyword in description.lower()) for keyword in ["人工智能", "机器学习", "神经网络", "深度学习", "ai"]):
+            course_type = "人工智能"
+        
+        current_app.logger.info(f"检测到课程类型: {course_type}")
+        
+        # 根据课程类型选择不同的章节模板
+        if course_type == "编程":
+            # 编程类课程章节
+            chapters_data = [
+                {
+                    "title": f"第一章：{course_name}基础入门",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "1.1 开发环境搭建",
+                            "duration": 30,
+                            "content": "学习如何配置开发环境，安装所需工具和库"
+                        },
+                        {
+                            "title": "1.2 基本语法讲解",
+                            "duration": 30,
+                            "content": "详细讲解编程语言的基础语法和结构"
+                        },
+                        {
+                            "title": "1.3 第一个程序实例",
+                            "duration": 30,
+                            "content": "编写并运行第一个简单程序，了解基本工作流程"
+                        }
+                    ]
+                },
+                {
+                    "title": "第二章：数据类型与结构",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "2.1 基本数据类型",
+                            "duration": 40,
+                            "content": "学习语言中的基本数据类型及其操作方法"
+                        },
+                        {
+                            "title": "2.2 复合数据结构",
+                            "duration": 40,
+                            "content": "掌握数组、列表、字典等复合数据结构的使用"
+                        },
+                        {
+                            "title": "2.3 数据操作实践",
+                            "duration": 40,
+                            "content": "通过实例练习各种数据类型和结构的操作"
+                        }
+                    ]
+                },
+                {
+                    "title": "第三章：流程控制",
+                    "duration": 100,
+                    "sections": [
+                        {
+                            "title": "3.1 条件语句",
+                            "duration": 30,
+                            "content": "学习if-else等条件语句的语法和应用场景"
+                        },
+                        {
+                            "title": "3.2 循环结构",
+                            "duration": 40,
+                            "content": "掌握for、while等循环结构的使用方法"
+                        },
+                        {
+                            "title": "3.3 控制流实例",
+                            "duration": 30,
+                            "content": "通过实际案例练习流程控制语句的应用"
+                        }
+                    ]
+                },
+                {
+                    "title": "第四章：函数编程",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "4.1 函数定义与调用",
+                            "duration": 30,
+                            "content": "学习如何定义和调用函数，理解参数传递机制"
+                        },
+                        {
+                            "title": "4.2 函数高级特性",
+                            "duration": 40,
+                            "content": "探讨匿名函数、闭包、装饰器等高级函数特性"
+                        },
+                        {
+                            "title": "4.3 模块化与包管理",
+                            "duration": 50,
+                            "content": "了解如何组织代码为模块，以及使用包管理工具"
+                        }
+                    ]
+                },
+                {
+                    "title": "第五章：面向对象编程",
+                    "duration": 150,
+                    "sections": [
+                        {
+                            "title": "5.1 类与对象基础",
+                            "duration": 50,
+                            "content": "理解面向对象的核心概念，学习类的定义和实例化"
+                        },
+                        {
+                            "title": "5.2 继承与多态",
+                            "duration": 50,
+                            "content": "掌握继承、多态等面向对象高级特性"
+                        },
+                        {
+                            "title": "5.3 设计模式入门",
+                            "duration": 50,
+                            "content": "了解常见设计模式及其在面向对象编程中的应用"
+                        }
+                    ]
+                },
+                {
+                    "title": "第六章：文件与异常处理",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "6.1 文件读写操作",
+                            "duration": 30,
+                            "content": "学习如何进行文件的读写、创建和删除等基本操作"
+                        },
+                        {
+                            "title": "6.2 异常处理机制",
+                            "duration": 30,
+                            "content": "掌握try-except异常处理语法和最佳实践"
+                        },
+                        {
+                            "title": "6.3 日志记录技术",
+                            "duration": 30,
+                            "content": "了解如何使用日志模块记录程序运行状态"
+                        }
+                    ]
+                },
+                {
+                    "title": "第七章：数据库交互",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "7.1 数据库基础",
+                            "duration": 40,
+                            "content": "了解关系型数据库和NoSQL数据库的基本概念"
+                        },
+                        {
+                            "title": "7.2 SQL语句与ORM",
+                            "duration": 40,
+                            "content": "学习基本SQL语句和使用ORM框架简化数据库操作"
+                        },
+                        {
+                            "title": "7.3 数据库应用开发",
+                            "duration": 40,
+                            "content": "实践数据库在实际应用中的集成和使用"
+                        }
+                    ]
+                },
+                {
+                    "title": "第八章：项目实战",
+                    "duration": 180,
+                    "sections": [
+                        {
+                            "title": "8.1 需求分析与设计",
+                            "duration": 60,
+                            "content": "学习如何分析项目需求并进行系统设计"
+                        },
+                        {
+                            "title": "8.2 项目开发实践",
+                            "duration": 60,
+                            "content": "按照设计文档实现项目功能，应用所学知识"
+                        },
+                        {
+                            "title": "8.3 测试与部署",
+                            "duration": 60,
+                            "content": "掌握基本的测试方法和项目部署技术"
+                        }
+                    ]
+                }
+            ]
+        elif course_type == "人工智能":
+            # 人工智能课程章节
+            chapters_data = [
+                {
+                    "title": "第一章：人工智能基础",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "1.1 人工智能概述与历史",
+                            "duration": 30,
+                            "content": "介绍人工智能的发展历程、关键里程碑和基本概念"
+                        },
+                        {
+                            "title": "1.2 机器学习基础理论",
+                            "duration": 30,
+                            "content": "讲解机器学习的核心原理、类型和常见算法"
+                        },
+                        {
+                            "title": "1.3 神经网络入门",
+                            "duration": 30,
+                            "content": "介绍神经网络的基本结构、工作原理和应用场景"
+                        }
+                    ]
+                },
+                {
+                    "title": "第二章：数学基础",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "2.1 线性代数基础",
+                            "duration": 40,
+                            "content": "回顾AI所需的向量、矩阵运算和特征分解等知识"
+                        },
+                        {
+                            "title": "2.2 概率与统计",
+                            "duration": 40,
+                            "content": "学习概率论、贝叶斯理论和假设检验等统计知识"
+                        },
+                        {
+                            "title": "2.3 最优化方法",
+                            "duration": 40,
+                            "content": "了解梯度下降、牛顿法等常用优化算法"
+                        }
+                    ]
+                },
+                {
+                    "title": "第三章：监督学习",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "3.1 线性回归与逻辑回归",
+                            "duration": 40,
+                            "content": "详细讲解回归模型的原理和实现方法"
+                        },
+                        {
+                            "title": "3.2 决策树与随机森林",
+                            "duration": 40,
+                            "content": "学习基于树的模型及其集成方法"
+                        },
+                        {
+                            "title": "3.3 支持向量机",
+                            "duration": 40,
+                            "content": "掌握SVM的数学原理和核技巧"
+                        }
+                    ]
+                },
+                {
+                    "title": "第四章：深度学习基础",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "4.1 前馈神经网络",
+                            "duration": 40,
+                            "content": "学习多层感知器的结构、前向传播和反向传播算法"
+                        },
+                        {
+                            "title": "4.2 深度网络训练技巧",
+                            "duration": 40,
+                            "content": "掌握正则化、批量归一化等提升模型性能的方法"
+                        },
+                        {
+                            "title": "4.3 深度学习框架入门",
+                            "duration": 40,
+                            "content": "了解主流深度学习框架的基本使用方法"
+                        }
+                    ]
+                },
+                {
+                    "title": "第五章：计算机视觉",
+                    "duration": 150,
+                    "sections": [
+                        {
+                            "title": "5.1 卷积神经网络(CNN)",
+                            "duration": 50,
+                            "content": "深入学习CNN的结构、原理和视觉应用"
+                        },
+                        {
+                            "title": "5.2 图像分类与检测",
+                            "duration": 50,
+                            "content": "掌握目标检测、图像分类等基本视觉任务"
+                        },
+                        {
+                            "title": "5.3 图像生成与风格迁移",
+                            "duration": 50,
+                            "content": "探索GAN和风格迁移等高级视觉生成技术"
+                        }
+                    ]
+                },
+                {
+                    "title": "第六章：自然语言处理",
+                    "duration": 150,
+                    "sections": [
+                        {
+                            "title": "6.1 循环神经网络与LSTM",
+                            "duration": 50,
+                            "content": "学习RNN、LSTM等序列建模的基本网络结构"
+                        },
+                        {
+                            "title": "6.2 注意力机制与Transformer",
+                            "duration": 50,
+                            "content": "深入研究Transformer架构及其工作原理"
+                        },
+                        {
+                            "title": "6.3 大型语言模型",
+                            "duration": 50,
+                            "content": "了解BERT、GPT等预训练语言模型的特点"
+                        }
+                    ]
+                },
+                {
+                    "title": "第七章：强化学习",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "7.1 马尔可夫决策过程",
+                            "duration": 40,
+                            "content": "了解强化学习的数学基础和理论框架"
+                        },
+                        {
+                            "title": "7.2 基于价值的方法",
+                            "duration": 40,
+                            "content": "学习Q-learning、DQN等基于价值的强化学习算法"
+                        },
+                        {
+                            "title": "7.3 策略梯度与Actor-Critic",
+                            "duration": 40,
+                            "content": "掌握基于策略的强化学习方法及其应用"
+                        }
+                    ]
+                },
+                {
+                    "title": "第八章：AI伦理与实践",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "8.1 AI系统部署与优化",
+                            "duration": 30,
+                            "content": "学习将AI模型部署到生产环境并进行优化"
+                        },
+                        {
+                            "title": "8.2 AI伦理与公平性",
+                            "duration": 30,
+                            "content": "探讨AI应用中的伦理问题、偏见与公平性"
+                        },
+                        {
+                            "title": "8.3 AI前沿与未来展望",
+                            "duration": 30,
+                            "content": "了解AI领域最新研究进展和未来发展方向"
+                        }
+                    ]
+                }
+            ]
+        else:
+            # 通用课程章节
+            chapters_data = [
+                {
+                    "title": f"第一章：{course_name}概述",
+                    "duration": 60,
+                    "sections": [
+                        {
+                            "title": "1.1 课程导引与学习目标",
+                            "duration": 20,
+                            "content": "介绍课程的总体框架、学习目标和预期收获"
+                        },
+                        {
+                            "title": "1.2 核心概念预览",
+                            "duration": 20,
+                            "content": "概述课程中将要学习的关键概念和重要理论"
+                        },
+                        {
+                            "title": "1.3 学习方法与资源",
+                            "duration": 20,
+                            "content": "分享有效的学习策略、方法和推荐的学习资源"
+                        }
+                    ]
+                },
+                {
+                    "title": "第二章：学科基础知识",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "2.1 基本概念与术语",
+                            "duration": 40,
+                            "content": "系统介绍学科中的基础概念和专业术语"
+                        },
+                        {
+                            "title": "2.2 理论框架与模型",
+                            "duration": 40,
+                            "content": "讲解该领域的主要理论框架和分析模型"
+                        },
+                        {
+                            "title": "2.3 发展历史与脉络",
+                            "duration": 40,
+                            "content": "回顾学科的历史发展脉络和重要里程碑"
+                        }
+                    ]
+                },
+                {
+                    "title": "第三章：核心原理讲解",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "3.1 基本原则与规律",
+                            "duration": 40,
+                            "content": "详细讲解学科中的基本原则和核心规律"
+                        },
+                        {
+                            "title": "3.2 方法论与工作流程",
+                            "duration": 40,
+                            "content": "介绍该领域常用的研究方法和标准流程"
+                        },
+                        {
+                            "title": "3.3 案例分析与应用",
+                            "duration": 40,
+                            "content": "通过案例分析加深对核心原理的理解"
+                        }
+                    ]
+                },
+                {
+                    "title": "第四章：技术与工具应用",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "4.1 常用工具介绍",
+                            "duration": 30,
+                            "content": "介绍本领域常用的专业工具和技术平台"
+                        },
+                        {
+                            "title": "4.2 技术操作实践",
+                            "duration": 30,
+                            "content": "通过实践学习各种技术的具体操作方法"
+                        },
+                        {
+                            "title": "4.3 数据收集与分析",
+                            "duration": 30,
+                            "content": "学习相关数据的收集、处理和分析方法"
+                        }
+                    ]
+                },
+                {
+                    "title": "第五章：专业技能培养",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "5.1 专业能力训练",
+                            "duration": 40,
+                            "content": "系统训练本领域所需的核心专业能力"
+                        },
+                        {
+                            "title": "5.2 问题解决策略",
+                            "duration": 40,
+                            "content": "学习解决本领域典型问题的方法和策略"
+                        },
+                        {
+                            "title": "5.3 实践项目指导",
+                            "duration": 40,
+                            "content": "通过实际项目练习应用所学知识和技能"
+                        }
+                    ]
+                },
+                {
+                    "title": "第六章：行业应用与实践",
+                    "duration": 120,
+                    "sections": [
+                        {
+                            "title": "6.1 行业现状分析",
+                            "duration": 40,
+                            "content": "分析本学科在各行业中的应用现状和特点"
+                        },
+                        {
+                            "title": "6.2 实际案例研究",
+                            "duration": 40,
+                            "content": "研究行业中的典型成功案例和失败教训"
+                        },
+                        {
+                            "title": "6.3 创新应用探索",
+                            "duration": 40,
+                            "content": "探讨本学科知识在新兴领域的创新应用"
+                        }
+                    ]
+                },
+                {
+                    "title": "第七章：前沿研究与发展",
+                    "duration": 90,
+                    "sections": [
+                        {
+                            "title": "7.1 学术前沿综述",
+                            "duration": 30,
+                            "content": "综述本领域当前的学术研究前沿和热点问题"
+                        },
+                        {
+                            "title": "7.2 新技术与新方法",
+                            "duration": 30,
+                            "content": "介绍领域内新兴的技术手段和研究方法"
+                        },
+                        {
+                            "title": "7.3 跨学科融合趋势",
+                            "duration": 30,
+                            "content": "探讨本学科与其他学科的交叉融合趋势"
+                        }
+                    ]
+                },
+                {
+                    "title": "第八章：课程总结与展望",
+                    "duration": 60,
+                    "sections": [
+                        {
+                            "title": "8.1 知识体系回顾",
+                            "duration": 20,
+                            "content": "系统回顾课程所学的全部知识体系"
+                        },
+                        {
+                            "title": "8.2 实践应用指导",
+                            "duration": 20,
+                            "content": "指导学生如何将所学知识应用到实际工作中"
+                        },
+                        {
+                            "title": "8.3 未来学习路径",
+                            "duration": 20,
+                            "content": "建议进一步学习的方向和资源获取渠道"
+                        }
+                    ]
+                }
+            ]
+        
+        # 保存到文件
+        current_app.logger.info(f"保存章节数据到文件")
+        with open(chapters_file_path, 'w', encoding='utf-8') as f:
+            json.dump(chapters_data, f, ensure_ascii=False, indent=2)
+        
+        current_app.logger.info(f"章节生成成功，返回数据")
+        return jsonify({
+            'status': 'success',
+            'message': 'Chapters generated successfully',
+            'chapters': chapters_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Generate chapters error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'生成章节失败: {str(e)}'
+        }), 500
+
+# 获取课程章节
+@learning_bp.route('/courses/<int:course_id>/chapters', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_course_chapters(course_id):
+    """获取课程章节"""
+    current_app.logger.info(f"获取课程章节: 课程ID = {course_id}")
+    
+    # 查找课程
+    course = Course.query.get(course_id)
+    if not course:
+        current_app.logger.error(f"课程不存在: ID = {course_id}")
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 章节文件路径
+    chapters_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'chapters')
+    course_chapters_folder = os.path.join(chapters_folder, str(course_id))
+    chapters_file_path = os.path.join(course_chapters_folder, 'chapters.json')
+    current_app.logger.info(f"章节文件路径: {chapters_file_path}")
+    
+    # 如果章节文件不存在，则返回空列表
+    if not os.path.exists(chapters_file_path):
+        current_app.logger.info(f"章节文件不存在，返回空列表")
+        return jsonify({
+            'status': 'success',
+            'chapters': []
+        })
+    
+    # 读取章节文件
+    try:
+        current_app.logger.info(f"读取章节文件")
+        with open(chapters_file_path, 'r', encoding='utf-8') as f:
+            chapters_data = json.load(f)
+        
+        current_app.logger.info(f"返回章节数据: {len(chapters_data)} 个章节")
+        return jsonify({
+            'status': 'success',
+            'chapters': chapters_data
+        })
+    except Exception as e:
+        current_app.logger.error(f"Get chapters error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'获取章节失败: {str(e)}'
+        }), 500
+
+# 保存课程章节
+@learning_bp.route('/courses/<int:course_id>/chapters', methods=['POST'])
+def save_course_chapters(course_id):
+    """保存课程章节"""
+    current_app.logger.info(f"保存课程章节: 课程ID = {course_id}")
+    
+    # 查找课程
+    course = Course.query.get(course_id)
+    if not course:
+        current_app.logger.error(f"课程不存在: ID = {course_id}")
+        return jsonify({'error': 'Course not found'}), 404
+    
+    # 获取请求数据
+    data = request.json
+    if not data or 'chapters' not in data:
+        current_app.logger.error(f"请求数据无效，缺少chapters字段")
+        return jsonify({'error': 'Invalid request data'}), 400
+    
+    # 验证章节数据
+    chapters = data['chapters']
+    if not isinstance(chapters, list):
+        current_app.logger.error(f"章节数据不是有效的列表")
+        return jsonify({'error': 'Chapters must be a list'}), 400
+    
+    # 检查章节文件夹是否存在，不存在则创建
+    chapters_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'chapters')
+    os.makedirs(chapters_folder, exist_ok=True)
+    
+    # 检查课程章节文件夹是否存在，不存在则创建
+    course_chapters_folder = os.path.join(chapters_folder, str(course_id))
+    os.makedirs(course_chapters_folder, exist_ok=True)
+    
+    # 章节文件路径
+    chapters_file_path = os.path.join(course_chapters_folder, 'chapters.json')
+    
+    try:
+        # 保存章节到文件
+        with open(chapters_file_path, 'w', encoding='utf-8') as f:
+            json.dump(chapters, f, ensure_ascii=False, indent=2)
+        
+        current_app.logger.info(f"章节保存成功: 课程ID = {course_id}, 章节数量 = {len(chapters)}")
+        return jsonify({
+            'status': 'success',
+            'message': 'Chapters saved successfully'
+        })
+    except Exception as e:
+        current_app.logger.error(f"保存章节失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'保存章节失败: {str(e)}'
+        }), 500
+
+# 测试API端点
+@learning_bp.route('/test-api', methods=['GET', 'POST', 'OPTIONS'])
+def test_api():
+    """测试API端点"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        return response
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'API测试成功',
+        'method': request.method
     })
 

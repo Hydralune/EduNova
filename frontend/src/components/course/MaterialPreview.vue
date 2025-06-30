@@ -178,7 +178,7 @@ const props = defineProps({
     required: true
   },
   initialMaterialId: {
-    type: [Number, String],
+    type: [Number, String, null],
     default: null
   }
 });

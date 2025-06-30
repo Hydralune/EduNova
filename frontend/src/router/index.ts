@@ -18,6 +18,7 @@ import AssessmentPlayerView from '../views/AssessmentPlayerView.vue'
 // 导入评估相关视图
 import AssessmentList from '../components/assessment/AssessmentList.vue'
 import AssessmentView from '../components/assessment/AssessmentView.vue'
+import AssessmentCreator from '../components/assessment/AssessmentCreator.vue'
 import SubmissionList from '../components/assessment/SubmissionList.vue'
 
 // 导入AI助手组件
@@ -101,6 +102,13 @@ const router = createRouter({
       }),
       meta: { requiresAuth: true }
     },
+    // 智能备课路由 - 用于直接访问
+    {
+      path: '/lesson-planner',
+      name: 'lessonPlanner',
+      component: () => import('../components/ai/LessonPlanner.vue'),
+      meta: { requiresAuth: true, requiresTeacher: true }
+    },
     // 评估相关路由
     {
       path: '/test-assessment',
@@ -111,6 +119,23 @@ const router = createRouter({
       path: '/assessments',
       name: 'assessments',
       component: AssessmentList,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/assessments/create',
+      name: 'AssessmentCreate',
+      component: AssessmentCreator,
+      props: route => ({ courseId: parseInt(route.query.courseId as string) }),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/assessments/:id/edit',
+      name: 'AssessmentEdit',
+      component: AssessmentCreator,
+      props: route => ({ 
+        assessmentId: parseInt(route.params.id as string),
+        isEditing: true
+      }),
       meta: { requiresAuth: true }
     },
     {

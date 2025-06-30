@@ -452,12 +452,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { assessmentAPI } from '../../api';
+
+const router = useRouter();
 
 const props = defineProps({
   courseId: {
     type: [Number, String],
-    required: true
+    required: false
+  },
+  assessmentId: {
+    type: [Number, String],
+    required: false
+  },
+  isEditing: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -473,6 +485,34 @@ const assessment = reactive({
   due_date: '',
   is_published: false,
   questions: []
+});
+
+// 加载现有评估数据
+onMounted(async () => {
+  if (props.isEditing && props.assessmentId) {
+    try {
+      const response = await assessmentAPI.getAssessment(Number(props.assessmentId));
+      
+      if (response) {
+        // 将获取的评估数据填充到表单中
+        Object.assign(assessment, {
+          title: response.title || '',
+          description: response.description || '',
+          type: response.type || 'quiz',
+          time_limit: response.time_limit || 30,
+          max_attempts: response.max_attempts || 1,
+          start_date: response.start_date ? response.start_date.split('T')[0] : '',
+          due_date: response.due_date ? response.due_date.split('T')[0] : '',
+          is_published: response.is_published || false,
+          questions: response.questions || [],
+          course_id: response.course_id
+        });
+      }
+    } catch (error) {
+      console.error('加载评估数据失败:', error);
+      alert('无法加载评估数据，请重试');
+    }
+  }
 });
 
 const showQuestionModal = ref(false);
@@ -670,18 +710,74 @@ function randomizeQuestionOrder() {
 }
 
 function saveAssessment() {
-  // 这里应该调用API保存评估
-  // 添加课程ID
+  // 准备评估数据
   const assessmentData = {
     ...assessment,
-    course_id: props.courseId
+    course_id: props.courseId || assessment.course_id
   };
   
+  // 如果是编辑模式，添加ID
+  if (props.isEditing && props.assessmentId) {
+    assessmentData.id = Number(props.assessmentId);
+  }
+  
+  // 保存评估
   emit('save', assessmentData);
+  
+  // 如果没有父组件处理保存操作，则自行处理
+  if (emit.length === 0) {
+    saveAssessmentToServer(assessmentData);
+  }
+}
+
+// 保存到服务器
+async function saveAssessmentToServer(assessmentData) {
+  try {
+    if (props.isEditing && props.assessmentId) {
+      // 更新现有评估
+      await assessmentAPI.updateAssessment(Number(props.assessmentId), assessmentData);
+      alert('评估更新成功');
+    } else {
+      // 创建新评估
+      await assessmentAPI.createAssessment(assessmentData);
+      alert('评估创建成功');
+    }
+    
+    // 返回到课程详情页
+    if (assessmentData.course_id) {
+      router.push({
+        path: `/course/${assessmentData.course_id}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else {
+      router.push('/assessments');
+    }
+  } catch (error) {
+    console.error('保存评估失败:', error);
+    alert('保存评估失败，请重试');
+  }
 }
 
 function cancel() {
   emit('cancel');
+  
+  // 如果没有父组件处理取消操作，则自行处理
+  if (emit.length === 0) {
+    // 返回到课程详情页或评估列表
+    if (props.courseId) {
+      router.push({
+        path: `/course/${props.courseId}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else if (assessment.course_id) {
+      router.push({
+        path: `/course/${assessment.course_id}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else {
+      router.push('/assessments');
+    }
+  }
 }
 
 function questionTypeText(type) {

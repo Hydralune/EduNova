@@ -3,7 +3,7 @@ import axios from 'axios'
 // 创建axios实例
 const api = axios.create({
   baseURL: 'http://localhost:5001/api', // 直接连接后端API
-  timeout: 10000,
+  timeout: 60000, // 增加超时时间到60秒
   headers: {
     'Content-Type': 'application/json',
   },
@@ -162,6 +162,7 @@ export const courseAPI = {
     api.post(`/courses/${courseId}/students`, { student_ids: studentIds }),
   removeStudentFromCourse: (courseId: number, studentId: number) => 
     api.delete(`/courses/${courseId}/students/${studentId}`),
+  getCourseChapters: (courseId: number) => api.get(`/courses/${courseId}/chapters`),
 }
 
 // 课件资源API
@@ -287,6 +288,22 @@ export const ragAiAPI = {
     api.post('/rag/search', data),
   
   // AI生成功能
+  generateLessonPlan: (data: {
+    outlineType: 'course' | 'class';
+    courseId?: number | string;
+    chapterId?: number | string;
+    gradeSubject: string;
+    duration?: string;
+    learningObjectives?: string;
+    keyPoints?: string;
+    studentLevel?: string;
+    customStudentLevel?: string;
+    activities?: string[];
+    teachingStyle?: string;
+    assessmentMethods?: string[];
+    detailLevel?: number;
+  }) => api.post('/rag/generate-lesson-plan', data),
+  
   generateCourseContent: (data: any) => api.post('/ai/generate-course-content', data),
   generateAssessment: (data: any) => api.post('/ai/generate-assessment', data),
   autoGradeAnswer: (data: any) => api.post('/ai/auto-grade', data),

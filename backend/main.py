@@ -38,7 +38,7 @@ db.init_app(app)
 jwt.init_app(app)
 migrate.init_app(app, db)
 cors.init_app(app, resources={r"/*": {
-    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "null"],
+    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "null","*"],
     "supports_credentials": True,
     "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

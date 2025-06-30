@@ -79,7 +79,7 @@
                 </div>
               </div>
               <div class="mt-5">
-                <button @click="activeTab = 'ai-assistant'" class="btn btn-primary w-full">
+                <button @click="activeTab = 'lesson-planner'" class="btn btn-primary w-full">
                   开始备课
                 </button>
               </div>
@@ -87,7 +87,7 @@
             <div class="bg-gray-50 px-4 py-4 sm:px-6">
               <div class="text-sm">
                 <span class="font-medium text-green-600 hover:text-green-500">
-                  AI助手已准备就绪
+                  AI辅助备课
                 </span>
               </div>
             </div>
@@ -140,6 +140,11 @@
           <AIAssistant :user-id="userId || ''" />
         </div>
 
+        <!-- 智能备课 -->
+        <div v-if="activeTab === 'lesson-planner'">
+          <LessonPlanner />
+        </div>
+
         <!-- 学习分析 -->
         <div v-if="activeTab === 'analytics'">
           <LearningAnalytics :user-id="userId || ''" />
@@ -187,6 +192,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 import CourseList from '@/components/course/CourseList.vue';
 import AIAssistant from '@/components/ai/AIAssistant.vue';
+import LessonPlanner from '@/components/ai/LessonPlanner.vue';
 import LearningAnalytics from '@/components/analytics/LearningAnalytics.vue';
 import KnowledgeBase from '@/components/rag/KnowledgeBase.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
@@ -201,7 +207,8 @@ const tabs = [
   { id: 'dashboard', name: '工作台' },
   { id: 'courses', name: '课程管理' },
   { id: 'assessments', name: '评估测试' },
-  { id: 'ai-assistant', name: '智能备课' },
+  { id: 'lesson-planner', name: '智能备课' },
+  { id: 'ai-assistant', name: '智能助手' },
   { id: 'analytics', name: '学情分析' },
   { id: 'knowledge-base', name: '知识库' }
 ];
