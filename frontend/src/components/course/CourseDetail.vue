@@ -345,7 +345,7 @@
                   class="mr-3"
                 />
                 <div>
-                  <div class="font-medium">{{ student.name }}</div>
+                  <div class="font-medium">{{ student.full_name }}</div>
                   <div class="text-sm text-gray-500">{{ student.email }}</div>
                 </div>
               </div>
@@ -478,6 +478,12 @@ const previewMaterialId = ref<number | undefined>();
 const supportedKnowledgeBaseTypes = ref<string[]>([]);
 const knowledgeBaseProcessing = ref<Record<number, boolean>>({});
 
+// 添加缺失的材料上传相关属性
+const materialTitle = ref('');
+const materialFile = ref<File | null>(null);
+const materialUploadProgress = ref(0);
+const materialUploadError = ref('');
+
 // 选项卡定义
 const tabs = [
   { id: 'chapters', name: '章节内容' },
@@ -525,7 +531,7 @@ onMounted(async () => {
 async function fetchCourse() {
   try {
     const response = await courseAPI.getCourse(courseId.value);
-    course.value = response;
+    course.value = response as any;
   } catch (error) {
     console.error('获取课程详情失败:', error);
   }
@@ -535,7 +541,7 @@ async function fetchCourse() {
 async function fetchMaterials() {
   try {
     const response = await materialAPI.getMaterials(courseId.value);
-    materials.value = response.materials || [];
+    materials.value = (response as any).materials || [];
   } catch (error) {
     console.error('获取课程材料失败:', error);
   }
@@ -547,7 +553,7 @@ async function fetchStudents() {
     isLoadingStudents.value = true;
     studentError.value = null;
     const response = await courseAPI.getCourseStudents(courseId.value);
-    students.value = response.students || [];
+    students.value = (response as any).students || [];
   } catch (error) {
     console.error('获取学生列表失败:', error);
     studentError.value = '获取学生列表失败';
@@ -561,7 +567,7 @@ async function fetchAvailableStudents() {
   try {
     isLoadingStudents.value = true;
     const response = await courseAPI.getAvailableStudents(courseId.value);
-    availableStudents.value = response.students || [];
+    availableStudents.value = (response as any).students || [];
   } catch (error) {
     console.error('获取可用学生失败:', error);
   } finally {
@@ -614,7 +620,7 @@ async function confirmRemoveStudent(student: Student) {
 async function fetchAssessments() {
   try {
     const response = await assessmentAPI.getAssessments(courseId.value);
-    assessments.value = response.assessments || [];
+    assessments.value = (response as any).assessments || [];
   } catch (error) {
     console.error('获取评估列表失败:', error);
   }
@@ -846,4 +852,62 @@ const confirmDeleteAssessment = (assessment: Assessment): void => {
     }
   }
 };
+
+// 处理文件选择
+function handleFileChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    materialFile.value = target.files[0];
+    if (!materialTitle.value) {
+      materialTitle.value = materialFile.value.name;
+    }
+  }
+}
+
+// 上传材料
+async function uploadMaterial() {
+  if (!materialFile.value || !course.value) {
+    materialUploadError.value = '请选择文件';
+    return;
+  }
+  
+  try {
+    materialUploadProgress.value = 10;
+    materialUploadError.value = '';
+    
+    const formData = new FormData();
+    formData.append('file', materialFile.value);
+    formData.append('title', materialTitle.value || materialFile.value.name);
+    
+    materialUploadProgress.value = 30;
+    
+    const response = await materialAPI.uploadMaterial(courseId.value, formData);
+    
+    materialUploadProgress.value = 100;
+    
+    // 清空表单
+    materialFile.value = null;
+    materialTitle.value = '';
+    
+    // 关闭模态框
+    showAddMaterialModal.value = false;
+    
+    // 重新获取材料列表
+    await fetchMaterials();
+  } catch (error) {
+    console.error('上传课件失败:', error);
+    materialUploadError.value = '上传失败，请重试';
+    materialUploadProgress.value = 0;
+  }
+}
+
+// 切换学生选择状态
+function toggleStudentSelection(studentId: number) {
+  const index = selectedStudents.value.indexOf(studentId);
+  if (index === -1) {
+    selectedStudents.value.push(studentId);
+  } else {
+    selectedStudents.value.splice(index, 1);
+  }
+}
 </script> 
