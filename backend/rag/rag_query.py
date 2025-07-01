@@ -169,9 +169,9 @@ def get_graph_context(question: str, graph: nx.Graph, all_chunks: dict, llm) -> 
 def initialize_resources(course_id):
     """Initialize and return resources for a specific course."""
     # --- Load API Keys ---
-    api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+    api_key = os.getenv("LLM_API_KEY")
     base_url = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
-    model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-8B")
+    model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
 
     if not api_key:
         raise ValueError("LLM_API_KEY not found in .env file.")
@@ -368,9 +368,12 @@ def get_llm_response(query: str, context: str = "", max_tokens: int = 4000) -> s
     """
     try:
         # 获取API配置
-        api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+        api_key = os.getenv("LLM_API_KEY")
         api_base = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
         model = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
+        
+        if not api_key:
+            raise ValueError("LLM_API_KEY not found in .env file.")
         
         # 构建提示词
         if context:
@@ -480,9 +483,12 @@ def get_llm_response_stream(query: str, context: str = "", max_tokens: int = 400
     """
     try:
         # 获取API配置
-        api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+        api_key = os.getenv("LLM_API_KEY")
         api_base = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
         model = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
+        
+        if not api_key:
+            raise ValueError("LLM_API_KEY not found in .env file.")
         
         # 构建提示词
         if context:
