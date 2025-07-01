@@ -11,6 +11,13 @@ from backend.models.material import Material
 from backend.models.assessment import Assessment, StudentAnswer
 import hashlib
 import requests
+import openai
+import re
+from dotenv import load_dotenv
+import time
+import uuid
+import threading
+import functools
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -21,6 +28,190 @@ def teacher_or_admin_required():
     if role not in ['teacher', 'admin']:
         return jsonify({"error": "需要教师或管理员权限"}), 403
     return None
+
+# 通用错误处理装饰器
+def api_error_handler(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except Exception as e:
+            current_app.logger.error(f"API异常: {str(e)}")
+            import traceback
+            current_app.logger.error(traceback.format_exc())
+            
+            # 创建错误响应
+            response = jsonify({
+                'status': 'error',
+                'message': f'服务器处理请求时出错: {str(e)}',
+                'error_type': type(e).__name__,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            # 添加CORS头
+            origin = request.headers.get('Origin', '')
+            allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+            
+            if origin in allowed_origins:
+                response.headers.add('Access-Control-Allow-Origin', origin)
+            else:
+                response.headers.add('Access-Control-Allow-Origin', '*')
+                
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'POST,GET,PUT,DELETE,OPTIONS')
+            response.headers.add('Content-Type', 'application/json')
+            
+            return response, 500
+    return decorated_function
+
+# 应用错误处理装饰器到关键API端点
+@learning_bp.route('/assessments/ai-generate', methods=['POST', 'OPTIONS'])
+@api_error_handler
+def generate_ai_assessment():
+    """使用AI自动生成评估内容"""
+    # 调试信息：记录完整请求详情
+    current_app.logger.info(f"收到请求: {request.method} {request.path} (完整URL: {request.url})")
+    current_app.logger.info(f"请求头: {request.headers}")
+    
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        current_app.logger.info("处理OPTIONS请求")
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        response.headers.add('Content-Type', 'application/json')
+        return response
+        
+    data = request.json
+    current_app.logger.info(f"收到AI自动生成评估请求: {data}")
+    
+    # 验证必要数据
+    required_fields = ['course_name', 'course_description']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+    
+    # 获取课程信息
+    course_name = data['course_name']
+    course_description = data['course_description']
+    extra_info = data.get('extra_info', '')
+    assessment_type = data.get('assessment_type', 'quiz')
+    difficulty = data.get('difficulty', 'medium')
+    course_id = data.get('course_id')
+    
+    # 创建唯一的请求ID (使用时间戳+课程ID)
+    request_id = f"{int(time.time())}_{course_id}_{str(uuid.uuid4())[:8]}"
+    
+    # 创建保存目录
+    ai_assessments_dir = os.path.join(current_app.root_path, 'uploads', 'ai_assessments')
+    os.makedirs(ai_assessments_dir, exist_ok=True)
+    
+    # 构建文件路径
+    file_path = os.path.join(ai_assessments_dir, f"assessment_{request_id}.json")
+    
+    # 保存请求信息
+    request_data = {
+        'status': 'processing',
+        'request_id': request_id,
+        'course_name': course_name,
+        'course_description': course_description,
+        'extra_info': extra_info,
+        'assessment_type': assessment_type,
+        'difficulty': difficulty,
+        'course_id': course_id,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # 先保存请求信息
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(request_data, f, ensure_ascii=False, indent=2)
+    
+    current_app.logger.info(f"请求信息已保存到: {file_path}")
+    
+    # 在后台线程中处理AI生成，避免长时间阻塞
+    # 获取当前的应用实例，以便在线程中使用
+    app = current_app._get_current_object()
+    
+    def generate_in_background():
+        # 在线程中使用应用上下文
+        with app.app_context():
+            try:
+                # 调用AI生成评估
+                generated_assessment = generate_assessment_with_ai(
+                    course_name, 
+                    course_description, 
+                    extra_info, 
+                    assessment_type, 
+                    difficulty
+                )
+                
+                # 添加课程ID（如果提供）
+                if course_id:
+                    generated_assessment['course_id'] = course_id
+                
+                # 添加请求ID用于跟踪
+                generated_assessment['request_id'] = request_id
+                
+                # 保存生成的评估
+                result_data = {
+                    'status': 'success',
+                    'request_id': request_id,
+                    'assessment': generated_assessment,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(result_data, f, ensure_ascii=False, indent=2)
+                
+                app.logger.info(f"生成的评估已保存到: {file_path}")
+                
+            except Exception as e:
+                # 保存错误信息
+                error_data = {
+                    'status': 'error',
+                    'request_id': request_id,
+                    'error': str(e),
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(error_data, f, ensure_ascii=False, indent=2)
+                
+                app.logger.error(f"生成评估失败: {str(e)}")
+    
+    # 启动后台线程
+    thread = threading.Thread(target=generate_in_background)
+    thread.daemon = True
+    thread.start()
+    
+    # 立即返回请求ID，让前端可以用它来后续查询结果
+    response_data = {
+        'status': 'processing',
+        'message': '正在生成评估，请稍后查询结果',
+        'request_id': request_id
+    }
+    
+    response = jsonify(response_data)
+    
+    # 添加CORS头
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'POST,GET,PUT,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Content-Type', 'application/json')
+    
+    # 调试输出
+    current_app.logger.info(f"返回响应: {response_data}")
+    
+    return response
 
 @learning_bp.route('/record', methods=['POST'])
 def record_learning_activity():
@@ -800,75 +991,105 @@ def remove_student_from_course(course_id, student_id):
 
 # ============ 评估相关API ============
 
-@learning_bp.route('/assessments', methods=['GET'])
+@learning_bp.route('/assessments', methods=['GET', 'OPTIONS'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def get_assessments():
     """获取评估列表"""
-    print("\n=== 获取评估列表 ===")
-    # 获取查询参数
-    course_id = request.args.get('course_id', type=int)
-    status = request.args.get('status')
-    search = request.args.get('search')
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    
-    print(f"查询参数: course_id={course_id}, status={status}, search={search}, page={page}, per_page={per_page}")
-    
-    # 构建查询
-    query = Assessment.query
-    
-    # 应用过滤条件
-    if course_id:
-        print(f"过滤课程: {course_id}")
-        query = query.filter_by(course_id=course_id)
-    
-    if status:
-        print(f"过滤状态: {status}")
-        if status == 'active':
-            query = query.filter_by(is_active=True, is_published=True)
-        elif status == 'upcoming':
-            query = query.filter(
-                Assessment.start_date > datetime.utcnow(),
-                Assessment.is_published == True
-            )
-        elif status == 'past':
-            query = query.filter(
-                Assessment.due_date < datetime.utcnow(),
-                Assessment.is_published == True
-            )
-    else:
-        # 默认显示所有评估，包括未发布的
-        print("显示所有评估")
-    
-    if search:
-        print(f"搜索关键词: {search}")
-        search_term = f"%{search}%"
-        query = query.filter(Assessment.title.ilike(search_term))
-    
-    # 按创建时间倒序排序
-    query = query.order_by(Assessment.created_at.desc())
-    
-    # 执行分页查询
-    assessments_pagination = query.paginate(page=page, per_page=per_page)
-    
-    # 准备响应数据
-    assessments_data = []
-    for assessment in assessments_pagination.items:
-        assessment_dict = assessment.to_dict()
-        # 添加提交数量信息
-        assessment_dict['submission_count'] = len(assessment.student_answers)
-        assessments_data.append(assessment_dict)
-    
-    print(f"找到 {len(assessments_data)} 个评估")
-    for assessment in assessments_data:
-        print(f"- {assessment['title']} (ID: {assessment['id']})")
-    
-    return jsonify({
-        'assessments': assessments_data,
-        'total': assessments_pagination.total,
-        'pages': assessments_pagination.pages,
-        'current_page': page
-    })
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
+        
+    try:
+        # 获取查询参数
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        course_id = request.args.get('course_id', type=int)
+        
+        # 构建查询
+        query = Assessment.query
+        
+        # 如果指定了课程ID，筛选该课程的评估
+        if course_id:
+            query = query.filter_by(course_id=course_id)
+            
+        # 按创建时间降序排序
+        query = query.order_by(Assessment.created_at.desc())
+        
+        # 分页
+        try:
+            assessments_pagination = query.paginate(page=page, per_page=per_page)
+        except Exception as e:
+            current_app.logger.error(f"分页查询失败: {str(e)}")
+            # 尝试不使用created_by字段进行查询
+            assessments = query.all()
+            total = len(assessments)
+            start = (page - 1) * per_page
+            end = start + per_page
+            assessments = assessments[start:end]
+            
+            # 创建自定义分页结果
+            result = {
+                'items': [a.to_dict() for a in assessments],
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page  # 向上取整
+            }
+        else:
+            # 使用标准分页结果
+            result = {
+                'items': [a.to_dict() for a in assessments_pagination.items],
+                'page': assessments_pagination.page,
+                'per_page': assessments_pagination.per_page,
+                'total': assessments_pagination.total,
+                'pages': assessments_pagination.pages
+            }
+        
+        # 创建响应
+        response = jsonify({
+            'status': 'success',
+            'assessments': result['items'],
+            'pagination': {
+                'page': result['page'],
+                'per_page': result['per_page'],
+                'total': result['total'],
+                'pages': result['pages']
+            }
+        })
+        
+        # 添加CORS头
+        origin = request.headers.get('Origin', '')
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET')
+        
+        return response
+        
+    except Exception as e:
+        current_app.logger.error(f"获取评估列表失败: {str(e)}")
+        
+        # 创建错误响应
+        response = jsonify({
+            'status': 'error',
+            'message': f'获取评估列表失败: {str(e)}'
+        })
+        
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        
+        return response, 500
 
 @learning_bp.route('/assessments/<int:assessment_id>', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
@@ -880,62 +1101,212 @@ def get_assessment(assessment_id):
     
     return jsonify(assessment.to_dict())
 
+@learning_bp.route('/assessments', methods=['OPTIONS'])
+def assessments_options():
+    """处理评估接口的OPTIONS请求"""
+    response = make_response()
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Origin')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Max-Age', '3600')
+    return response
+
 @learning_bp.route('/assessments', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def create_assessment():
-    """创建新评估"""
-    data = request.json
-    
-    # 验证必要数据
-    required_fields = ['title', 'course_id', 'questions']
-    for field in required_fields:
-        if field not in data:
-            return jsonify({'error': f'Missing required field: {field}'}), 400
-    
-    # 创建评估
-    assessment = Assessment(
-        title=data['title'],
-        description=data.get('description', ''),
-        course_id=data['course_id'],
-        questions=json.dumps(data['questions']),
-        due_date=datetime.fromisoformat(data['due_date']) if 'due_date' in data else None,
-        is_active=data.get('is_active', True)
-    )
-    
-    db.session.add(assessment)
-    db.session.commit()
-    
-    return jsonify(assessment.to_dict()), 201
+    """创建新的评估"""
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response
+        
+    try:
+        data = request.json
+        current_app.logger.info(f"接收到创建评估请求: {data}")
+        
+        # 验证必要字段
+        required_fields = ['title', 'course_id']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # 处理日期字段
+        start_date = None
+        if data.get('start_date'):
+            try:
+                start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+            except:
+                start_date = None
+                
+        due_date = None
+        if data.get('due_date'):
+            try:
+                due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00'))
+            except:
+                due_date = None
+        
+        # 确保questions字段不为NULL
+        questions_json = '[]'
+        if 'questions' in data and data['questions']:
+            questions_json = json.dumps(data['questions'])
+        
+        # 创建评估对象
+        assessment = Assessment(
+            title=data['title'],
+            description=data.get('description', ''),
+            course_id=data['course_id'],
+            total_score=data.get('total_score', 100),
+            duration=data.get('duration'),
+            start_date=start_date,
+            due_date=due_date,
+            max_attempts=data.get('max_attempts'),
+            is_published=data.get('is_published', False),
+            is_active=data.get('is_active', True),
+            questions=questions_json,  # 直接设置questions字段
+            created_by=1  # 暂时硬编码为1，实际应该使用 get_jwt_identity()
+        )
+        
+        # 保存评估
+        db.session.add(assessment)
+        db.session.commit()
+        
+        # 创建响应
+        response = jsonify({
+            'status': 'success',
+            'message': '评估创建成功',
+            'assessment_id': assessment.id,
+            'assessment': assessment.to_dict()
+        })
+        
+        # 添加CORS头
+        origin = request.headers.get('Origin', '')
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST')
+        
+        return response
+        
+    except Exception as e:
+        current_app.logger.error(f"创建评估失败: {str(e)}")
+        db.session.rollback()
+        
+        # 创建错误响应
+        response = jsonify({
+            'status': 'error',
+            'message': f'创建评估失败: {str(e)}'
+        })
+        
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        
+        return response, 500
 
-@learning_bp.route('/assessments/<int:assessment_id>', methods=['PUT'])
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['PUT', 'OPTIONS'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def update_assessment(assessment_id):
     """更新评估"""
-    assessment = Assessment.query.get(assessment_id)
-    if not assessment:
-        return jsonify({'error': 'Assessment not found'}), 404
-    
-    data = request.json
-    
-    # 更新评估信息
-    if 'title' in data:
-        assessment.title = data['title']
-    
-    if 'description' in data:
-        assessment.description = data['description']
-    
-    if 'questions' in data:
-        assessment.questions = json.dumps(data['questions'])
-    
-    if 'due_date' in data:
-        assessment.due_date = datetime.fromisoformat(data['due_date']) if data['due_date'] else None
-    
-    if 'is_active' in data:
-        assessment.is_active = data['is_active']
-    
-    db.session.commit()
-    
-    return jsonify(assessment.to_dict())
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'PUT,OPTIONS')
+        return response
+        
+    try:
+        assessment = Assessment.query.get(assessment_id)
+        if not assessment:
+            return jsonify({'error': 'Assessment not found'}), 404
+        
+        data = request.json
+        current_app.logger.info(f"接收到更新评估请求: {assessment_id}, 数据: {data}")
+        
+        # 处理日期字段
+        if 'start_date' in data:
+            try:
+                assessment.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00')) if data['start_date'] else None
+            except:
+                pass
+                
+        if 'due_date' in data:
+            try:
+                assessment.due_date = datetime.fromisoformat(data['due_date'].replace('Z', '+00:00')) if data['due_date'] else None
+            except:
+                pass
+        
+        # 更新基本信息
+        assessment.title = data.get('title', assessment.title)
+        assessment.description = data.get('description', assessment.description)
+        assessment.total_score = data.get('total_score', assessment.total_score)
+        assessment.duration = data.get('duration', assessment.duration)
+        assessment.max_attempts = data.get('max_attempts', assessment.max_attempts)
+        assessment.is_published = data.get('is_published', assessment.is_published)
+        assessment.is_active = data.get('is_active', assessment.is_active)
+        
+        # 更新题目
+        if 'questions' in data and data['questions'] is not None:
+            # 将题目列表转换为JSON字符串
+            assessment.questions = json.dumps(data['questions'])
+        
+        db.session.commit()
+        
+        # 创建响应
+        response = jsonify({
+            'status': 'success',
+            'message': '评估更新成功',
+            'assessment_id': assessment.id,
+            'assessment': assessment.to_dict()
+        })
+        
+        # 添加CORS头
+        origin = request.headers.get('Origin', '')
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        
+        if origin in allowed_origins:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        else:
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'PUT')
+        
+        return response
+        
+    except Exception as e:
+        current_app.logger.error(f"更新评估失败: {str(e)}")
+        db.session.rollback()
+        
+        # 创建错误响应
+        response = jsonify({
+            'status': 'error',
+            'message': f'更新评估失败: {str(e)}'
+        })
+        
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        
+        return response, 500
 
 @learning_bp.route('/assessments/<int:assessment_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
@@ -1959,4 +2330,260 @@ def test_api():
         'message': 'API测试成功',
         'method': request.method
     })
+
+def generate_assessment_with_ai(course_name, course_description, extra_info='', assessment_type='quiz', difficulty='medium'):
+    """使用AI生成评估内容"""
+    # 加载环境变量
+    load_dotenv()
+    
+    # 尝试获取API配置
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+    api_base = os.getenv("LLM_API_BASE") or os.getenv("OPENAI_API_BASE") or os.getenv("DEEPSEEK_API_BASE")
+    model_name = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv("DEEPSEEK_MODEL") or "gpt-3.5-turbo"
+    
+    if not api_key:
+        raise ValueError("API密钥未配置，请在环境变量中设置LLM_API_KEY或OPENAI_API_KEY")
+    
+    # 设置API客户端
+    if api_base:
+        client = openai.OpenAI(api_key=api_key, base_url=api_base)
+    else:
+        client = openai.OpenAI(api_key=api_key)
+    
+    current_app.logger.info(f"使用模型 {model_name} 生成评估内容")
+    
+    # 根据评估类型调整题目数量
+    question_count = 10  # 默认值
+    if assessment_type == "quiz":
+        question_count = 10
+    elif assessment_type == "exam":
+        question_count = 20
+    elif assessment_type == "homework":
+        question_count = 8
+    
+    # 准备提示词
+    prompt = f"""
+    请根据以下课程信息生成一个完整的{assessment_type}（{question_count}题左右）：
+    
+    课程名称: {course_name}
+    课程描述: {course_description}
+    难度级别: {difficulty}
+    额外要求: {extra_info}
+    
+    请按照以下JSON格式返回评估内容，确保格式正确：
+    {{
+      "title": "评估标题",
+      "description": "评估描述",
+      "type": "{assessment_type}",
+      "total_score": 100,
+      "sections": [
+        {{
+          "type": "multiple_choice",
+          "description": "选择题部分",
+          "score_per_question": 分数,
+          "questions": [
+            {{
+              "id": 1,
+              "stem": "题干内容",
+              "type": "multiple_choice",
+              "score": 分数,
+              "difficulty": "{difficulty}",
+              "options": ["A. 选项内容", "B. 选项内容", "C. 选项内容", "D. 选项内容"],
+              "answer": "C",
+              "explanation": "答案解析"
+            }}
+            // 更多题目...
+          ]
+        }},
+        // 可以有多个sections，如multiple_choice, fill_in_blank, short_answer等
+      ]
+    }}
+    
+    注意：
+    1. 请确保生成的题目与课程内容相关，并具有适当的难度级别
+    2. 选择题的选项应该使用A、B、C、D等标注，答案也要用对应的字母
+    3. 每种题型的分值合理分配，总分为100分
+    4. 务必确保JSON格式正确，可以直接被解析
+    5. 对于选择题，answer是选项的字母（如"A"、"B"等）
+    6. 对于填空题，answer可以是字符串或字符串数组（多个空）
+    7. 对于简答题和论述题，提供reference_answer参考答案
+    8. 根据课程内容生成真实、准确、有教育意义的题目
+    
+    请只返回JSON格式的评估内容，不要添加任何额外的解释或说明。
+    """
+    
+    current_app.logger.info("发送AI请求生成评估内容")
+    
+    # 调用AI API生成内容
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "你是一个专业的教育内容创建者，擅长根据课程信息生成高质量的测验和考试题目。"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=4000
+        )
+        
+        # 提取生成的内容
+        ai_response = response.choices[0].message.content.strip()
+        current_app.logger.info(f"AI响应内容长度: {len(ai_response)}")
+        
+        # 尝试解析JSON，提取其中的内容
+        try:
+            # 使用正则表达式找到JSON部分（从第一个{开始到最后一个}结束）
+            json_match = re.search(r'({[\s\S]*})', ai_response)
+            if json_match:
+                json_str = json_match.group(1)
+                assessment_data = json.loads(json_str)
+                current_app.logger.info("成功解析AI生成的评估JSON")
+                return assessment_data
+            else:
+                # 尝试直接解析整个响应
+                assessment_data = json.loads(ai_response)
+                current_app.logger.info("成功解析AI生成的评估JSON")
+                return assessment_data
+        except json.JSONDecodeError as e:
+            current_app.logger.error(f"JSON解析错误: {str(e)}")
+            raise ValueError(f"无法解析AI生成的内容为有效JSON: {str(e)}")
+        
+    except Exception as e:
+        current_app.logger.error(f"调用AI服务失败: {str(e)}")
+        raise Exception(f"调用AI服务失败: {str(e)}")
+
+@learning_bp.route('/assessments/ai-generate/<request_id>', methods=['GET', 'OPTIONS'])
+@api_error_handler
+def get_ai_assessment_status(request_id):
+    """获取AI生成评估的状态和结果"""
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
+    
+    current_app.logger.info(f"查询AI生成评估状态: request_id={request_id}")
+    
+    # 查找对应的文件
+    ai_assessments_dir = os.path.join(current_app.root_path, 'uploads', 'ai_assessments')
+    file_path = os.path.join(ai_assessments_dir, f"assessment_{request_id}.json")
+    
+    if not os.path.exists(file_path):
+        current_app.logger.error(f"找不到评估文件: {file_path}")
+        response = jsonify({
+            'status': 'error',
+            'message': '找不到指定的评估请求',
+            'request_id': request_id
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 404
+    
+    try:
+        # 读取文件内容
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # 判断是否已完成
+        if 'assessment' in data:
+            current_app.logger.info(f"评估已生成完成: request_id={request_id}")
+            response = jsonify(data)
+        elif 'error' in data:
+            current_app.logger.info(f"评估生成失败: request_id={request_id}")
+            response = jsonify(data)
+        else:
+            # 计算进行了多长时间
+            start_time = datetime.fromisoformat(data.get('timestamp', datetime.now().isoformat()))
+            current_time = datetime.now()
+            elapsed_seconds = (current_time - start_time).total_seconds()
+            
+            # 根据经过的时间估算进度
+            progress_info = ""
+            if elapsed_seconds < 30:
+                progress_info = "准备模型资源中..."
+            elif elapsed_seconds < 60:
+                progress_info = "正在分析课程内容..."
+            elif elapsed_seconds < 90:
+                progress_info = "正在构思评估题目..."
+            else:
+                progress_info = "正在组装评估内容，即将完成..."
+            
+            current_app.logger.info(f"评估正在生成中: request_id={request_id}, elapsed={elapsed_seconds:.1f}秒")
+            response = jsonify({
+                'status': 'processing',
+                'message': f'评估正在生成中，请稍后再查询',
+                'progress': progress_info,
+                'elapsed_seconds': int(elapsed_seconds),
+                'request_id': request_id
+            })
+            
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Content-Type', 'application/json')
+        return response
+    
+    except Exception as e:
+        current_app.logger.error(f"读取评估文件失败: {str(e)}")
+        response = jsonify({
+            'status': 'error',
+            'message': f'读取评估状态失败: {str(e)}',
+            'request_id': request_id
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 500
+
+@learning_bp.route('/assessments/ai-file/<request_id>', methods=['GET', 'OPTIONS'])
+@api_error_handler
+def get_ai_assessment_file(request_id):
+    """直接获取AI生成评估文件的内容"""
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
+    
+    current_app.logger.info(f"直接请求AI评估文件内容: request_id={request_id}")
+    
+    # 查找对应的文件
+    ai_assessments_dir = os.path.join(current_app.root_path, 'uploads', 'ai_assessments')
+    file_path = os.path.join(ai_assessments_dir, f"assessment_{request_id}.json")
+    
+    if not os.path.exists(file_path):
+        current_app.logger.error(f"找不到评估文件: {file_path}")
+        response = jsonify({
+            'status': 'error',
+            'message': '找不到指定的评估文件',
+            'request_id': request_id
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 404
+    
+    try:
+        # 读取文件内容
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # 直接返回文件内容，无论处理状态如何
+        current_app.logger.info(f"成功读取评估文件: request_id={request_id}")
+        response = jsonify(data)
+        
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Content-Type', 'application/json')
+        return response
+    
+    except Exception as e:
+        current_app.logger.error(f"读取评估文件失败: {str(e)}")
+        response = jsonify({
+            'status': 'error',
+            'message': f'读取评估文件失败: {str(e)}',
+            'request_id': request_id
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 500
 
