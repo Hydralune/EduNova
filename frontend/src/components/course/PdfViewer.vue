@@ -1,10 +1,10 @@
 <template>
   <div class="pdf-viewer">
-    <div v-if="loading" class="flex flex-col justify-center items-center h-[600px] bg-white border rounded-md">
+    <div v-if="loading" class="flex flex-col justify-center items-center h-[600px] bg-white rounded-md">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
       <p class="text-gray-500">{{ loadingProgress > 0 ? `加载中... ${loadingProgress}%` : '加载中...' }}</p>
     </div>
-    <div v-else-if="error" class="flex flex-col items-center justify-center h-[600px] bg-white border rounded-md">
+    <div v-else-if="error" class="flex flex-col items-center justify-center h-[600px] bg-white rounded-md">
       <div class="text-red-500 mb-4">{{ error }}</div>
       <div class="flex space-x-4">
         <a 
@@ -25,7 +25,7 @@
     <div v-else>
       <!-- 使用object标签直接嵌入PDF，让浏览器使用内置PDF查看器 -->
       <object
-        :data="pdfUrl"
+        :data="viewerUrl"
         type="application/pdf"
         class="pdf-object"
       >
@@ -53,13 +53,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, defineProps, defineEmits } from 'vue';
+import { ref, onMounted, watch, defineProps, defineEmits, computed } from 'vue';
 
 const props = defineProps({
   pdfUrl: {
     type: String,
     required: true
   }
+});
+
+const viewerUrl = computed(() => {
+  if (!props.pdfUrl) return '';
+  // Hide default toolbar for cleaner look
+  return props.pdfUrl + '#toolbar=0';
 });
 
 const emit = defineEmits(['download']);
@@ -116,7 +122,6 @@ function loadPdf() {
   width: 100%;
   height: 600px;
   border-radius: 0.375rem;
-  border: 1px solid #e5e7eb;
   background-color: white;
 }
 

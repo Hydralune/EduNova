@@ -38,3 +38,4 @@ scikit-learn==1.5.1
 # File processing
 python-magic>=0.4.27
 python-magic-bin>=0.4.14; platform_system == "Windows" 
+radon>=6.0 

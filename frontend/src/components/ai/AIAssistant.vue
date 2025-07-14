@@ -9,7 +9,7 @@
     </div>
     
     <!-- 对话列表侧边栏 -->
-    <div v-if="showConversations" class="fixed inset-0 bg-black bg-opacity-50 flex z-40" @click="showConversations = false">
+    <div v-if="!minimal && showConversations" class="fixed inset-0 bg-black bg-opacity-50 flex z-40" @click="showConversations = false">
       <div class="bg-white w-80 h-full overflow-y-auto p-4" @click.stop>
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-semibold">对话历史</h3>
@@ -57,10 +57,14 @@
     
     <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
       <!-- 聊天页面头部 -->
-      <div class="px-6 py-4 border-b">
-        <div class="flex justify-between items-center mb-4">
+      <div
+        :class="['border-b', minimal ? 'px-4 py-2' : 'px-6 py-4', 'cursor-pointer']"
+        @click.stop="emit('collapseRequest')"
+      >
+        <div class="flex justify-between items-center mb-2">
           <div class="flex items-center">
             <button 
+              v-if="!minimal"
               @click="showConversations = true" 
               class="mr-3 text-gray-500 hover:text-gray-700"
             >
@@ -68,9 +72,14 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
               </svg>
             </button>
-            <h3 class="text-lg font-semibold">智能助手</h3>
+            <h3 class="text-lg font-semibold whitespace-nowrap flex items-center space-x-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M2 5a2 2 0 012-2h16a2 2 0 012 2v9a2 2 0 01-2 2H8l-6 6V5z" />
+              </svg>
+              <span>智能助手</span>
+            </h3>
           </div>
-          <div class="flex items-center">
+          <div v-if="!minimal" class="flex items-center">
             <span class="inline-block w-2 h-2 rounded-full mr-2" 
                   :class="statusIndicatorClass"></span>
             <span class="text-sm text-gray-500">{{ statusText }}</span>
@@ -78,7 +87,7 @@
         </div>
         
         <!-- 模式选择和课程选择 -->
-        <div class="flex flex-wrap items-center gap-4">
+        <div v-if="!minimal" class="flex flex-wrap items-center gap-4">
           <!-- 模式选择 -->
           <div class="flex items-center">
             <label class="text-sm text-gray-600 mr-2 whitespace-nowrap">模式:</label>
@@ -128,7 +137,7 @@
         </div>
       </div>
       
-      <div class="h-[calc(100vh-300px)] p-4 overflow-y-auto" ref="chatContainer">
+      <div :class="[minimal ? 'h-[calc(100vh-240px)]' : 'h-[calc(100vh-300px)]', 'p-4 overflow-y-auto']" ref="chatContainer">
         <div class="space-y-4">
           <!-- 系统消息 -->
           <div v-if="chatMessages.length === 0" class="flex items-start">
@@ -238,7 +247,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, computed } from 'vue';
+import { ref, onMounted, nextTick, watch, computed, defineEmits } from 'vue';
 import axios from 'axios';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
@@ -273,6 +282,13 @@ const props = defineProps({
   courseId: {
     type: [Number, String],
     default: null
+  },
+  // 当 minimal 为 true 时：
+  // 1) 默认启用 RAG 并锁定到传入的 courseId
+  // 2) 隐藏对话历史、模式/课程选择等额外 UI
+  minimal: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -457,6 +473,8 @@ function formatAvatarUrl(url: string): string {
   return `http://localhost:5001${url}`;
 }
 
+const emit = defineEmits(['collapseRequest']);
+
 onMounted(async () => {
   // 获取用户信息
   try {
@@ -524,6 +542,14 @@ onMounted(async () => {
   } else {
     // 否则使用普通模式
     chatMode.value = 'general';
+  }
+
+  // 如果处于简洁模式，预设聊天模式和课程
+  if (props.minimal) {
+    chatMode.value = 'rag';
+    if (props.courseId) {
+      selectedCourseId.value = props.courseId;
+    }
   }
   
   // 设置欢迎消息
