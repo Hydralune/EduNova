@@ -25,6 +25,7 @@ import SubmissionList from '../components/assessment/SubmissionList.vue'
 import AIAssistant from '../components/ai/AIAssistant.vue'
 import TestAIAssistantView from '../views/TestAIAssistantView.vue'
 import SimpleTestView from '../views/SimpleTestView.vue'
+import LearningView from '../views/LearningView.vue'
 
 // 定义路由历史位置状态接口
 interface ScrollPositionNormalized {
@@ -167,6 +168,12 @@ const router = createRouter({
       path: '/simple-test',
       name: 'simpleTest',
       component: SimpleTestView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/learning/:courseId',
+      name: 'learning',
+      component: LearningView,
       meta: { requiresAuth: true }
     },
     {

@@ -70,6 +70,7 @@
             <span class="text-sm text-gray-500">{{ course.teacher_name }}</span>
             <div class="flex space-x-2">
               <router-link :to="`/course/${course.id}`" class="text-blue-600 hover:text-blue-800">查看详情</router-link>
+              <router-link :to="{ name: 'learning', params: { courseId: course.id } }" class="text-blue-600 hover:text-blue-800">开始学习</router-link>
               <div v-if="userRole === 'teacher' || userRole === 'admin'" class="flex space-x-2">
                 <button @click="openEditModal(course)" class="text-green-600 hover:text-green-800">编辑</button>
                 <button @click="confirmDeleteCourse(course)" class="text-red-600 hover:text-red-800">删除</button>

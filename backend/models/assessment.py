@@ -12,19 +12,21 @@ class Assessment(db.Model):
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
     type = db.Column(db.String(50), default='quiz')  # quiz, exam, assignment
     total_score = db.Column(db.Float, default=100.0)
-    questions = db.Column(db.Text, nullable=False)  # JSON格式存储题目
-    duration = db.Column(db.String(50), nullable=True)  # 如 "30分钟", "2小时"
+    questions = db.Column(db.Text, nullable=False, default='[]')  # JSON格式存储题目或题目列表
+    duration = db.Column(db.Integer, nullable=True)  # 以分钟为单位
     due_date = db.Column(db.DateTime, nullable=True)
     start_date = db.Column(db.DateTime, nullable=True)
     max_attempts = db.Column(db.Integer, default=1)
     is_published = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # 关联关系
     course = db.relationship('Course', backref=db.backref('assessments', lazy=True))
     student_answers = db.relationship('StudentAnswer', backref='assessment', lazy=True)
+    creator = db.relationship('User', backref=db.backref('created_assessments', lazy=True))
 
     def __repr__(self):
         return f'<Assessment {self.title}>'
@@ -48,13 +50,44 @@ class Assessment(db.Model):
             'updated_at': self.updated_at.isoformat()
         }
         
-        # 解析JSON格式的题目
+        # 安全处理created_by字段（可能不存在于旧数据库中）
         try:
-            result['questions'] = json.loads(self.questions)
-        except (json.JSONDecodeError, TypeError):
-            result['questions'] = []
+            result['created_by'] = self.created_by
+        except:
+            result['created_by'] = None
+        
+        # 解析JSON格式的题目
+        result['questions'] = self.get_questions()
         
         return result
+    
+    def get_questions(self):
+        """获取题目列表，处理不同的存储格式"""
+        if not self.questions:
+            return []
+            
+        try:
+            # 尝试解析为JSON
+            if isinstance(self.questions, str):
+                # 如果是字符串，尝试解析为JSON
+                return json.loads(self.questions)
+            elif isinstance(self.questions, list):
+                # 如果已经是列表，直接返回解析后的题目列表
+                questions_list = []
+                for q in self.questions:
+                    if isinstance(q, str):
+                        try:
+                            questions_list.append(json.loads(q))
+                        except:
+                            questions_list.append(q)
+                    else:
+                        questions_list.append(q)
+                return questions_list
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"Error parsing questions: {e}")
+            return []
+        
+        return []
 
 
 class StudentAnswer(db.Model):
