@@ -112,7 +112,7 @@ async function fetchCourse () {
       materialAPI.getMaterials(courseId)
     ])
     const courseData: any = (courseRes as any).data ?? courseRes
-    const mats: Material[] = ((materialsRes as any).data ?? materialsRes ?? []).map((m: any) => ({
+    const mats: Material[] = ((materialsRes as any).materials ?? []).map((m: any) => ({
       id: m.id,
       title: m.title || m.filename || `资源 ${m.id}`,
       material_type: m.material_type,

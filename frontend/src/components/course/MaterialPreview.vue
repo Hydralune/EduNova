@@ -77,8 +77,8 @@
         
         <div class="preview-body">
           <!-- PDF 预览 -->
-          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview">
-            <PdfViewer 
+          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview h-[85vh]">
+            <PdfViewer
               :pdf-url="getFileUrl(selectedMaterial.file_path || '')" 
               @download="downloadMaterial(selectedMaterial.id)" 
             />
@@ -183,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, defineProps, defineEmits, watch, computed } from 'vue';
+import { ref, onMounted, defineProps, defineEmits, watch, computed, nextTick } from 'vue';
 import { materialAPI } from '../../api';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -228,6 +228,16 @@ const isSidebarCollapsed = ref(false);
 function toggleSidebar() {
   isSidebarCollapsed.value = !isSidebarCollapsed.value;
 }
+
+watch(isSidebarCollapsed, () => {
+  // After the sidebar state changes, wait for the DOM to update, then for the animation to finish.
+  nextTick(() => {
+    setTimeout(() => {
+      // Dispatch a standard 'resize' event, which many components listen for to re-calculate their size.
+      window.dispatchEvent(new Event('resize'));
+    }, 300); // This duration should match the CSS transition duration.
+  });
+});
 
 const renderedMarkdown = computed(() => {
   if (!markdownContent.value) return '';

@@ -20,16 +20,18 @@
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
     "marked": "^16.0.0",
-    "pdfjs-dist": "^5.3.31",
+    "pdfjs-dist": "2.10.377",
     "pinia": "^2.1.6",
     "vue": "^3.3.4",
     "vue-advanced-cropper": "^2.8.9",
-    "vue-router": "^4.2.4"
+    "vue-router": "^4.2.4",
+    "vue3-pdfjs": "0.1.6"
   },
   "devDependencies": {
     "@tsconfig/node18": "^18.2.0",
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
+    "@types/marked": "^5.0.2",
     "@types/node": "^18.17.5",
     "@types/pdfjs-dist": "^2.10.377",
     "@vitejs/plugin-vue": "^5.0.4",
