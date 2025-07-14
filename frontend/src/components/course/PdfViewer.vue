@@ -22,32 +22,53 @@
         </button>
       </div>
     </div>
-    <div v-else>
-      <!-- 使用object标签直接嵌入PDF，让浏览器使用内置PDF查看器 -->
-      <object
-        :data="viewerUrl"
-        type="application/pdf"
-        class="pdf-object"
-      >
-        <div class="flex flex-col items-center justify-center h-full bg-white">
-          <p class="text-red-500 mb-4">您的浏览器不支持直接查看PDF</p>
-          <div class="flex space-x-4">
-            <a 
-              :href="pdfUrl" 
-              target="_blank" 
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              直接查看
-            </a>
-            <button 
-              @click="$emit('download')" 
-              class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-            >
-              下载PDF
-            </button>
-          </div>
+    <div v-else class="relative">
+      <!-- 顶部控制栏 -->
+      <div class="absolute top-0 left-0 right-0 z-10 bg-gray-100 bg-opacity-90 p-2 flex justify-between items-center">
+        <div class="flex space-x-2">
+          <button 
+            @click="$emit('download')" 
+            class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors text-sm flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            下载
+          </button>
+          <a 
+            :href="pdfUrl" 
+            target="_blank" 
+            class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors text-sm flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            新窗口打开
+          </a>
         </div>
-      </object>
+        <button 
+          @click="toggleFullscreen" 
+          class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors text-sm flex items-center"
+        >
+          <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          {{ isFullscreen ? '退出全屏' : '全屏' }}
+        </button>
+      </div>
+
+      <!-- 使用iframe嵌入PDF，让浏览器使用内置PDF查看器 -->
+      <iframe
+        ref="pdfFrame"
+        :src="viewerUrl"
+        class="pdf-object"
+        :class="{ 'fullscreen': isFullscreen }"
+        allow="fullscreen"
+        allowfullscreen
+      ></iframe>
     </div>
   </div>
 </template>
@@ -73,6 +94,8 @@ const emit = defineEmits(['download']);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const loadingProgress = ref(0);
+const isFullscreen = ref(false);
+const pdfFrame = ref<HTMLIFrameElement | null>(null);
 
 // 监听URL变化
 watch(() => props.pdfUrl, (newUrl) => {
@@ -85,7 +108,50 @@ onMounted(() => {
   if (props.pdfUrl) {
     loadPdf();
   }
+  
+  // 监听全屏变化事件
+  document.addEventListener('fullscreenchange', handleFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+  document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+  document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 });
+
+function handleFullscreenChange() {
+  isFullscreen.value = Boolean(
+    document.fullscreenElement || 
+    document.webkitFullscreenElement || 
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+}
+
+function toggleFullscreen() {
+  if (!pdfFrame.value) return;
+  
+  if (!isFullscreen.value) {
+    // 进入全屏
+    if (pdfFrame.value.requestFullscreen) {
+      pdfFrame.value.requestFullscreen();
+    } else if (pdfFrame.value.webkitRequestFullscreen) {
+      pdfFrame.value.webkitRequestFullscreen();
+    } else if (pdfFrame.value.mozRequestFullScreen) {
+      pdfFrame.value.mozRequestFullScreen();
+    } else if (pdfFrame.value.msRequestFullscreen) {
+      pdfFrame.value.msRequestFullscreen();
+    }
+  } else {
+    // 退出全屏
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+      document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
+    }
+  }
+}
 
 function loadPdf() {
   if (!props.pdfUrl) return;
@@ -123,13 +189,16 @@ function loadPdf() {
   height: 600px;
   border-radius: 0.375rem;
   background-color: white;
+  border: none;
 }
 
-/* 尝试通过CSS变量覆盖PDF查看器的主题色 */
-:deep(object) {
-  --viewer-bg-color: white;
-  --viewer-text-color: black;
-  --viewer-toolbar-bg-color: #f9fafb;
-  --viewer-toolbar-color: #4b5563;
+.pdf-object.fullscreen {
+  height: 100vh;
+  border-radius: 0;
+}
+
+/* 全屏时隐藏控制栏 */
+:fullscreen .pdf-object {
+  height: 100vh;
 }
 </style> 
