@@ -170,13 +170,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, inject } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import * as authAPI from '@/api/auth';
-
-// 注入通知服务
-const showNotification = inject('showNotification') as (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
+import notificationService from '@/services/notificationService';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -266,7 +264,7 @@ const saveProfile = async () => {
         console.log('头像上传成功:', avatarResponse);
       } catch (avatarErr: any) {
         console.error('头像上传失败:', avatarErr);
-        showNotification('error', '头像上传失败', (avatarErr.error || avatarErr.message || '未知错误'));
+        notificationService.error('头像上传失败', (avatarErr.error || avatarErr.message || '未知错误'));
         // 继续执行，不要因为头像上传失败而中断整个流程
       }
     }
@@ -275,7 +273,7 @@ const saveProfile = async () => {
     isEditing.value = false;
     previewAvatar.value = ''; // 清除预览头像
     selectedFile.value = null; // 清除选择的文件
-    showNotification('success', '个人资料更新成功');
+    notificationService.success('个人资料更新成功');
     
     // 刷新页面显示
     if (authStore.user) {
@@ -316,7 +314,7 @@ const changePassword = async () => {
     // 关闭模态框
     showPasswordModal.value = false;
     
-    showNotification('success', '密码修改成功');
+    notificationService.success('密码修改成功');
   } catch (err: any) {
     console.error('修改密码失败:', err);
     passwordError.value = typeof err === 'string' ? err : (err.error || '修改密码失败，请检查当前密码是否正确');
@@ -353,12 +351,12 @@ const onFileChange = (event: Event) => {
     
     // 检查文件类型和大小
     if (!file.type.match('image.*')) {
-      showNotification('error', '文件类型错误', '请选择图片文件');
+      notificationService.error('文件类型错误', '请选择图片文件');
       return;
     }
     
     if (file.size > 5 * 1024 * 1024) { // 5MB限制
-      showNotification('error', '文件过大', '图片大小不能超过5MB');
+      notificationService.error('文件过大', '图片大小不能超过5MB');
       return;
     }
     

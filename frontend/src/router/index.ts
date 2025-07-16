@@ -14,6 +14,8 @@ import CourseDetailView from '../views/CourseDetailView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import TestAssessmentView from '../views/TestAssessmentView.vue'
 import AssessmentPlayerView from '../views/AssessmentPlayerView.vue'
+import TestNotificationView from '../views/TestNotificationView.vue'
+import NotificationTestPage from '../views/NotificationTestPage.vue'
 
 // 导入评估相关视图
 import AssessmentList from '../components/assessment/AssessmentList.vue'
@@ -144,7 +146,7 @@ const router = createRouter({
       path: '/assessments/:id',
       name: 'assessmentDetail',
       component: AssessmentView,
-      props: route => ({ assessmentId: parseInt(route.params.id) }),
+      props: route => ({ assessmentId: parseInt(route.params.id as string) }),
       meta: { requiresAuth: true }
     },
     {
@@ -183,6 +185,18 @@ const router = createRouter({
       path: '/learning/:courseId',
       name: 'learning',
       component: LearningView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/test-notification',
+      name: 'testNotification',
+      component: TestNotificationView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/notification-test',
+      name: 'notificationTest',
+      component: NotificationTestPage,
       meta: { requiresAuth: true }
     },
     {

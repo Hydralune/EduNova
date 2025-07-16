@@ -18,6 +18,7 @@ import time
 import uuid
 import threading
 import functools
+from backend.api.rag_ai import get_api_config
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -1308,8 +1309,26 @@ def update_assessment(assessment_id):
         
         return response, 500
 
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['OPTIONS'])
+def assessment_options(assessment_id):
+    """处理评估相关的OPTIONS请求"""
+    response = make_response()
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
 @learning_bp.route('/assessments/<int:assessment_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def delete_assessment(assessment_id):
     """删除评估"""
     assessment = Assessment.query.get(assessment_id)
@@ -1320,7 +1339,22 @@ def delete_assessment(assessment_id):
     db.session.delete(assessment)
     db.session.commit()
     
-    return jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
+    response = jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
+    
+    # 添加CORS头
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    
+    return response
 
 @learning_bp.route('/assessments/<int:assessment_id>/submit', methods=['POST', 'OPTIONS'])
 # @jwt_required()  # 暂时禁用JWT认证要求
@@ -1544,42 +1578,295 @@ def submit_assessment(assessment_id):
 @learning_bp.route('/submissions/<int:submission_id>/grade', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
 def grade_submission(submission_id):
-    """评分学生提交"""
-    # 验证提交是否存在
-    submission = StudentAnswer.query.get(submission_id)
-    if not submission:
-        return jsonify({'error': 'Submission not found'}), 404
-    
-    data = request.json
-    
-    # 更新分数和反馈
-    if 'score' in data:
-        submission.score = data['score']
-    
-    if 'feedback' in data:
-        submission.feedback = data['feedback']
-    
-    # 更新题目评分和反馈
-    if 'question_scores' in data:
-        submission.question_scores = json.dumps(data['question_scores'])
-    
-    if 'question_feedback' in data:
-        submission.question_feedback = json.dumps(data['question_feedback'])
-    
-    # 记录评分时间和评分人
-    submission.graded_at = datetime.utcnow()
-    
-    # 在实际应用中，应该从JWT中获取教师ID
-    # submission.graded_by = get_jwt_identity()
-    if 'grader_id' in data:
-        submission.graded_by = data['grader_id']
-    
-    db.session.commit()
-    
-    return jsonify({
-        'message': 'Submission graded successfully',
-        'submission': submission.to_dict()
-    })
+    """评分提交"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '无效的请求数据'}), 400
+        
+        # 获取评分数据
+        score = data.get('score')
+        feedback = data.get('feedback')
+        question_scores = data.get('question_scores')
+        question_feedback = data.get('question_feedback')
+        grader_id = data.get('grader_id')
+        
+        # 查找提交记录
+        submission = StudentAnswer.query.get(submission_id)
+        if not submission:
+            return jsonify({'error': '找不到提交记录'}), 404
+        
+        # 更新评分信息
+        submission.score = score
+        submission.feedback = feedback
+        submission.question_scores = json.dumps(question_scores) if isinstance(question_scores, list) else question_scores
+        submission.question_feedback = json.dumps(question_feedback) if isinstance(question_feedback, list) else question_feedback
+        submission.grader_id = grader_id
+        submission.graded_at = datetime.now()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': '评分已保存',
+            'submission_id': submission_id
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'评分失败: {str(e)}'}), 500
+
+@learning_bp.route('/submissions/<int:submission_id>/ai-grade-question', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
+def ai_grade_question(submission_id):
+    """使用AI评分单个题目"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '无效的请求数据'}), 400
+        
+        question_index = data.get('question_index')
+        question_data = data.get('question_data')
+        
+        if question_index is None or not question_data:
+            return jsonify({'error': '缺少必要参数'}), 400
+        
+        # 查找提交记录
+        submission = StudentAnswer.query.get(submission_id)
+        if not submission:
+            return jsonify({'error': '找不到提交记录'}), 404
+            
+        # 获取题目和学生答案
+        question = question_data.get('question')
+        student_answer = question_data.get('student_answer')
+        max_score = question_data.get('max_score', 10)  # 默认10分
+        
+        # 构建AI评分提示
+        prompt = f"""
+        你是一位专业的教育评分助手，请根据以下信息为学生的答案打分：
+        
+        题目：{question.get('stem', '')}
+        题型：{question.get('section_type', '简答题')}
+        满分：{max_score}分
+        
+        参考答案：{question.get('reference_answer') or question.get('answer') or '未提供参考答案'}
+        
+        学生答案：{student_answer}
+        
+        请根据学生答案与参考答案的匹配度、准确性、完整性和表达清晰度进行评分。
+        分数应为整数或0.5的倍数，最高分为{max_score}分。
+        
+        请以JSON格式返回评分结果，格式如下：
+        {{
+          "score": 分数值(数字),
+          "feedback": "评语"
+        }}
+        
+        只返回JSON格式，不要有其他解释。
+        """
+        
+        # 调用AI API进行评分
+        api_key, api_base, model_name = get_api_config()
+        
+        if not api_key:
+            return jsonify({'error': 'API密钥未配置'}), 500
+        
+        # 设置API客户端
+        if api_base:
+            client = openai.OpenAI(api_key=api_key, base_url=api_base)
+        else:
+            client = openai.OpenAI(api_key=api_key)
+        
+        # 调用AI API
+        response = client.chat.completions.create(
+            model=model_name or "gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "你是一位专业的教育评分助手，根据题目和参考答案为学生答案打分。"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        # 提取AI响应
+        ai_response = response.choices[0].message.content.strip()
+        
+        # 解析JSON响应
+        try:
+            # 使用正则表达式找到JSON部分
+            json_match = re.search(r'({[\s\S]*})', ai_response)
+            if json_match:
+                json_str = json_match.group(1)
+                result = json.loads(json_str)
+            else:
+                # 尝试直接解析整个响应
+                result = json.loads(ai_response)
+                
+            # 确保分数在有效范围内
+            score = result.get('score', 0)
+            if score < 0:
+                score = 0
+            elif score > max_score:
+                score = max_score
+                
+            # 四舍五入到最接近的0.5
+            score = round(score * 2) / 2
+            
+            return jsonify({
+                'status': 'success',
+                'score': score,
+                'feedback': result.get('feedback', '')
+            })
+            
+        except (json.JSONDecodeError, ValueError) as e:
+            current_app.logger.error(f"AI响应解析错误: {str(e)}, 响应: {ai_response}")
+            return jsonify({
+                'error': '无法解析AI响应',
+                'raw_response': ai_response
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"AI评分错误: {str(e)}")
+        return jsonify({'error': f'AI评分失败: {str(e)}'}), 500
+
+@learning_bp.route('/submissions/<int:submission_id>/ai-grade-all', methods=['POST'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
+def ai_grade_all_subjective(submission_id):
+    """使用AI评分所有主观题"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '无效的请求数据'}), 400
+        
+        questions_data = data.get('questions_data')
+        
+        if not questions_data or not isinstance(questions_data, list):
+            return jsonify({'error': '缺少必要参数或格式错误'}), 400
+        
+        # 查找提交记录
+        submission = StudentAnswer.query.get(submission_id)
+        if not submission:
+            return jsonify({'error': '找不到提交记录'}), 404
+            
+        # 获取当前的分数和反馈
+        try:
+            current_scores = json.loads(submission.question_scores) if submission.question_scores else []
+            current_feedback = json.loads(submission.question_feedback) if submission.question_feedback else []
+        except:
+            current_scores = []
+            current_feedback = []
+            
+        # 确保分数和反馈数组足够长
+        while len(current_scores) < len(questions_data):
+            current_scores.append(0)
+        while len(current_feedback) < len(questions_data):
+            current_feedback.append("")
+            
+        # 获取API配置
+        api_key, api_base, model_name = get_api_config()
+        
+        if not api_key:
+            return jsonify({'error': 'API密钥未配置'}), 500
+        
+        # 设置API客户端
+        if api_base:
+            client = openai.OpenAI(api_key=api_key, base_url=api_base)
+        else:
+            client = openai.OpenAI(api_key=api_key)
+            
+        # 对每个主观题进行评分
+        for question_data in questions_data:
+            index = question_data.get('index')
+            question = question_data.get('question')
+            student_answer = question_data.get('student_answer')
+            max_score = question_data.get('max_score', 10)
+            
+            # 构建AI评分提示
+            prompt = f"""
+            你是一位专业的教育评分助手，请根据以下信息为学生的答案打分：
+            
+            题目：{question.get('stem', '')}
+            题型：{question.get('section_type', '简答题')}
+            满分：{max_score}分
+            
+            参考答案：{question.get('reference_answer') or question.get('answer') or '未提供参考答案'}
+            
+            学生答案：{student_answer}
+            
+            请根据学生答案与参考答案的匹配度、准确性、完整性和表达清晰度进行评分。
+            分数应为整数或0.5的倍数，最高分为{max_score}分。
+            
+            请以JSON格式返回评分结果，格式如下：
+            {{
+              "score": 分数值(数字),
+              "feedback": "评语"
+            }}
+            
+            只返回JSON格式，不要有其他解释。
+            """
+            
+            # 调用AI API
+            response = client.chat.completions.create(
+                model=model_name or "gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "你是一位专业的教育评分助手，根据题目和参考答案为学生答案打分。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+            
+            # 提取AI响应
+            ai_response = response.choices[0].message.content.strip()
+            
+            # 解析JSON响应
+            try:
+                # 使用正则表达式找到JSON部分
+                json_match = re.search(r'({[\s\S]*})', ai_response)
+                if json_match:
+                    json_str = json_match.group(1)
+                    result = json.loads(json_str)
+                else:
+                    # 尝试直接解析整个响应
+                    result = json.loads(ai_response)
+                    
+                # 确保分数在有效范围内
+                score = result.get('score', 0)
+                if score < 0:
+                    score = 0
+                elif score > max_score:
+                    score = max_score
+                    
+                # 四舍五入到最接近的0.5
+                score = round(score * 2) / 2
+                
+                # 更新分数和反馈
+                current_scores[index] = score
+                current_feedback[index] = result.get('feedback', '')
+                
+            except (json.JSONDecodeError, ValueError) as e:
+                current_app.logger.error(f"AI响应解析错误: {str(e)}, 响应: {ai_response}")
+                # 跳过这个问题，继续处理下一个
+                continue
+                
+        # 计算总分
+        total_score = sum(filter(None, current_scores))
+        # 四舍五入到最接近的0.5
+        total_score = round(total_score * 2) / 2
+                
+        return jsonify({
+            'status': 'success',
+            'question_scores': current_scores,
+            'question_feedback': current_feedback,
+            'total_score': total_score
+        })
+            
+    except Exception as e:
+        current_app.logger.error(f"AI批量评分错误: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'error': f'AI批量评分失败: {str(e)}'}), 500
 
 @learning_bp.route('/submissions/<int:submission_id>', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求

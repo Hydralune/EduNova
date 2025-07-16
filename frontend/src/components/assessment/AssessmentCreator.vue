@@ -632,7 +632,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { assessmentAPI } from '../../api';
+import assessmentAPI from '../../api/assessmentAPI';
+import notificationService from '../../services/notificationService';
+import NotificationContainer from '../NotificationContainer.vue';
 
 // Define types to fix TypeScript errors
 interface QuestionOption {
@@ -768,6 +770,11 @@ function updateMultipleAnswers() {
 
 // 加载现有评估数据
 onMounted(async () => {
+  // 如果有课程ID，设置到评估中
+  if (props.courseId) {
+    assessment.course_id = props.courseId;
+  }
+  
   if (props.isEditing && props.assessmentId) {
     try {
       const response = await assessmentAPI.getAssessment(Number(props.assessmentId));

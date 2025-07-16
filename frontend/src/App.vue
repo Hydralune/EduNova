@@ -109,84 +109,23 @@
           </div>
         </div>
       </footer>
-
-      <!-- 全局通知 -->
-      <div
-        v-if="notification.show"
-        class="notification"
-      >
-        <div 
-          class="notification-container"
-          :class="{
-            'notification-success': notification.type === 'success',
-            'notification-error': notification.type === 'error',
-            'notification-warning': notification.type === 'warning',
-            'notification-info': notification.type === 'info'
-          }"
-        >
-          <div class="p-4">
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div
-                  :class="{
-                    'text-green-500': notification.type === 'success',
-                    'text-red-500': notification.type === 'error',
-                    'text-yellow-500': notification.type === 'warning',
-                    'text-blue-500': notification.type === 'info'
-                  }"
-                >
-                  <!-- 图标 -->
-                  <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      v-if="notification.type === 'success'"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                    <path
-                      v-else-if="notification.type === 'error'"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                    <path
-                      v-else
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-              </div>
-              <div class="ml-3 w-0 flex-1 pt-0.5">
-                <p class="text-sm font-medium text-gray-900">{{ notification.title }}</p>
-                <p v-if="notification.message" class="mt-1 text-sm text-gray-500">
-                  {{ notification.message }}
-                </p>
-              </div>
-              <div class="ml-4 flex-shrink-0 flex">
-                <button
-                  @click="hideNotification"
-                  class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  <span class="sr-only">关闭</span>
-                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fill-rule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
+    
+    <!-- 全局通知容器 -->
+    <NotificationContainer />
+    
+    <!-- 全局确认对话框 -->
+    <ConfirmDialog
+      :show="dialogState.visible.value"
+      :title="dialogState.options.value.title"
+      :message="dialogState.options.value.message"
+      :confirm-text="dialogState.options.value.confirmText || '确定'"
+      :cancel-text="dialogState.options.value.cancelText || '取消'"
+      :type="dialogState.options.value.type || 'info'"
+      @confirm="handleDialogConfirm"
+      @cancel="handleDialogCancel"
+      @update:show="(val) => dialogState.visible.value = val"
+    />
   </div>
 </template>
 
@@ -195,6 +134,10 @@ import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { courseAPI, materialAPI } from './api'
+import NotificationContainer from './components/NotificationContainer.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
+import notificationService from './services/notificationService'
+import dialogService from './services/dialogService'
 
 const route = useRoute()
 const router = useRouter()
@@ -204,12 +147,6 @@ const authStore = useAuthStore()
 const isInitializing = ref(true)
 const userMenuOpen = ref(false)
 const userMenuRef = ref<HTMLElement | null>(null)
-const notification = ref({
-  show: false,
-  type: 'info' as 'success' | 'error' | 'warning' | 'info',
-  title: '',
-  message: ''
-})
 
 // 全局数据
 const globalCourses = ref<any[]>([]);
@@ -233,37 +170,17 @@ const showNavigation = computed(() => {
 const handleLogout = async () => {
   try {
     authStore.logout()
-    showNotification('success', '退出成功', '您已成功退出登录')
+    notificationService.success('退出成功', '您已成功退出登录')
     router.push('/login')
   } catch (error) {
-    showNotification('error', '退出失败', '退出登录时发生错误')
+    notificationService.error('退出失败', '退出登录时发生错误')
   }
-}
-
-const showNotification = (
-  type: 'success' | 'error' | 'warning' | 'info',
-  title: string,
-  message?: string
-) => {
-  notification.value = {
-    show: true,
-    type,
-    title,
-    message: message || ''
-  }
-  
-  // 3秒后自动隐藏
-  setTimeout(() => {
-    hideNotification()
-  }, 3000)
-}
-
-const hideNotification = () => {
-  notification.value.show = false
 }
 
 // 提供通知服务给所有组件使用
-provide('showNotification', showNotification);
+provide('showNotification', (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => {
+  notificationService.show(type, title, message);
+});
 
 function toggleUserMenu() {
   userMenuOpen.value = !userMenuOpen.value
@@ -274,6 +191,30 @@ function handleClickOutside(event: MouseEvent) {
     userMenuOpen.value = false
   }
 }
+
+// 对话框状态
+const dialogState = dialogService.getDialogState();
+
+// 对话框确认和取消处理
+const handleDialogConfirm = () => {
+  if (dialogState.options.value.onConfirm) {
+    dialogState.options.value.onConfirm();
+  }
+};
+
+const handleDialogCancel = () => {
+  if (dialogState.options.value.onCancel) {
+    dialogState.options.value.onCancel();
+  }
+};
+
+// 提供对话框服务给所有组件使用
+provide('confirm', async (message: string, title?: string) => {
+  return await dialogService.confirm({
+    title: title || '确认',
+    message
+  });
+});
 
 // 生命周期
 onMounted(async () => {
@@ -327,7 +268,7 @@ function initNavigationHistory() {
 // 全局错误处理
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled promise rejection:', event.reason)
-  showNotification('error', '系统错误', '发生了未预期的错误，请刷新页面重试')
+  notificationService.error('系统错误', '发生了未预期的错误，请刷新页面重试')
 })
 
 // 监听登录状态变化
@@ -430,5 +371,18 @@ async function loadGlobalData() {
 
 .bg-primary-600 {
   background-color: var(--color-primary-600);
+}
+
+/* 通知容器样式 */
+.notification-wrapper {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.notification-wrapper > * {
+  pointer-events: auto;
 }
 </style> 
