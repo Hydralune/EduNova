@@ -20,6 +20,7 @@ import AssessmentList from '../components/assessment/AssessmentList.vue'
 import AssessmentView from '../components/assessment/AssessmentView.vue'
 import AssessmentCreator from '../components/assessment/AssessmentCreator.vue'
 import SubmissionList from '../components/assessment/SubmissionList.vue'
+import SubmissionGrader from '../components/assessment/SubmissionGrader.vue'
 
 // 导入AI助手组件
 import AIAssistant from '../components/ai/AIAssistant.vue'
@@ -157,6 +158,14 @@ const router = createRouter({
       name: 'assessmentSubmissions',
       component: SubmissionList,
       meta: { requiresAuth: true }
+    },
+    // 添加批改路由
+    {
+      path: '/submissions/:id/grade',
+      name: 'submissionGrader',
+      component: SubmissionGrader,
+      props: route => ({ submissionId: parseInt(route.params.id as string) }),
+      meta: { requiresAuth: true, requiresTeacher: true }
     },
     {
       path: '/test-ai-assistant',

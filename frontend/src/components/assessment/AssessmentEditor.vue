@@ -178,6 +178,7 @@
                   <option value="multiple_choice">单选题</option>
                   <option value="multiple_answer">多选题</option>
                   <option value="true_false">判断题</option>
+                  <option value="fill_blank">填空题</option>
                   <option value="short_answer">简答题</option>
                 </select>
               </div>
@@ -191,6 +192,7 @@
                 ></textarea>
               </div>
 
+              <!-- 多选题选项 -->
               <div v-if="['multiple_choice', 'multiple_answer'].includes(question.type)">
                 <label class="block text-sm font-medium text-gray-700 mb-2">选项</label>
                 <div class="space-y-2">
@@ -202,18 +204,20 @@
                     <input
                       v-if="question.type === 'multiple_choice'"
                       type="radio"
-                      :name="'question_' + index"
+                      :name="`question_${index}`"
                       :value="optionIndex"
                       v-model="question.answer"
                       class="h-4 w-4"
                     />
-                    <input
-                      v-else
-                      type="checkbox"
-                      v-model="question.answers"
-                      :value="optionIndex"
-                      class="h-4 w-4"
-                    />
+                    <div v-else class="h-4 w-4">
+                      <input
+                        type="checkbox"
+                        :id="`question_${index}_option_${optionIndex}`" 
+                        :checked="isOptionSelected(question, optionIndex)"
+                        @change="toggleAnswerOption(question, optionIndex)"
+                        class="h-4 w-4"
+                      />
+                    </div>
                     <input
                       v-model="question.options[optionIndex]"
                       type="text"
@@ -238,6 +242,7 @@
                 </div>
               </div>
 
+              <!-- true/false question -->
               <div v-else-if="question.type === 'true_false'">
                 <label class="block text-sm font-medium text-gray-700">正确答案</label>
                 <div class="mt-1 space-x-4">
@@ -262,6 +267,63 @@
                 </div>
               </div>
 
+              <!-- Fill in blank question answers -->
+              <div v-else-if="question.type === 'fill_blank'">
+                <label class="block text-sm font-medium text-gray-700 mb-2">答案</label>
+                <div v-if="!Array.isArray(question.answer)" class="mb-2">
+                  <input
+                    v-model="question.answer"
+                    type="text"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="填入答案"
+                  />
+                  <button 
+                    type="button"
+                    @click="convertToMultipleAnswers(question)"
+                    class="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    使用多个空格
+                  </button>
+                </div>
+                <div v-else class="space-y-2">
+                  <div v-for="(answer, answerIndex) in question.answer" :key="answerIndex" class="flex items-center space-x-2">
+                    <span class="text-sm w-24">空格 {{ answerIndex + 1 }}:</span>
+                    <input
+                      v-model="question.answer[answerIndex]"
+                      type="text"
+                      class="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                      :placeholder="`空格 ${answerIndex + 1} 的答案`"
+                    />
+                    <button
+                      v-if="question.answer.length > 1"
+                      type="button"
+                      @click="removeAnswer(question, answerIndex)"
+                      class="text-red-600 hover:text-red-800"
+                    >
+                      删除
+                    </button>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      type="button"
+                      @click="addAnswer(question)"
+                      class="text-blue-600 hover:text-blue-800"
+                    >
+                      添加空格
+                    </button>
+                    <button 
+                      v-if="question.answer.length > 1"
+                      type="button"
+                      @click="convertToSingleAnswer(question)"
+                      class="text-blue-600 hover:text-blue-800"
+                    >
+                      使用单个空格
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Short answer -->
               <div v-else-if="question.type === 'short_answer'">
                 <label class="block text-sm font-medium text-gray-700">参考答案</label>
                 <textarea
@@ -429,6 +491,7 @@ const addQuestion = () => {
     content: '',
     options: ['', ''],
     answer: 0,
+    answers: [false, false], // 为多选题初始化answers数组
     score: 10
   });
 };
@@ -441,6 +504,75 @@ const removeQuestion = (index) => {
 // 添加选项
 const addOption = (question) => {
   question.options.push('');
+  
+  // 如果是多选题，确保answers数组已初始化
+  if (question.type === 'multiple_answer') {
+    if (!question.answers) {
+      question.answers = Array(question.options.length).fill(false);
+    }
+    // 为新选项添加一个默认为false的状态
+    question.answers.push(false);
+  }
+};
+
+// 填空题相关函数
+const convertToMultipleAnswers = (question) => {
+  // 将单一答案转换为数组形式
+  const currentAnswer = question.answer;
+  question.answer = [currentAnswer || ''];
+};
+
+const convertToSingleAnswer = (question) => {
+  // 将多答案数组转换为单一答案
+  if (Array.isArray(question.answer) && question.answer.length > 0) {
+    question.answer = question.answer[0] || '';
+  }
+};
+
+const addAnswer = (question) => {
+  // 添加一个新的填空答案
+  if (Array.isArray(question.answer)) {
+    question.answer.push('');
+  } else {
+    question.answer = [question.answer || '', ''];
+  }
+};
+
+const removeAnswer = (question, index) => {
+  // 删除指定索引的填空答案
+  if (Array.isArray(question.answer) && question.answer.length > 1) {
+    question.answer.splice(index, 1);
+  }
+};
+
+// 多选题相关函数
+const isOptionSelected = (question, optionIndex) => {
+  // 确保answers数组已初始化
+  if (!question.answers) {
+    question.answers = Array(question.options.length).fill(false);
+  }
+  
+  // 如果answers数组长度不足，扩展它
+  while (question.answers.length < question.options.length) {
+    question.answers.push(false);
+  }
+  
+  return question.answers[optionIndex];
+};
+
+const toggleAnswerOption = (question, optionIndex) => {
+  // 确保answers数组已初始化
+  if (!question.answers) {
+    question.answers = Array(question.options.length).fill(false);
+  }
+  
+  // 如果answers数组长度不足，扩展它
+  while (question.answers.length < question.options.length) {
+    question.answers.push(false);
+  }
+  
+  // 切换选项状态
+  question.answers[optionIndex] = !question.answers[optionIndex];
 };
 
 // 删除选项
@@ -451,23 +583,132 @@ const removeOption = (question, index) => {
       question.answer = Math.max(0, question.answer - 1);
     }
   } else if (question.type === 'multiple_answer') {
-    question.answers = question.answers.filter(a => a !== index)
-      .map(a => a > index ? a - 1 : a);
+    // 确保answers数组存在
+    if (!question.answers) {
+      question.answers = Array(question.options.length).fill(false);
+    } else {
+      // 移除对应的答案项
+      question.answers.splice(index, 1);
+    }
   }
 };
 
-// 提交表单
-const handleSubmit = () => {
-  // 计算总分
-  const totalScore = form.value.questions.reduce((sum, q) => sum + (q.score || 0), 0);
-  form.value.total_score = totalScore;
+// 处理题目保存
+const handleSubmit = async () => {
+  try {
+    // 转换题目数据为sections格式
+    const sections = [];
+    
+    // 按题目类型分组
+    const groupedQuestions = {};
+    
+    form.value.questions.forEach(question => {
+      if (!groupedQuestions[question.type]) {
+        groupedQuestions[question.type] = [];
+      }
+      
+      // 为填空题做特殊处理，确保类型正确
+      let questionType = question.type;
+      
+      // 准备题目数据
+      const questionData = {
+        id: question.id || sections.length + groupedQuestions[question.type].length + 1,
+        stem: question.content,
+        score: question.score,
+        type: questionType, // 保持原始类型
+      };
+      
+      // 根据题目类型设置特定属性
+      if (question.type === 'multiple_choice' || question.type === 'multiple_answer') {
+        questionData.options = question.options;
+        
+        if (question.type === 'multiple_choice') {
+          questionData.answer = question.answer;
+        } else {
+          // 多选题答案
+          questionData.answer = question.answers
+            .map((isSelected, index) => isSelected ? index : null)
+            .filter(index => index !== null);
+        }
+      } else if (question.type === 'fill_blank' || question.type === 'fill_in_blank') {
+        // 确保填空题答案格式正确
+        if (Array.isArray(question.answer) && question.answer.length > 0) {
+          questionData.answer = question.answer.map(item => item || '');
+        } else if (typeof question.answer === 'string') {
+          // 如果是单个空白，确保不是空字符串
+          questionData.answer = question.answer || '';
+        } else {
+          // 默认值
+          questionData.answer = '';
+        }
+        
+        // 如果是填空题，也设置section_type属性确保兼容性
+        questionData.section_type = 'fill_blank';
+      } else if (question.type === 'true_false') {
+        questionData.answer = question.answer;
+      } else if (question.type === 'short_answer') {
+        questionData.reference_answer = question.reference_answer || '';
+      }
+      
+      groupedQuestions[question.type].push(questionData);
+    });
+    
+    // 构建sections
+    Object.entries(groupedQuestions).forEach(([type, questions]) => {
+      if (questions.length > 0) {
+        // 为填空题类型做特殊处理，确保兼容性
+        let sectionType = type;
+        if (type === 'fill_blank') {
+          sectionType = 'fill_in_blank'; // 使用后端期望的类型
+        }
+        
+        sections.push({
+          type: sectionType,
+          description: getSectionDescription(type),
+          score_per_question: getAverageScore(questions),
+          questions: questions
+        });
+      }
+    });
+    
+    // 准备提交数据
+    const assessmentData = {
+      ...form.value,
+      sections: sections
+    };
+    
+    // 如果正在编辑现有评估
+    if (props.assessment.id) {
+      assessmentData.id = props.assessment.id;
+    }
+    
+    // 发送保存事件
+    emit('save', assessmentData);
+    
+  } catch (error) {
+    console.error('准备评估数据失败:', error);
+    alert('保存失败，请检查表单数据');
+  }
+};
 
-  const assessment = {
-    ...props.assessment,
-    ...form.value,
-    is_published: form.value.is_active // 设置发布状态
-  };
-  emit('save', assessment);
+// 获取分区描述
+const getSectionDescription = (type) => {
+  switch (type) {
+    case 'multiple_choice': return '选择题：请在每小题给出的选项中选出一个正确答案。';
+    case 'multiple_answer': return '多选题：请在每小题给出的选项中选出所有正确答案。';
+    case 'fill_blank':
+    case 'fill_in_blank': return '填空题：请在横线上填写正确的内容。';
+    case 'true_false': return '判断题：请判断以下说法是否正确。';
+    case 'short_answer': return '简答题：请简要回答以下问题。';
+    default: return `${type}题`;
+  }
+};
+
+// 计算平均分值
+const getAverageScore = (questions) => {
+  if (!questions || questions.length === 0) return 10;
+  const totalScore = questions.reduce((sum, q) => sum + (q.score || 0), 0);
+  return Math.round(totalScore / questions.length);
 };
 
 // 在组件挂载时获取课程列表
@@ -680,16 +921,51 @@ const generateAssessmentWithAI = async () => {
                   // 处理选项 - 如果选项是字符串数组
                   const options = q.options || [];
                   
+                  // 将AI生成的题型映射到前端支持的题型
+                  let mappedType = q.type || section.type || 'multiple_choice';
+                  let mappedAnswer = q.answer || '';
+                  
+                  // 题型映射
+                  if (mappedType === 'multiple_select') {
+                    mappedType = 'multiple_answer'; // 多选题映射
+                  } else if (mappedType === 'essay') {
+                    mappedType = 'short_answer'; // 论述题映射为简答题
+                  } else if (mappedType === 'fill_in_blank') {
+                    mappedType = 'fill_blank'; // 填空题映射
+                  }
+                  
+                  // 答案处理
+                  if (mappedType === 'multiple_choice') {
+                    // 单选题答案处理
+                    if (typeof mappedAnswer === 'string' && /^[A-Z]$/.test(mappedAnswer)) {
+                      // 如果答案是字母A-Z，转换为索引
+                      mappedAnswer = mappedAnswer.charCodeAt(0) - 65; // A=0, B=1, ...
+                    }
+                  } else if (mappedType === 'multiple_answer') {
+                    // 多选题答案处理
+                    let answers = [];
+                    if (Array.isArray(mappedAnswer)) {
+                      answers = mappedAnswer.map(ans => {
+                        if (typeof ans === 'string' && /^[A-Z]$/.test(ans)) {
+                          return ans.charCodeAt(0) - 65; // A=0, B=1, ...
+                        }
+                        return ans;
+                      });
+                    }
+                    mappedAnswer = answers;
+                  }
+                  
                   // 标准化问题对象
                   questions.push({
                     id: questions.length + 1,
-                    type: q.type || section.type || 'multiple_choice',
+                    type: mappedType,
                     content: q.stem || q.question || '',
                     score: parseFloat(q.score || section.score_per_question || 5),
                     options: options,
-                    answer: q.answer || '',
-                    answers: q.type === 'multiple_answer' ? [] : undefined,
-                    explanation: q.explanation || ''
+                    answer: mappedType === 'multiple_answer' ? 0 : mappedAnswer, // 单选题用answer
+                    answers: mappedType === 'multiple_answer' ? mappedAnswer : undefined, // 多选题用answers
+                    explanation: q.explanation || '',
+                    reference_answer: q.reference_answer || q.answer || '' // 保存参考答案
                   });
                 });
               }
@@ -698,30 +974,104 @@ const generateAssessmentWithAI = async () => {
           // 处理直接的questions格式
           else if (assessmentData.questions) {
             console.log('使用questions格式处理题目');
-            questions = assessmentData.questions.map((q, index) => ({
-              id: index + 1,
-              type: q.type || 'multiple_choice',
-              content: q.stem || q.question || '',
-              score: parseFloat(q.score || 5),
-              options: q.options || [],
-              answer: q.answer || '',
-              answers: q.type === 'multiple_answer' ? [] : undefined,
-              explanation: q.explanation || ''
-            }));
+            assessmentData.questions.forEach((q, index) => {
+              // 将AI生成的题型映射到前端支持的题型
+              let mappedType = q.type || 'multiple_choice';
+              let mappedAnswer = q.answer || '';
+              
+              // 题型映射
+              if (mappedType === 'multiple_select') {
+                mappedType = 'multiple_answer'; // 多选题映射
+              } else if (mappedType === 'essay') {
+                mappedType = 'short_answer'; // 论述题映射为简答题
+              } else if (mappedType === 'fill_in_blank') {
+                mappedType = 'fill_blank'; // 填空题映射
+              }
+              
+              // 答案处理
+              if (mappedType === 'multiple_choice') {
+                // 单选题答案处理
+                if (typeof mappedAnswer === 'string' && /^[A-Z]$/.test(mappedAnswer)) {
+                  // 如果答案是字母A-Z，转换为索引
+                  mappedAnswer = mappedAnswer.charCodeAt(0) - 65; // A=0, B=1, ...
+                }
+              } else if (mappedType === 'multiple_answer') {
+                // 多选题答案处理
+                let answers = [];
+                if (Array.isArray(mappedAnswer)) {
+                  answers = mappedAnswer.map(ans => {
+                    if (typeof ans === 'string' && /^[A-Z]$/.test(ans)) {
+                      return ans.charCodeAt(0) - 65; // A=0, B=1, ...
+                    }
+                    return ans;
+                  });
+                }
+                mappedAnswer = answers;
+              }
+              
+              questions.push({
+                id: index + 1,
+                type: mappedType,
+                content: q.stem || q.question || '',
+                score: parseFloat(q.score || 5),
+                options: q.options || [],
+                answer: mappedType === 'multiple_answer' ? 0 : mappedAnswer, // 单选题用answer
+                answers: mappedType === 'multiple_answer' ? mappedAnswer : undefined, // 多选题用answers
+                explanation: q.explanation || '',
+                reference_answer: q.reference_answer || q.answer || '' // 保存参考答案
+              });
+            });
           }
           // 尝试处理其他可能的格式
           else if (Array.isArray(assessmentData)) {
             console.log('处理数组格式的题目');
-            questions = assessmentData.map((q, index) => ({
-              id: index + 1,
-              type: q.type || 'multiple_choice',
-              content: q.stem || q.question || '',
-              score: parseFloat(q.score || 5),
-              options: q.options || [],
-              answer: q.answer || '',
-              answers: q.type === 'multiple_answer' ? [] : undefined,
-              explanation: q.explanation || ''
-            }));
+            assessmentData.forEach((q, index) => {
+              // 将AI生成的题型映射到前端支持的题型
+              let mappedType = q.type || 'multiple_choice';
+              let mappedAnswer = q.answer || '';
+              
+              // 题型映射
+              if (mappedType === 'multiple_select') {
+                mappedType = 'multiple_answer'; // 多选题映射
+              } else if (mappedType === 'essay') {
+                mappedType = 'short_answer'; // 论述题映射为简答题
+              } else if (mappedType === 'fill_in_blank') {
+                mappedType = 'fill_blank'; // 填空题映射
+              }
+              
+              // 答案处理
+              if (mappedType === 'multiple_choice') {
+                // 单选题答案处理
+                if (typeof mappedAnswer === 'string' && /^[A-Z]$/.test(mappedAnswer)) {
+                  // 如果答案是字母A-Z，转换为索引
+                  mappedAnswer = mappedAnswer.charCodeAt(0) - 65; // A=0, B=1, ...
+                }
+              } else if (mappedType === 'multiple_answer') {
+                // 多选题答案处理
+                let answers = [];
+                if (Array.isArray(mappedAnswer)) {
+                  answers = mappedAnswer.map(ans => {
+                    if (typeof ans === 'string' && /^[A-Z]$/.test(ans)) {
+                      return ans.charCodeAt(0) - 65; // A=0, B=1, ...
+                    }
+                    return ans;
+                  });
+                }
+                mappedAnswer = answers;
+              }
+              
+              questions.push({
+                id: index + 1,
+                type: mappedType,
+                content: q.stem || q.question || '',
+                score: parseFloat(q.score || 5),
+                options: q.options || [],
+                answer: mappedType === 'multiple_answer' ? 0 : mappedAnswer, // 单选题用answer
+                answers: mappedType === 'multiple_answer' ? mappedAnswer : undefined, // 多选题用answers
+                explanation: q.explanation || '',
+                reference_answer: q.reference_answer || q.answer || '' // 保存参考答案
+              });
+            });
           }
           
           // 设置题目

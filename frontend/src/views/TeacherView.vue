@@ -132,7 +132,28 @@
 
         <!-- 评估测试 -->
         <div v-if="activeTab === 'assessments'">
-          <AssessmentList :role="'teacher'" />
+          <div v-if="showSubmissionsList">
+            <div class="flex justify-between mb-4">
+              <h2 class="text-xl font-semibold">{{ currentAssessment.title }} - 学生提交</h2>
+              <button 
+                @click="closeSubmissionsList" 
+                class="px-4 py-2 border rounded-md hover:bg-gray-50"
+              >
+                返回评估列表
+              </button>
+            </div>
+            <SubmissionList 
+              :assessmentId="currentAssessment.id" 
+              :role="'teacher'"
+              @back="closeSubmissionsList"
+            />
+          </div>
+          <div v-else>
+            <AssessmentList 
+              :role="'teacher'" 
+              @view-submissions="viewSubmissions"
+            />
+          </div>
         </div>
 
         <!-- AI助手 -->
@@ -197,6 +218,7 @@ import LearningAnalytics from '@/components/analytics/LearningAnalytics.vue';
 import KnowledgeBase from '@/components/rag/KnowledgeBase.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
 import AssessmentList from '@/components/assessment/AssessmentList.vue';
+import SubmissionList from '@/components/assessment/SubmissionList.vue';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -213,6 +235,25 @@ const tabs = [
   { id: 'knowledge-base', name: '知识库' }
 ];
 const activeTab = ref('dashboard');
+
+// 评估测试相关状态
+const showSubmissionsList = ref(false);
+const currentAssessment = ref<{ id: string | number; title: string }>({ id: '', title: '' });
+
+const viewSubmissions = (data: { assessment: { id: string | number; title: string } }) => {
+  console.log('查看提交:', data);
+  currentAssessment.value = {
+    id: data.assessment.id,
+    title: data.assessment.title
+  };
+  showSubmissionsList.value = true;
+};
+
+const closeSubmissionsList = () => {
+  showSubmissionsList.value = false;
+  currentAssessment.value = { id: '', title: '' };
+};
+
 
 // 监听路由查询参数变化，更新活动标签
 watch(() => route.query.activeTab, (newTab) => {

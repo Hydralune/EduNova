@@ -296,12 +296,17 @@ const fetchAssessments = async () => {
     };
     
     // 获取评估列表
-    const response = await assessmentAPI.getAssessments(filters.value.courseId || undefined, params);
+    const response = await assessmentAPI.getAssessments(params);
     
     assessments.value = response.assessments || [];
     totalItems.value = response.total || 0;
     totalPages.value = response.pages || 1;
     currentPage.value = response.current_page || 1;
+    
+    // 如果是教师，获取每个评估的提交数量
+    if (isTeacher.value) {
+      await fetchSubmissionCounts();
+    }
     
     // 如果是学生，获取提交状态
     if (isStudent.value) {
@@ -311,6 +316,24 @@ const fetchAssessments = async () => {
     console.error('获取评估列表失败:', error);
   } finally {
     loading.value = false;
+  }
+};
+
+// 获取提交数量
+const fetchSubmissionCounts = async () => {
+  try {
+    // 为每个评估获取提交数量
+    for (const assessment of assessments.value) {
+      try {
+        const response = await assessmentAPI.getSubmissionCount(assessment.id);
+        assessment.submission_count = response.count || 0;
+      } catch (err) {
+        console.error(`获取评估 ${assessment.id} 的提交数量失败:`, err);
+        assessment.submission_count = 0;
+      }
+    }
+  } catch (error) {
+    console.error('获取提交数量失败:', error);
   }
 };
 
@@ -498,7 +521,7 @@ const takeAssessment = (assessment) => {
 };
 
 const viewSubmissions = (assessment) => {
-  emit('view-submissions', { assessment, student: true });
+  emit('view-submissions', { assessment: assessment });
   // 或者直接导航到提交页面
   // router.push(`/assessments/${assessment.id}/submissions`);
 };

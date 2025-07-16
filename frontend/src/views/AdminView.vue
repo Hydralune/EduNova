@@ -292,7 +292,7 @@
         <div v-if="showGradingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div class="bg-white rounded-lg p-6 w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="text-xl font-semibold">评分 - {{ getStudentName(currentSubmission.student_id) }}</h3>
+              <h3 class="text-xl font-semibold">评分 - {{ getStudentName(currentSubmission?.student_id || 0) }}</h3>
               <button @click="closeGradingModal" class="text-gray-500 hover:text-gray-700">
                 <span class="text-2xl">&times;</span>
               </button>
@@ -301,16 +301,16 @@
             <div class="space-y-6">
               <!-- 学生信息 -->
               <div class="bg-gray-50 p-4 rounded-md">
-                <p><span class="font-medium">学生:</span> {{ getStudentName(currentSubmission.student_id) }}</p>
-                <p><span class="font-medium">评估:</span> {{ getAssessmentTitle(currentSubmission.assessment_id) }}</p>
-                <p><span class="font-medium">提交时间:</span> {{ formatDate(currentSubmission.submitted_at) }}</p>
+                <p><span class="font-medium">学生:</span> {{ getStudentName(currentSubmission?.student_id || 0) }}</p>
+                <p><span class="font-medium">评估:</span> {{ getAssessmentTitle(currentSubmission?.assessment_id || 0) }}</p>
+                <p><span class="font-medium">提交时间:</span> {{ formatDate(currentSubmission?.submitted_at || '') }}</p>
               </div>
               
               <!-- 答案预览 -->
               <div>
                 <h4 class="text-lg font-medium mb-2">学生答案</h4>
                 <div class="bg-gray-50 p-4 rounded-md">
-                  <pre class="whitespace-pre-wrap">{{ formatAnswers(currentSubmission.answers) }}</pre>
+                  <pre class="whitespace-pre-wrap">{{ formatAnswers(currentSubmission?.answers || '') }}</pre>
                 </div>
               </div>
               
@@ -324,7 +324,7 @@
                       type="number" 
                       v-model="gradingForm.score"
                       min="0"
-                      :max="getAssessmentTotalScore(currentSubmission.assessment_id)"
+                      :max="getAssessmentTotalScore(currentSubmission?.assessment_id || 0)"
                       class="w-full px-3 py-2 border rounded-md"
                     />
                   </div>
@@ -410,8 +410,17 @@ const systemLogs = ref([
 // 状态变量
 const showSubmissionsModal = ref(false);
 const showGradingModal = ref(false);
-const currentAssessment = ref(null);
-const currentSubmission = ref(null);
+const currentAssessment = ref<{ id: number; title: string; total_score: number } | null>(null);
+const currentSubmission = ref<{ 
+  id: number; 
+  student_id: number; 
+  assessment_id: number; 
+  answers: string;
+  score?: number;
+  feedback?: string;
+  submitted_at: string;
+  graded_at?: string;
+} | null>(null);
 const gradingForm = ref({
   score: 0,
   feedback: ''
@@ -443,17 +452,17 @@ const createAssessment = () => {
   console.log('创建评估');
 };
 
-const editAssessment = (assessment) => {
+const editAssessment = (assessment: any) => {
   // 跳转到编辑评估页面或打开模态框
   console.log('编辑评估', assessment);
 };
 
-const deleteAssessment = (assessment) => {
+const deleteAssessment = (assessment: any) => {
   // 删除评估
   console.log('删除评估', assessment);
 };
 
-const viewSubmissions = (data) => {
+const viewSubmissions = (data: { assessment: any }) => {
   currentAssessment.value = data.assessment;
   showSubmissionsModal.value = true;
 };
@@ -463,12 +472,12 @@ const closeSubmissionsModal = () => {
   currentAssessment.value = null;
 };
 
-const viewSubmissionDetail = (submission) => {
+const viewSubmissionDetail = (submission: any) => {
   // 查看提交详情
   console.log('查看提交详情', submission);
 };
 
-const gradeSubmission = (submission) => {
+const gradeSubmission = (submission: any) => {
   currentSubmission.value = submission;
   gradingForm.value = {
     score: submission.score || 0,
@@ -477,7 +486,7 @@ const gradeSubmission = (submission) => {
   showGradingModal.value = true;
 };
 
-const editGrade = (submission) => {
+const editGrade = (submission: any) => {
   // 与评分相同，但使用已有的分数和反馈
   gradeSubmission(submission);
 };
@@ -502,6 +511,8 @@ const submitGrade = async () => {
     // });
     // const data = await response.json();
     
+    if (!currentSubmission.value) return;
+    
     console.log('提交评分', {
       submissionId: currentSubmission.value.id,
       score: gradingForm.value.score,
@@ -520,28 +531,28 @@ const submitGrade = async () => {
   }
 };
 
-const getStudentName = (studentId) => {
+const getStudentName = (studentId: number) => {
   const student = students.value.find(s => s.id === studentId);
   return student ? student.name : `学生 ${studentId}`;
 };
 
-const getAssessmentTitle = (assessmentId) => {
+const getAssessmentTitle = (assessmentId: number) => {
   const assessment = assessments.value.find(a => a.id === assessmentId);
   return assessment ? assessment.title : `评估 ${assessmentId}`;
 };
 
-const getAssessmentTotalScore = (assessmentId) => {
+const getAssessmentTotalScore = (assessmentId: number) => {
   const assessment = assessments.value.find(a => a.id === assessmentId);
   return assessment ? assessment.total_score : 100;
 };
 
-const formatDate = (dateString) => {
+const formatDate = (dateString: string) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleString();
 };
 
-const formatAnswers = (answersJson) => {
+const formatAnswers = (answersJson: string) => {
   try {
     const answers = JSON.parse(answersJson);
     return JSON.stringify(answers, null, 2);
@@ -550,7 +561,7 @@ const formatAnswers = (answersJson) => {
   }
 };
 
-const takeAssessment = (assessment) => {
+const takeAssessment = (assessment: any) => {
   // 导航到评估播放器
   console.log('开始评估', assessment);
   router.push(`/assessments/${assessment.id}/take`);
@@ -559,10 +570,29 @@ const takeAssessment = (assessment) => {
 
 <style scoped>
 .btn {
-  @apply px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(59, 130, 246, 0.5);
 }
 
 .btn-primary {
-  @apply text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
+  color: white;
+  background-color: #2563eb;
 }
-</style> 
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-primary:focus {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(59, 130, 246, 0.5);
+}
+</style>

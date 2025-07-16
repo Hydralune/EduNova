@@ -103,6 +103,7 @@
               {{ getStatusText(submission) }}
             </span>
             
+            <!-- 操作按钮 -->
             <div class="flex gap-2 mt-2">
               <button 
                 @click="viewSubmission(submission)" 
@@ -188,6 +189,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import assessmentAPI from '@/api/assessmentAPI'; // 导入assessmentAPI
+import { userAPI } from '@/api'; // 从主API模块导入userAPI
 
 const props = defineProps({
   title: {
@@ -284,209 +287,260 @@ const paginationRange = computed(() => {
 });
 
 // 方法
+// 获取提交列表
 const fetchSubmissions = async () => {
-  loading.value = true;
-  
   try {
-    // 构建查询参数
-    const params = new URLSearchParams();
-    params.append('page', currentPage.value);
-    params.append('per_page', itemsPerPage.value);
+    loading.value = true;
+    console.log('开始获取提交列表');
     
+    // 准备API参数
+    const params = {
+      page: currentPage.value,
+      per_page: itemsPerPage.value
+    };
+    
+    // 添加过滤参数
     if (filters.value.studentId) {
-      params.append('student_id', filters.value.studentId);
-    }
-    
-    if (filters.value.assessmentId) {
-      params.append('assessment_id', filters.value.assessmentId);
+      params.student_id = filters.value.studentId;
     }
     
     if (filters.value.status === 'graded') {
-      params.append('graded', 'true');
+      params.graded = 'true';
     } else if (filters.value.status === 'ungraded') {
-      params.append('graded', 'false');
+      params.graded = 'false';
     }
     
-    // 发送请求
-    // 实际应用中，这里应该调用API
-    // let url = '/api/submissions';
-    // if (props.assessmentId) {
-    //   url = `/api/assessments/${props.assessmentId}/submissions`;
-    // } else if (props.studentId) {
-    //   url = `/api/students/${props.studentId}/submissions`;
-    // }
-    // const response = await fetch(`${url}?${params.toString()}`);
-    // const data = await response.json();
+    let response;
+    const assessmentId = props.assessmentId ? (typeof props.assessmentId === 'string' ? parseInt(props.assessmentId) : props.assessmentId) : null;
+    const studentId = props.studentId ? (typeof props.studentId === 'string' ? parseInt(props.studentId) : props.studentId) : null;
     
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const data = {
-      submissions: [
-        {
-          id: 1,
-          student_id: 1,
-          assessment_id: 1,
-          answers: JSON.stringify({
-            "1": "C",
-            "2": "B",
-            "3": ["A", "C", "D"],
-            "4": "defineComponent",
-            "5": ["reactive", "ref"],
-            "6": "true",
-            "7": "false",
-            "8": "Vue的生命周期钩子包括created, mounted, updated, unmounted等...",
-            "9": "Vue和React都是现代前端框架，但有不同的设计理念..."
-          }),
-          score: 85,
-          feedback: "整体表现不错，但在React和Vue的比较中缺少具体案例。",
-          submitted_at: '2025-06-10T15:30:00Z',
-          graded_at: '2025-06-11T10:15:00Z',
-          graded_by: 2
-        },
-        {
-          id: 2,
-          student_id: 2,
-          assessment_id: 1,
-          answers: JSON.stringify({
-            "1": "C",
-            "2": "A", // 错误答案
-            "3": ["A", "C"],
-            "4": "createComponent", // 错误答案
-            "5": ["reactive", "ref"],
-            "6": "true",
-            "7": "false",
-            "8": "Vue生命周期包括beforeCreate, created...",
-            "9": "Vue使用模板语法，React使用JSX..."
-          }),
-          score: 70,
-          feedback: "对Vue和React的理解基本正确，但有些细节概念不清晰。",
-          submitted_at: '2025-06-09T14:20:00Z',
-          graded_at: '2025-06-11T10:30:00Z',
-          graded_by: 2
-        },
-        {
-          id: 3,
-          student_id: 3,
-          assessment_id: 1,
-          answers: JSON.stringify({
-            "1": "C",
-            "2": "B",
-            "3": ["A", "C", "D"],
-            "4": "defineComponent",
-            "5": ["reactive", "ref"],
-            "6": "true",
-            "7": "false",
-            "8": "Vue的生命周期包括...",
-            "9": "Vue和React的比较..."
-          }),
-          submitted_at: '2025-06-11T09:45:00Z'
+    console.log('准备获取提交，参数:', { assessmentId, studentId, params });
+    
+    // 根据不同情况调用不同的API
+    if (assessmentId) {
+      // 如果有评估ID，获取该评估的所有提交
+      console.log('通过评估ID获取提交:', assessmentId);
+      try {
+        response = await assessmentAPI.getSubmissionsByAssessment(assessmentId, params);
+        console.log('评估提交API响应:', response);
+      } catch (err) {
+        console.error('获取评估提交失败:', err);
+        if (err.response) {
+          console.error('错误响应:', err.response.data);
+          console.error('状态码:', err.response.status);
         }
-      ],
-      total: 3,
-      pages: 1,
-      current_page: 1
-    };
+        throw err;
+      }
+    } else if (studentId) {
+      // 如果有学生ID，获取该学生的所有提交
+      console.log('通过学生ID获取提交:', studentId);
+      try {
+        response = await assessmentAPI.getSubmissionsByStudent(studentId, params);
+        console.log('学生提交API响应:', response);
+      } catch (err) {
+        console.error('获取学生提交失败:', err);
+        if (err.response) {
+          console.error('错误响应:', err.response.data);
+          console.error('状态码:', err.response.status);
+        }
+        throw err;
+      }
+    } else {
+      // 否则使用过滤器获取提交
+      console.log('通过过滤器获取提交:', filters.value);
+      if (filters.value.assessmentId) {
+        try {
+          response = await assessmentAPI.getSubmissionsByAssessment(parseInt(filters.value.assessmentId), params);
+          console.log('过滤器评估提交API响应:', response);
+        } catch (err) {
+          console.error('通过过滤器获取评估提交失败:', err);
+          if (err.response) {
+            console.error('错误响应:', err.response.data);
+            console.error('状态码:', err.response.status);
+          }
+          throw err;
+        }
+      } else if (filters.value.studentId) {
+        try {
+          response = await assessmentAPI.getSubmissionsByStudent(parseInt(filters.value.studentId), params);
+          console.log('过滤器学生提交API响应:', response);
+        } catch (err) {
+          console.error('通过过滤器获取学生提交失败:', err);
+          if (err.response) {
+            console.error('错误响应:', err.response.data);
+            console.error('状态码:', err.response.status);
+          }
+          throw err;
+        }
+      } else {
+        // 默认获取所有提交（在实际系统中可能需要限制）
+        console.warn('没有提供具体过滤条件，无法获取提交');
+        submissions.value = [];
+        loading.value = false;
+        return;
+      }
+    }
     
-    submissions.value = data.submissions;
-    totalItems.value = data.total;
-    totalPages.value = data.pages;
-    currentPage.value = data.current_page;
+    console.log('提交响应数据:', response);
+    
+    // 更新提交列表
+    if (response && response.submissions) {
+      console.log('找到提交数据:', response.submissions.length, '条记录');
+      submissions.value = response.submissions;
+      totalItems.value = response.total || response.submissions.length;
+      totalPages.value = response.pages || Math.ceil(totalItems.value / itemsPerPage.value);
+    } else {
+      console.log('未找到提交数据或格式不正确');
+      submissions.value = [];
+      totalItems.value = 0;
+      totalPages.value = 1;
+    }
+    
+    // 如果有学生列表或评估列表，也获取它们用于筛选
+    if (props.showStudentFilter) {
+      fetchStudents();
+    }
+    
+    if (props.showAssessmentFilter) {
+      fetchAssessments();
+    }
   } catch (error) {
     console.error('获取提交列表失败:', error);
+    submissions.value = [];
   } finally {
     loading.value = false;
   }
 };
 
+// 获取学生列表
 const fetchStudents = async () => {
   try {
-    // 实际应用中，这里应该调用API
-    // const response = await fetch('/api/students');
-    // const data = await response.json();
+    // 调用API获取学生列表，这里可能需要根据实际API调整
+    const response = await userAPI.getUsers({ role: 'student' });
     
-    // 模拟数据
-    const data = {
-      students: [
-        { id: 1, name: '张三' },
-        { id: 2, name: '李四' },
-        { id: 3, name: '王五' }
-      ]
-    };
-    
-    students.value = data.students;
+    if (response && response.users) {
+      students.value = response.users;
+    } else {
+      students.value = [];
+    }
   } catch (error) {
     console.error('获取学生列表失败:', error);
+    students.value = [];
   }
 };
 
+// 获取评估列表
 const fetchAssessments = async () => {
   try {
-    // 实际应用中，这里应该调用API
-    // const response = await fetch('/api/assessments');
-    // const data = await response.json();
+    // 调用API获取评估列表
+    const response = await assessmentAPI.getAssessments();
     
-    // 模拟数据
-    const data = {
-      assessments: [
-        {
-          id: 1,
-          title: '第一章测验',
-          total_score: 100
-        },
-        {
-          id: 2,
-          title: '期中考试',
-          total_score: 100
-        }
-      ]
-    };
-    
-    assessments.value = data.assessments;
+    if (response && response.assessments) {
+      assessments.value = response.assessments;
+    } else {
+      assessments.value = [];
+    }
   } catch (error) {
     console.error('获取评估列表失败:', error);
+    assessments.value = [];
   }
 };
 
-const applyFilters = () => {
-  currentPage.value = 1;
-  fetchSubmissions();
+// 查看提交详情
+const viewSubmission = (submission) => {
+  console.log('View submission:', submission);
+  // 跳转到查看提交详情页面，使用评分页面但添加readOnly参数
+  router.push(`/submissions/${submission.id}/grade?readOnly=true`);
 };
 
+// 评分提交
+const gradeSubmission = (submission) => {
+  console.log('Grade submission:', submission);
+  // 跳转到评分页面
+  router.push(`/submissions/${submission.id}/grade`);
+};
+
+// 修改评分
+const editGrade = (submission) => {
+  console.log('Edit grade:', submission);
+  // 跳转到评分页面
+  router.push(`/submissions/${submission.id}/grade`);
+};
+
+// 返回按钮
+const goBack = () => {
+  emit('back');
+  router.back();
+};
+
+// 切换页面
 const changePage = (page) => {
   if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
   fetchSubmissions();
 };
 
-const getStudentName = (studentId) => {
-  const student = students.value.find(s => s.id === studentId);
-  return student ? student.name : `学生 ${studentId}`;
+// 应用过滤器
+const applyFilters = () => {
+  currentPage.value = 1;
+  fetchSubmissions();
 };
 
-const getAssessmentTitle = (assessmentId) => {
-  const assessment = assessments.value.find(a => a.id === assessmentId);
-  return assessment ? assessment.title : `评估 ${assessmentId}`;
-};
-
-const getAssessmentTotalScore = (assessmentId) => {
-  const assessment = assessments.value.find(a => a.id === assessmentId);
-  return assessment ? assessment.total_score : 100;
-};
-
+// 格式化日期
 const formatDate = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleString();
 };
 
-const getStatusText = (submission) => {
-  if (submission.graded_at) {
-    return '已评分';
-  } else {
-    return '待评分';
+// 获取学生姓名
+const getStudentName = (studentId) => {
+  const student = students.value.find(s => s.id === studentId);
+  return student ? student.full_name || student.username : `学生 ${studentId}`;
+};
+
+// 获取评估标题
+const getAssessmentTitle = (assessmentId) => {
+  const assessment = assessments.value.find(a => a.id === assessmentId);
+  return assessment ? assessment.title : `评估 ${assessmentId}`;
+};
+
+// 获取评估总分
+const getAssessmentTotalScore = (assessmentId) => {
+  const assessment = assessments.value.find(a => a.id === assessmentId);
+  return assessment ? assessment.total_score : 100;
+};
+
+// 获取答案预览
+const getAnswerPreview = (submission) => {
+  if (!submission.answers) return '无答案数据';
+  
+  try {
+    // 答案可能是字符串或已解析的对象
+    const answers = typeof submission.answers === 'string' 
+      ? JSON.parse(submission.answers) 
+      : submission.answers;
+    
+    if (Array.isArray(answers)) {
+      // 简单展示前几个答案
+      return answers.slice(0, 3).map(ans => {
+        if (typeof ans === 'object') {
+          return JSON.stringify(ans).slice(0, 30) + '...';
+        }
+        return String(ans).slice(0, 30);
+      }).join(', ') + (answers.length > 3 ? '...' : '');
+    } else if (typeof answers === 'object') {
+      return JSON.stringify(answers).slice(0, 50) + '...';
+    }
+    
+    return String(answers).slice(0, 50) + '...';
+  } catch (error) {
+    console.error('解析答案预览失败:', error);
+    return '答案格式错误';
   }
 };
 
+// 检查提交状态
 const getStatusClass = (submission) => {
   if (submission.graded_at) {
     return 'bg-green-100 text-green-800';
@@ -495,68 +549,38 @@ const getStatusClass = (submission) => {
   }
 };
 
+// 获取提交状态文本
+const getStatusText = (submission) => {
+  if (submission.graded_at) {
+    return '已评分';
+  } else {
+    return '待评分';
+  }
+};
+
+// 检查是否已评分
 const isGraded = (submission) => {
-  return !!submission.graded_at;
+  return submission.graded_at != null;
 };
 
-const getAnswerPreview = (submission) => {
-  try {
-    const answers = JSON.parse(submission.answers);
-    // 生成简短的预览
-    const keys = Object.keys(answers);
-    if (keys.length === 0) return '无答案';
+// 监听属性变化
+watch(
+  () => [props.assessmentId, props.studentId],
+  () => {
+    // 重置过滤器和页码
+    if (props.assessmentId) {
+      filters.value.assessmentId = props.assessmentId;
+    }
     
-    // 选择前两个问题的答案作为预览
-    const previewKeys = keys.slice(0, 2);
-    const preview = previewKeys.map(key => {
-      const answer = answers[key];
-      if (Array.isArray(answer)) {
-        return `问题${key}: ${answer.join(', ')}`;
-      } else if (typeof answer === 'string' && answer.length > 30) {
-        return `问题${key}: ${answer.substring(0, 30)}...`;
-      } else {
-        return `问题${key}: ${answer}`;
-      }
-    }).join(' | ');
+    if (props.studentId) {
+      filters.value.studentId = props.studentId;
+    }
     
-    return keys.length > 2 ? `${preview} | ...` : preview;
-  } catch (error) {
-    return '答案格式错误';
-  }
-};
-
-const viewSubmission = (submission) => {
-  emit('view', submission);
-};
-
-const gradeSubmission = (submission) => {
-  emit('grade', submission);
-};
-
-const editGrade = (submission) => {
-  emit('edit-grade', submission);
-};
-
-const goBack = () => {
-  emit('back');
-};
-
-// 监听过滤器变化
-watch(() => props.assessmentId, (newVal) => {
-  if (newVal !== filters.value.assessmentId) {
-    filters.value.assessmentId = newVal || '';
     currentPage.value = 1;
     fetchSubmissions();
-  }
-});
-
-watch(() => props.studentId, (newVal) => {
-  if (newVal !== filters.value.studentId) {
-    filters.value.studentId = newVal || '';
-    currentPage.value = 1;
-    fetchSubmissions();
-  }
-});
+  },
+  { immediate: true }
+);
 
 // 初始化
 onMounted(() => {
