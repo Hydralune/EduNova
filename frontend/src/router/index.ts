@@ -12,10 +12,7 @@ import StudentView from '../views/StudentView.vue'
 import TeacherView from '../views/TeacherView.vue'
 import CourseDetailView from '../views/CourseDetailView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
-import TestAssessmentView from '../views/TestAssessmentView.vue'
 import AssessmentPlayerView from '../views/AssessmentPlayerView.vue'
-import TestNotificationView from '../views/TestNotificationView.vue'
-import NotificationTestPage from '../views/NotificationTestPage.vue'
 
 // 导入评估相关视图
 import AssessmentList from '../components/assessment/AssessmentList.vue'
@@ -26,8 +23,6 @@ import SubmissionGrader from '../components/assessment/SubmissionGrader.vue'
 
 // 导入AI助手组件
 import AIAssistant from '../components/ai/AIAssistant.vue'
-import TestAIAssistantView from '../views/TestAIAssistantView.vue'
-import SimpleTestView from '../views/SimpleTestView.vue'
 import LearningView from '../views/LearningView.vue'
 
 // 定义路由历史位置状态接口
@@ -115,11 +110,6 @@ const router = createRouter({
     },
     // 评估相关路由
     {
-      path: '/test-assessment',
-      name: 'testAssessment',
-      component: TestAssessmentView
-    },
-    {
       path: '/assessments',
       name: 'assessments',
       component: AssessmentList,
@@ -170,33 +160,9 @@ const router = createRouter({
       meta: { requiresAuth: true, requiresTeacher: true }
     },
     {
-      path: '/test-ai-assistant',
-      name: 'testAIAssistant',
-      component: TestAIAssistantView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/simple-test',
-      name: 'simpleTest',
-      component: SimpleTestView,
-      meta: { requiresAuth: true }
-    },
-    {
       path: '/learning/:courseId',
       name: 'learning',
       component: LearningView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/test-notification',
-      name: 'testNotification',
-      component: TestNotificationView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/notification-test',
-      name: 'notificationTest',
-      component: NotificationTestPage,
       meta: { requiresAuth: true }
     },
     {
