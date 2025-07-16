@@ -16,11 +16,22 @@
         </div>
 
         <!-- 教师查看模式 -->
-        <div v-else-if="isTeacher && !editMode">
+        <div v-else-if="isTeacher && !editMode" class="max-w-7xl mx-auto">
           <div class="bg-white p-6 rounded-lg shadow-md mb-6">
             <div class="flex justify-between items-center">
               <div>
-                <h1 class="text-2xl font-bold">{{ assessment.title }}</h1>
+                <div class="flex items-center gap-3 mb-2">
+                  <button 
+                    @click="goBack" 
+                    class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center"
+                    style="width: 40px; height: 40px;"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                  <h1 class="text-2xl font-bold">{{ assessment.title }}</h1>
+                </div>
                 <p class="text-gray-600 mt-1">{{ assessment.description }}</p>
               </div>
               <div class="text-right">
@@ -48,9 +59,9 @@
               </div>
             </div>
           </div>
-            
+          
           <!-- 题目预览 -->
-          <div class="space-y-8">
+          <div class="space-y-8 max-w-7xl mx-auto">
             <div v-for="(section, sectionIndex) in assessment.sections" :key="sectionIndex" class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <h3 class="text-xl font-semibold mb-4">{{ section.description }}</h3>
               <p class="text-sm text-gray-600 mb-4">每题 {{ section.score_per_question }} 分</p>
@@ -65,7 +76,7 @@
                       <!-- 选择题选项 -->
                       <div v-if="question.type === 'multiple_choice' || question.type === 'multiple_select'" class="space-y-2">
                         <div v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center">
-                          <span class="mr-2">{{ String.fromCharCode(65 + optIndex) }}.</span>
+                          <!-- 不添加额外的选项标识，直接显示选项内容 -->
                           <span v-html="option"></span>
                         </div>
                         <p class="text-sm text-gray-600 mt-2">
@@ -248,6 +259,7 @@
                       : ''
                   ]"
                 >
+                  <!-- 保留选择指示器但不重复显示选项标识 -->
                   <div class="w-6 h-6 flex items-center justify-center border rounded-full mr-3">
                     {{ String.fromCharCode(65 + optIndex) }}
                   </div>
@@ -266,6 +278,7 @@
                     isOptionSelected(optIndex) ? 'bg-blue-50 border-blue-200' : ''
                   ]"
                 >
+                  <!-- 保留选择指示器但不重复显示选项标识 -->
                   <div class="w-6 h-6 flex items-center justify-center border rounded mr-3">
                     {{ String.fromCharCode(65 + optIndex) }}
                   </div>
@@ -1673,4 +1686,16 @@ watch(currentQuestionIndex, (newIndex) => {
     }
   }
 });
+
+// 返回按钮处理函数
+const goBack = () => {
+  // 获取当前用户角色
+  const userRole = 'teacher'; // 这里应该从authStore获取，但为简化直接使用teacher
+  
+  // 返回到教师工作台的评估测试页面
+  router.push({ 
+    path: `/${userRole}`, 
+    query: { activeTab: 'assessments' } 
+  });
+};
 </script> 

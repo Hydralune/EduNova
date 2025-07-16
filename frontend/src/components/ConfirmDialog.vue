@@ -103,13 +103,13 @@ const cancel = () => {
 const headerClass = computed(() => {
   switch (props.type) {
     case 'success':
-      return 'bg-green-50 text-green-800 border-green-100';
+      return 'bg-green-50 text-gray-800 border-green-100';
     case 'error':
-      return 'bg-red-50 text-red-800 border-red-100';
+      return 'bg-red-50 text-gray-800 border-red-100';
     case 'warning':
-      return 'bg-amber-50 text-amber-700 border-amber-100';
+      return 'bg-blue-50 text-gray-800 border-blue-100';
     default:
-      return 'bg-blue-50 text-blue-800 border-blue-100';
+      return 'bg-blue-50 text-gray-800 border-blue-100';
   }
 });
 
@@ -120,7 +120,7 @@ const buttonClass = computed(() => {
     case 'error':
       return 'bg-red-600 hover:bg-red-700 border-transparent focus:ring-red-500';
     case 'warning':
-      return 'bg-amber-500 hover:bg-amber-600 border-transparent focus:ring-amber-400';
+      return 'bg-blue-600 hover:bg-blue-700 border-transparent focus:ring-blue-500';
     default:
       return 'bg-blue-600 hover:bg-blue-700 border-transparent focus:ring-blue-500';
   }

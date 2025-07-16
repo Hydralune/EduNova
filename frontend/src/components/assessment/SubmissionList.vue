@@ -1,7 +1,18 @@
 <template>
   <div class="submission-list">
     <div class="mb-6 flex justify-between items-center">
-      <h2 class="text-xl font-semibold">{{ title }}</h2>
+      <div class="flex items-center gap-3">
+        <button 
+          @click="goBack" 
+          class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center" 
+          style="width: 40px; height: 40px;"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+          </svg>
+        </button>
+        <h2 class="text-xl font-semibold">{{ title }}</h2>
+      </div>
       <div v-if="showBackButton">
         <button 
           @click="goBack" 
@@ -470,7 +481,15 @@ const editGrade = (submission) => {
 // 返回按钮
 const goBack = () => {
   emit('back');
-  router.back();
+  
+  // 获取当前用户角色
+  const userRole = 'teacher'; // 这里应该从authStore获取，但为简化直接使用teacher
+  
+  // 返回到教师工作台的评估测试页面
+  router.push({ 
+    path: `/${userRole}`, 
+    query: { activeTab: 'assessments' } 
+  });
 };
 
 // 切换页面
