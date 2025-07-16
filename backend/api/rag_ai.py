@@ -238,12 +238,12 @@ def chat_with_ai():
                     
                     if course:
                         course_info = f"""
-课程名称: {course.name}
-课程简介: {course.description or '无简介'}
-课程类别: {course.category or '未分类'}
-难度级别: {course.difficulty or '未指定'}
-课程时长: {course.duration or 0} 小时
-"""
+                                    课程名称: {course.name}
+                                    课程简介: {course.description or '无简介'}
+                                    课程类别: {course.category or '未分类'}
+                                    难度级别: {course.difficulty or '未指定'}
+                                    课程时长: {course.duration or 0} 小时
+                                    """
                         app_logger.info(f"获取到课程信息: {course.name}")
                     else:
                         app_logger.warning(f"未找到课程信息，课程ID: {course_id}")
