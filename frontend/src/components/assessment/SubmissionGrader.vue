@@ -1,5 +1,5 @@
 <template>
-  <div class="submission-grader">
+  <div class="submission-grader max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- 加载状态 -->
     <div v-if="loading" class="flex justify-center items-center py-10">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -43,6 +43,20 @@
         <div class="flex justify-between text-sm text-gray-600">
           <span>已批改: {{ gradedQuestions }}/{{ totalQuestions }}</span>
           <span>待批改: {{ totalQuestions - gradedQuestions }}</span>
+        </div>
+        
+        <!-- AI一键打分按钮 -->
+        <div v-if="!isReadOnly && hasSubjectiveQuestions" class="mt-4 flex justify-end">
+          <button 
+            @click="aiGradeAllSubjective" 
+            class="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            :disabled="aiGradingAll"
+          >
+            <span v-if="aiGradingAll" class="mr-2">
+              <div class="animate-spin rounded-full h-4 w-4 border-2 border-white"></div>
+            </span>
+            <span>AI 一键打分</span>
+          </button>
         </div>
       </div>
 
@@ -220,20 +234,38 @@
             </div>
           </div>
 
-          <!-- 评分区域 (仅对主观题显示) -->
-          <div v-if="needsManualGrading(question)" class="border-t pt-4">
+          <!-- 评分区域 (对填空题和主观题显示) -->
+          <div v-if="needsManualGrading(question) || canBeModifiedAfterAutoGrading(question)" class="border-t pt-4">
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1">分数 (最高 {{ question.score }} 分)</label>
-              <input 
-                type="number" 
-                v-model="questionScores[index]" 
-                class="w-24 px-3 py-2 border rounded-md"
-                :min="0" 
-                :max="question.score" 
-                step="0.5"
-                :disabled="isReadOnly"
-                :class="{'bg-gray-100': isReadOnly}"
-              />
+              <div class="flex items-center">
+                <input 
+                  type="number" 
+                  v-model="questionScores[index]" 
+                  class="w-24 px-3 py-2 border rounded-md"
+                  :min="0" 
+                  :max="question.score" 
+                  step="0.5"
+                  :disabled="isReadOnly"
+                  :class="{'bg-gray-100': isReadOnly}"
+                />
+                <span v-if="canBeModifiedAfterAutoGrading(question)" class="ml-2 text-sm text-blue-600">
+                  (系统已自动评分，可修改)
+                </span>
+                
+                <!-- AI打分按钮 (仅对主观题显示) -->
+                <button 
+                  v-if="!isReadOnly && needsManualGrading(question)"
+                  @click="aiGradeQuestion(index)" 
+                  class="ml-3 flex items-center px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                  :disabled="aiGradingQuestions[index]"
+                >
+                  <span v-if="aiGradingQuestions[index]" class="mr-1">
+                    <div class="animate-spin rounded-full h-3 w-3 border-2 border-white"></div>
+                  </span>
+                  <span>AI 打分</span>
+                </button>
+              </div>
             </div>
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1">评语</label>
@@ -297,13 +329,19 @@
         </button>
       </div>
     </div>
+    
+    <!-- 全局通知容器 -->
+    <NotificationContainer />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import axios from 'axios';
+import { useRoute, useRouter } from 'vue-router';
 import assessmentAPI from '@/api/assessmentAPI';
+import notificationService from '../../services/notificationService';
+import NotificationContainer from '../NotificationContainer.vue';
 
 const props = defineProps({
   submissionId: {
@@ -333,10 +371,22 @@ const questionFeedback = ref([]);
 const overallFeedback = ref('');
 const totalScore = ref(0);
 
+// AI评分状态
+const aiGradingAll = ref(false);
+const aiGradingQuestions = ref([]);
+
 // 计算属性
 const gradedQuestions = computed(() => {
-  // 计算已批改的题目数量（有分数的题目）
-  return questionScores.value.filter(score => score > 0).length;
+  // 计算已批改的题目数量（有分数的题目或自动评分的题目）
+  return questions.value.reduce((count, question, index) => {
+    // 如果是需要手动评分的题目，检查是否有分数
+    if (needsManualGrading(question)) {
+      return (questionScores.value[index] > 0) ? count + 1 : count;
+    } else {
+      // 客观题自动评分，算作已批改
+      return count + 1;
+    }
+  }, 0);
 });
 
 const totalQuestions = computed(() => {
@@ -345,6 +395,10 @@ const totalQuestions = computed(() => {
 
 const currentScore = computed(() => {
   return totalScore.value || 0;
+});
+
+const hasSubjectiveQuestions = computed(() => {
+  return questions.value.some(q => needsManualGrading(q));
 });
 
 // 方法
@@ -367,6 +421,14 @@ const getQuestionTypeText = (type) => {
   return typeMap[type] || type;
 };
 
+const needsManualGrading = (question) => {
+  return ['short_answer', 'essay'].includes(question.section_type);
+};
+
+const canBeModifiedAfterAutoGrading = (question) => {
+  return ['fill_blank', 'fill_in_blank'].includes(question.section_type);
+};
+
 const getQuestionStatusClass = (question) => {
   const index = questions.value.indexOf(question);
   if (index === -1) return '';
@@ -376,6 +438,8 @@ const getQuestionStatusClass = (question) => {
   if (score === undefined || score === null) return 'bg-gray-100 text-gray-800';
   if (needsManualGrading(question)) {
     return score > 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+  } else if (canBeModifiedAfterAutoGrading(question)) {
+    return 'bg-blue-100 text-blue-800 cursor-pointer';
   } else {
     // 客观题
     return 'bg-blue-100 text-blue-800';
@@ -391,14 +455,12 @@ const getQuestionStatusText = (question) => {
   if (score === undefined || score === null) return '未评分';
   if (needsManualGrading(question)) {
     return score > 0 ? '已评分' : '未评分';
+  } else if (canBeModifiedAfterAutoGrading(question)) {
+    return '自动评分 (可修改)';
   } else {
     // 客观题
     return '自动评分';
   }
-};
-
-const needsManualGrading = (question) => {
-  return ['short_answer', 'essay'].includes(question.section_type);
 };
 
 const formatQuestionStem = (stem) => {
@@ -747,6 +809,12 @@ const parseQuestionsAndAnswers = (submissionData) => {
     // 初始化为零分数组
     questionScores.value = questions.value.map(() => 0);
   }
+
+  // 初始化AI评分状态
+  aiGradingQuestions.value = questions.value.map(() => false);
+
+  // 自动评分填空题
+  autoGradeFillInBlankQuestions();
   
   if (submissionData.question_feedback) {
     try {
@@ -766,14 +834,195 @@ const parseQuestionsAndAnswers = (submissionData) => {
   }
 };
 
+// 自动评分填空题
+const autoGradeFillInBlankQuestions = () => {
+  questions.value.forEach((question, index) => {
+    if ((question.section_type === 'fill_blank' || question.section_type === 'fill_in_blank') && 
+        questionScores.value[index] === 0) {
+      
+      const studentAnswer = studentAnswers.value[index];
+      const correctAnswer = question.answer;
+      
+      // 检查答案是否正确
+      let isCorrect = false;
+      let partialCorrect = 0;
+      
+      if (Array.isArray(correctAnswer) && Array.isArray(studentAnswer)) {
+        // 多个填空的情况
+        const totalBlanks = correctAnswer.length;
+        let correctBlanks = 0;
+        
+        for (let i = 0; i < totalBlanks; i++) {
+          if (i < studentAnswer.length) {
+            const correct = String(correctAnswer[i] || '').toLowerCase().trim();
+            const student = String(studentAnswer[i] || '').toLowerCase().trim();
+            
+            if (correct === student) {
+              correctBlanks++;
+            }
+          }
+        }
+        
+        partialCorrect = correctBlanks / totalBlanks;
+        isCorrect = correctBlanks === totalBlanks;
+      } else if (!Array.isArray(correctAnswer) && !Array.isArray(studentAnswer)) {
+        // 单个填空的情况
+        const correct = String(correctAnswer || '').toLowerCase().trim();
+        const student = String(studentAnswer || '').toLowerCase().trim();
+        
+        isCorrect = correct === student;
+        partialCorrect = isCorrect ? 1 : 0;
+      }
+      
+      // 设置分数
+      if (isCorrect) {
+        questionScores.value[index] = question.score;
+      } else if (partialCorrect > 0) {
+        // 部分正确，按比例给分，四舍五入到最近的0.5分
+        const rawScore = question.score * partialCorrect;
+        // 将分数四舍五入到最近的0.5
+        questionScores.value[index] = Math.round(rawScore * 2) / 2;
+      } else {
+        questionScores.value[index] = 0;
+      }
+      
+      // 添加自动评分反馈
+      if (isCorrect) {
+        questionFeedback.value[index] = '答案完全正确';
+      } else if (partialCorrect > 0) {
+        questionFeedback.value[index] = `部分正确 (${Math.round(partialCorrect * 100)}%)`;
+      } else {
+        questionFeedback.value[index] = '答案不正确';
+      }
+    }
+  });
+  
+  // 更新总分
+  updateTotalScore();
+};
+
+const updateTotalScore = () => {
+  const sum = questionScores.value.reduce((sum, score) => sum + (score || 0), 0);
+  // 将总分四舍五入到最近的0.5
+  totalScore.value = Math.round(sum * 2) / 2;
+};
+
+// AI一键打分
+const aiGradeAllSubjective = async () => {
+  if (aiGradingAll.value) return;
+  aiGradingAll.value = true;
+  try {
+    // 准备所有主观题的数据
+    const subjectiveQuestions = questions.value
+      .map((question, idx) => {
+        if (needsManualGrading(question)) {
+          return {
+            index: idx,
+            question: question,
+            student_answer: studentAnswers.value[idx],
+            max_score: question.score
+          };
+        }
+        return null;
+      })
+      .filter(q => q !== null);
+
+    const response = await assessmentAPI.aiGradeAllSubjective(props.submissionId, subjectiveQuestions);
+    console.log('AI一键打分响应:', response);
+    
+    if (response && response.question_scores) {
+      // 更新分数和反馈
+      response.question_scores.forEach((score, idx) => {
+        if (score !== null && idx < questionScores.value.length) {
+          questionScores.value[idx] = score;
+        }
+      });
+      
+      if (response.question_feedback) {
+        response.question_feedback.forEach((feedback, idx) => {
+          if (feedback && idx < questionFeedback.value.length) {
+            questionFeedback.value[idx] = feedback;
+          }
+        });
+      }
+      
+      // 如果返回了总分，直接使用
+      if (response.total_score !== undefined) {
+        totalScore.value = response.total_score;
+      } else {
+        // 否则重新计算总分
+        updateTotalScore();
+      }
+      
+      notificationService.success('批量评分完成', '所有主观题已由AI完成评分');
+    } else {
+      notificationService.error('AI一键打分失败', 'AI一键打分失败或无有效数据');
+    }
+  } catch (error) {
+    console.error('AI一键打分失败:', error);
+    notificationService.error('AI一键打分失败', 'AI一键打分失败，请重试');
+  } finally {
+    aiGradingAll.value = false;
+  }
+};
+
+// AI单独打分
+const aiGradeQuestion = async (index) => {
+  if (aiGradingQuestions.value[index]) return;
+  aiGradingQuestions.value[index] = true;
+  try {
+    const question = questions.value[index];
+    const questionData = {
+      question: question,
+      student_answer: studentAnswers.value[index],
+      max_score: question.score
+    };
+
+    const response = await assessmentAPI.aiGradeQuestion(props.submissionId, index, questionData);
+    console.log('AI单独打分响应:', response);
+    
+    if (response && response.status === 'success') {
+      // 优先使用返回的score字段
+      if (response.score !== undefined) {
+        questionScores.value[index] = response.score;
+      }
+      
+      // 使用返回的feedback字段作为评语
+      if (response.feedback) {
+        questionFeedback.value[index] = response.feedback;
+      }
+      
+      // 更新总分
+      updateTotalScore();
+      notificationService.success(`题目 ${index + 1} 已由AI自动评分`);
+    } else {
+      notificationService.error('AI单独打分失败', 'AI单独打分失败或无有效数据');
+    }
+  } catch (error) {
+    console.error('AI单独打分失败:', error);
+    notificationService.error('AI单独打分失败', 'AI单独打分失败，请重试');
+  } finally {
+    aiGradingQuestions.value[index] = false;
+  }
+};
+
 // 保存评分
 const saveGrading = async () => {
   try {
     // 准备提交数据
+    const roundedScores = questionScores.value.map(score => {
+      if (!score) return 0;
+      // 将每个分数四舍五入到最近的0.5
+      return Math.round(score * 2) / 2;
+    });
+    
+    // 将总分四舍五入到最近的0.5
+    const roundedTotalScore = Math.round(totalScore.value * 2) / 2;
+    
     const gradingData = {
-      score: totalScore.value,
+      score: roundedTotalScore,
       feedback: overallFeedback.value,
-      question_scores: questionScores.value,
+      question_scores: roundedScores,
       question_feedback: questionFeedback.value,
       grader_id: 1 // 应该从用户状态获取
     };
@@ -786,20 +1035,21 @@ const saveGrading = async () => {
     console.log('Grading response:', response);
     
     // 显示成功消息
-    alert('评分已保存');
+    notificationService.success('评分已保存', '学生成绩已成功更新');
     
     // 返回提交列表
     goBack();
   } catch (error) {
     console.error('保存评分失败:', error);
-    alert('保存评分失败，请重试');
+    notificationService.error('保存评分失败', '评分保存失败，请重试');
   }
 };
 
 // 监听题目评分变化，自动更新总分
 watch(questionScores, (newScores) => {
-  // 计算总分
-  totalScore.value = newScores.reduce((sum, score) => sum + (score || 0), 0);
+  // 计算总分并四舍五入到最近的0.5
+  const sum = newScores.reduce((sum, score) => sum + (score || 0), 0);
+  totalScore.value = Math.round(sum * 2) / 2;
 }, { deep: true });
 
 // 组件挂载时获取数据

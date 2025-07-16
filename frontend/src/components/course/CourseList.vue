@@ -155,9 +155,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch, onBeforeUnmount } from 'vue';
+import { ref, reactive, onMounted, computed, watch, onBeforeUnmount, inject } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI } from '../../api';
+import notificationService from '../../services/notificationService';
+import dialogService from '../../services/dialogService';
 
 // 定义Course接口
 interface Course {
@@ -322,7 +324,7 @@ async function saveCourse() {
   try {
     // 验证表单
     if (!newCourse.name || !newCourse.description || !newCourse.category || !newCourse.difficulty) {
-      alert('请填写所有必填字段');
+      notificationService.error('表单验证失败', '请填写所有必填字段');
       return;
     }
     
@@ -344,13 +346,13 @@ async function saveCourse() {
       console.log('更新课程:', currentCourseId.value);
       response = await courseAPI.updateCourse(currentCourseId.value, courseData);
       console.log('课程更新成功:', response);
-      alert('课程更新成功');
+      notificationService.success('课程更新成功', `课程 "${newCourse.name}" 已更新`);
     } else {
       // 创建新课程
       console.log('创建新课程');
       response = await courseAPI.createCourse(courseData);
       console.log('课程创建成功:', response);
-      alert('课程创建成功');
+      notificationService.success('课程创建成功', `课程 "${newCourse.name}" 已创建`);
     }
     
     // 关闭模态框
@@ -360,20 +362,30 @@ async function saveCourse() {
     await fetchCourses();
   } catch (error) {
     console.error(isEditing.value ? '更新课程失败:' : '创建课程失败:', error);
-    alert(isEditing.value ? '更新课程失败，请重试' : '创建课程失败，请重试');
+    notificationService.error(
+      isEditing.value ? '更新课程失败' : '创建课程失败', 
+      '操作未能完成，请重试'
+    );
   }
 }
 
 async function confirmDeleteCourse(course: Course) {
-  if (confirm(`确定要删除课程"${course.name}"吗？此操作不可恢复。`)) {
+  const confirmed = await dialogService.warning({
+    title: '删除课程',
+    message: `确定要删除课程"${course.name}"吗？此操作不可恢复。`,
+    confirmText: '删除',
+    cancelText: '取消'
+  });
+  
+  if (confirmed) {
     try {
       await courseAPI.deleteCourse(course.id);
-      alert('课程删除成功');
+      notificationService.success('课程删除成功', `课程 "${course.name}" 已删除`);
       // 重新加载课程列表
       await fetchCourses();
     } catch (error) {
       console.error('删除课程失败:', error);
-      alert('删除课程失败，请重试');
+      notificationService.error('删除课程失败', '操作未能完成，请重试');
     }
   }
 }

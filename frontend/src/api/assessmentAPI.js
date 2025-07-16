@@ -120,6 +120,26 @@ const assessmentAPI = {
   getCourseAssessments: (courseId, params) => {
     return api.get(`/courses/${courseId}/assessments`, { params });
   },
+
+  // AI评分单个题目
+  aiGradeQuestion: (submissionId, questionIndex, questionData) => {
+    return api.post(`/submissions/${submissionId}/ai-grade-question`, {
+      question_index: questionIndex,
+      question_data: questionData
+    });
+  },
+
+  // AI评分所有主观题
+  aiGradeAllSubjective: (submissionId, questionsData) => {
+    return api.post(`/submissions/${submissionId}/ai-grade-all`, {
+      questions_data: questionsData
+    });
+  },
+
+  // 使用AI生成评估内容
+  generateAssessmentWithAI: (params) => {
+    return api.post('/assessments/generate-with-ai', params);
+  },
 };
 
 export default assessmentAPI; 

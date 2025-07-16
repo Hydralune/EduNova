@@ -196,81 +196,85 @@
 
         <!-- 评估测验 -->
         <div v-else-if="activeTab === 'assessments'" class="p-6">
-          <div class="flex justify-between items-center mb-6">
-            <h3 class="text-lg font-semibold">评估测验</h3>
-            <button 
-              v-if="canEdit" 
-              @click="createNewAssessment"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              创建评估
-            </button>
-          </div>
+          <div class="max-w-7xl mx-auto">
+            <div class="mb-6 flex justify-between items-center">
+              <h3 class="text-lg font-semibold">评估测验</h3>
+              <div v-if="canEdit">
+                <button 
+                  @click="createNewAssessment"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  创建评估
+                </button>
+              </div>
+            </div>
 
-          <div v-if="assessments.length > 0" class="space-y-4">
-            <div 
-              v-for="assessment in assessments" 
-              :key="assessment.id" 
-              class="bg-white p-6 rounded-lg shadow-md border border-gray-200"
-            >
-              <div class="flex justify-between items-start">
-                <div>
-                  <h4 class="text-lg font-semibold">{{ assessment.title }}</h4>
-                  <p class="text-sm text-gray-600">{{ assessment.description }}</p>
-                  <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
-                    <span>总分: {{ assessment.total_score }}</span>
-                    <span>题目数: {{ getTotalQuestions(assessment) }}</span>
-                    <span>时间限制: {{ assessment.duration || '无限制' }}</span>
-                    <span>截止日期: {{ formatDate(assessment.due_date) }}</span>
-                    <span>尝试次数: {{ assessment.max_attempts || '无限制' }}</span>
+            <div v-if="assessments.length > 0" class="space-y-4">
+              <div 
+                v-for="assessment in assessments" 
+                :key="assessment.id" 
+                class="bg-white p-6 rounded-lg shadow-md border border-gray-200"
+              >
+                <div class="flex justify-between items-start">
+                  <div>
+                    <h4 class="text-lg font-semibold">{{ assessment.title }}</h4>
+                    <p class="text-sm text-gray-600">{{ assessment.description }}</p>
+                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
+                      <span>总分: {{ assessment.total_score }}</span>
+                      <span>题目数: {{ getTotalQuestions(assessment) }}</span>
+                      <span>时间限制: {{ assessment.duration || '无限制' }}</span>
+                      <span>截止日期: {{ formatDate(assessment.due_date) }}</span>
+                      <span>尝试次数: {{ assessment.max_attempts || '无限制' }}</span>
+                    </div>
                   </div>
-                </div>
-                
-                <div class="flex flex-col gap-2">
-                  <span 
-                    :class="getStatusClass(assessment)"
-                    class="px-2 py-1 text-xs rounded-full"
-                  >
-                    {{ getStatusText(assessment) }}
-                  </span>
                   
-                  <div class="flex gap-2 mt-2">
-                    <router-link 
-                      :to="`/assessments/${assessment.id}`" 
-                      class="text-blue-600 hover:text-blue-800"
+                  <div class="flex flex-col gap-2">
+                    <span 
+                      :class="getStatusClass(assessment)"
+                      class="px-2 py-1 text-xs rounded-full"
                     >
-                      查看
-                    </router-link>
+                      {{ getStatusText(assessment) }}
+                    </span>
                     
-                    <button 
-                      v-if="canEdit"
-                      @click="editAssessment(assessment)"
-                      class="text-green-600 hover:text-green-800"
-                    >
-                      编辑
-                    </button>
-                    
-                    <button 
-                      v-if="canEdit"
-                      @click="confirmDeleteAssessment(assessment)"
-                      class="text-red-600 hover:text-red-800"
-                    >
-                      删除
-                    </button>
+                    <div class="flex gap-2 mt-2">
+                      <router-link 
+                        :to="`/assessments/${assessment.id}`" 
+                        class="text-blue-600 hover:text-blue-800"
+                      >
+                        查看
+                      </router-link>
+                      
+                      <button 
+                        v-if="canEdit"
+                        @click="editAssessment(assessment)"
+                        class="text-green-600 hover:text-green-800"
+                      >
+                        编辑
+                      </button>
+                      
+                      <button 
+                        v-if="canEdit"
+                        @click="confirmDeleteAssessment(assessment)"
+                        class="text-red-600 hover:text-red-800"
+                      >
+                        删除
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div v-else class="text-center py-10">
-            <p class="text-gray-500">暂无评估测验</p>
-            <button 
-              v-if="canEdit"
-              @click="createNewAssessment"
-              class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              创建评估
-            </button>
+            <div v-else class="text-center py-10">
+              <p class="text-gray-500">暂无评估测验</p>
+              <div v-if="canEdit" class="mt-4">
+                <button 
+                  @click="createNewAssessment"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  创建评估
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -535,6 +539,17 @@
       </div>
     </div>
     
+    <!-- 评估编辑模态框 -->
+    <div v-if="showAssessmentEditor" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <AssessmentEditor 
+          :assessment="currentAssessment"
+          @save="handleSaveAssessment"
+          @cancel="showAssessmentEditor = false"
+        />
+      </div>
+    </div>
+    
     <!-- 修改章节模态框 -->
     <div v-if="showEditChapterModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -675,14 +690,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import { courseAPI, materialAPI, assessmentAPI } from '../../api';
 import MaterialPreview from './MaterialPreview.vue';
 import MarkdownViewer from './MarkdownViewer.vue';
 import PdfViewer from './PdfViewer.vue';
 import AIAssistant from '../ai/AIAssistant.vue';
+import AssessmentEditor from '../assessment/AssessmentEditor.vue';
+import NavigationControls from './NavigationControls.vue';
+import notificationService from '../../services/notificationService';
+import dialogService from '../../services/dialogService';
 
 // 定义接口
 interface Course {
@@ -778,7 +797,9 @@ const showAddChapterModal = ref(false);
 const showAddMaterialModal = ref(false);
 const showAddStudentsModal = ref(false);
 const showMaterialPreview = ref(false);
+const showAssessmentEditor = ref(false);
 const previewMaterialId = ref<number | null>(null);
+const currentAssessment = ref<any>({});
 
 // 知识库相关
 const supportedKnowledgeBaseTypes = ref<FileType[]>([]);
@@ -894,7 +915,7 @@ async function fetchAvailableStudents() {
 // 添加学生到课程
 async function addStudents() {
   if (selectedStudents.value.length === 0) {
-    alert('请选择至少一名学生');
+    notificationService.warning('无法添加学生', '请选择至少一名学生');
     return;
   }
   
@@ -906,9 +927,11 @@ async function addStudents() {
     
     // 重新获取学生列表
     fetchStudents();
+    
+    notificationService.success('添加成功', '学生已成功添加到课程');
   } catch (error) {
     console.error('添加学生失败:', error);
-    alert('添加学生失败');
+    notificationService.error('添加学生失败', '请稍后重试');
   }
 }
 
@@ -921,13 +944,21 @@ function openAddStudentsModal() {
 
 // 移除学生
 async function confirmRemoveStudent(student: Student) {
-  if (confirm(`确定要将学生 ${student.full_name} 从课程中移除吗？`)) {
+  const confirmed = await dialogService.warning({
+    title: '移除学生',
+    message: `确定要将学生 ${student.full_name} 从课程中移除吗？`,
+    confirmText: '移除',
+    cancelText: '取消'
+  });
+  
+  if (confirmed) {
     try {
       await courseAPI.removeStudentFromCourse(courseId.value, student.id);
       fetchStudents();
+      notificationService.success('移除成功', `学生 ${student.full_name} 已从课程中移除`);
     } catch (error) {
       console.error('移除学生失败:', error);
-      alert('移除学生失败');
+      notificationService.error('移除学生失败', '请稍后重试');
     }
   }
 }
@@ -944,18 +975,42 @@ async function fetchAssessments() {
 
 // 创建新评估
 function createNewAssessment() {
-  router.push({
-    name: 'AssessmentCreate',
-    query: { courseId: courseId.value.toString() }
-  });
+  // 显示模态框并使用 AssessmentEditor 组件
+  currentAssessment.value = {
+    title: '',
+    description: '',
+    course_id: courseId.value,
+    total_score: 100,
+    questions: [],
+    is_active: false
+  };
+  showAssessmentEditor.value = true;
 }
 
 // 编辑评估
 function editAssessment(assessment: Assessment) {
-  router.push({
-    name: 'AssessmentEdit',
-    params: { id: assessment.id.toString() }
-  });
+  currentAssessment.value = { ...assessment };
+  showAssessmentEditor.value = true;
+}
+
+// 处理保存评估
+async function handleSaveAssessment(assessment: any) {
+  try {
+    if (assessment.id) {
+      // 更新现有评估
+      await assessmentAPI.updateAssessment(assessment.id, assessment);
+      notificationService.success('评估更新成功', `评估 "${assessment.title}" 已更新`);
+    } else {
+      // 创建评估
+      await assessmentAPI.createAssessment(assessment);
+      notificationService.success('评估创建成功', `评估 "${assessment.title}" 已创建`);
+    }
+    showAssessmentEditor.value = false;
+    await fetchAssessments();
+  } catch (error) {
+    console.error('保存评估失败:', error);
+    notificationService.error('保存评估失败', '请稍后重试');
+  }
 }
 
 // 获取知识库支持的文件类型
@@ -1028,12 +1083,13 @@ async function addToKnowledgeBase(material: Material) {
         return m;
       });
       materials.value = updatedMaterials;
+      notificationService.success('添加成功', `"${material.title}" 已添加到知识库，正在处理中`);
     } else {
-      alert('添加到知识库失败: ' + result.message);
+      notificationService.error('添加到知识库失败', result.message || '未知错误');
     }
   } catch (error) {
     console.error('添加到知识库失败:', error);
-    alert('添加到知识库失败');
+    notificationService.error('添加到知识库失败', '请稍后重试');
   } finally {
     knowledgeBaseProcessing.value[material.id] = false;
   }
@@ -1052,19 +1108,28 @@ function downloadMaterial(materialId: number) {
 
 // 确认删除材料
 function confirmDeleteMaterial(material: Material) {
-  if (confirm(`确定要删除材料 "${material.title}" 吗？`)) {
-    deleteMaterial(material.id);
-  }
+  dialogService.warning({
+    title: '删除材料',
+    message: `确定要删除材料 "${material.title}" 吗？`,
+    confirmText: '删除',
+    cancelText: '取消'
+  }).then(confirmed => {
+    if (confirmed) {
+      deleteMaterial(material.id);
+    }
+  });
 }
 
 // 删除材料
 async function deleteMaterial(materialId: number) {
   try {
     await materialAPI.deleteMaterial(materialId);
+    const deletedMaterial = materials.value.find(m => m.id === materialId);
     materials.value = materials.value.filter(m => m.id !== materialId);
+    notificationService.success('删除成功', `材料 "${deletedMaterial?.title || ''}" 已删除`);
   } catch (error) {
     console.error('删除材料失败:', error);
-    alert('删除材料失败');
+    notificationService.error('删除材料失败', '请稍后重试');
   }
 }
 
@@ -1160,15 +1225,23 @@ const getTotalQuestions = (assessment: Assessment): number => {
 };
 
 const confirmDeleteAssessment = (assessment: Assessment): void => {
-  if (confirm('确定要删除这个评估吗？')) {
-    try {
-      assessmentAPI.deleteAssessment(assessment.id);
-      assessments.value = assessments.value.filter(a => a.id !== assessment.id);
-    } catch (error) {
-      console.error('删除评估失败:', error);
-      alert('删除评估失败');
+  dialogService.warning({
+    title: '删除评估',
+    message: '确定要删除这个评估吗？',
+    confirmText: '删除',
+    cancelText: '取消'
+  }).then(confirmed => {
+    if (confirmed) {
+      try {
+        assessmentAPI.deleteAssessment(assessment.id);
+        assessments.value = assessments.value.filter(a => a.id !== assessment.id);
+        notificationService.success('删除成功', `评估 "${assessment.title}" 已删除`);
+      } catch (error) {
+        console.error('删除评估失败:', error);
+        notificationService.error('删除评估失败', '请稍后重试');
+      }
     }
-  }
+  });
 };
 
 // 处理文件选择
@@ -1334,12 +1407,13 @@ async function generateChaptersWithAI() {
       
       // 保存到服务器以确保持久化
       await saveChaptersToServer();
+      notificationService.success('章节生成成功', '已使用AI成功生成课程章节');
     } else {
-      alert('生成章节失败: ' + (data.message || '未知错误'));
+      notificationService.error('生成章节失败', data.message || '未知错误');
     }
   } catch (error) {
     console.error('生成章节失败:', error);
-    alert('生成章节失败，请稍后重试: ' + (error instanceof Error ? error.message : String(error)));
+    notificationService.error('生成章节失败', `请稍后重试: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     isGeneratingChapters.value = false;
   }
@@ -1436,9 +1510,11 @@ async function saveChapter() {
     // 关闭模态框并重置表单
     showAddChapterModal.value = false;
     resetNewChapter();
+    
+    notificationService.success('章节添加成功', '新章节已成功添加到课程中');
   } catch (error) {
     console.error('保存章节失败:', error);
-    alert('保存章节失败，请稍后重试');
+    notificationService.error('保存章节失败', '请稍后重试');
   }
 }
 
@@ -1510,9 +1586,11 @@ async function saveEditedChapters() {
     
     // 关闭模态框
     showEditChapterModal.value = false;
+    
+    notificationService.success('章节更新成功', '课程章节已成功更新');
   } catch (error) {
     console.error('保存章节失败:', error);
-    alert('保存章节失败，请稍后重试');
+    notificationService.error('保存章节失败', '请稍后重试');
   }
 }
 
@@ -1520,7 +1598,7 @@ async function saveEditedChapters() {
 async function saveChaptersToServer() {
   if (!course.value) {
     console.error('课程对象为空，无法保存');
-    alert('无法保存章节：课程信息丢失');
+    notificationService.error('无法保存章节', '课程信息丢失');
     return;
   }
   
@@ -1530,7 +1608,7 @@ async function saveChaptersToServer() {
   
   if(!courseId.value) {
     console.error('课程ID为空，无法保存');
-    alert('无法保存章节：课程ID丢失');
+    notificationService.error('无法保存章节', '课程ID丢失');
     return;
   }
   
@@ -1555,7 +1633,7 @@ async function saveChaptersToServer() {
     
     if (!response.ok) {
       console.error('服务器响应错误:', response.status, response.statusText);
-      alert(`保存失败: HTTP错误 ${response.status}`);
+      notificationService.error('保存失败', `HTTP错误 ${response.status}`);
       throw new Error(`服务器响应错误: ${response.status}`);
     }
     
@@ -1563,12 +1641,9 @@ async function saveChaptersToServer() {
     console.log('服务器响应数据:', data);
     
     if (!data.status || data.status !== 'success') {
-      alert(data.message || '保存失败');
+      notificationService.error('保存失败', data.message || '未知错误');
       throw new Error(data.message || '保存失败');
     }
-    
-    // 显示成功提示
-    alert('章节保存成功');
     
     // 保存成功后重新获取章节
     await fetchChapters();
@@ -1576,7 +1651,7 @@ async function saveChaptersToServer() {
     return data;
   } catch (error) {
     console.error('保存章节到服务器失败:', error);
-    alert(`保存章节到服务器失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('保存失败', `${error instanceof Error ? error.message : '未知错误'}`);
     throw error;
   }
 }
