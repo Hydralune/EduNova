@@ -1308,8 +1308,26 @@ def update_assessment(assessment_id):
         
         return response, 500
 
+@learning_bp.route('/assessments/<int:assessment_id>', methods=['OPTIONS'])
+def assessment_options(assessment_id):
+    """处理评估相关的OPTIONS请求"""
+    response = make_response()
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
 @learning_bp.route('/assessments/<int:assessment_id>', methods=['DELETE'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def delete_assessment(assessment_id):
     """删除评估"""
     assessment = Assessment.query.get(assessment_id)
@@ -1320,7 +1338,22 @@ def delete_assessment(assessment_id):
     db.session.delete(assessment)
     db.session.commit()
     
-    return jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
+    response = jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
+    
+    # 添加CORS头
+    origin = request.headers.get('Origin', '')
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+    else:
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    
+    return response
 
 @learning_bp.route('/assessments/<int:assessment_id>/submit', methods=['POST', 'OPTIONS'])
 # @jwt_required()  # 暂时禁用JWT认证要求

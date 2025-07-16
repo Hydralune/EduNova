@@ -173,6 +173,7 @@
                 <label class="block text-sm font-medium text-gray-700">题目类型</label>
                 <select
                   v-model="question.type"
+                  @change="handleQuestionTypeChange(question)"
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
                 >
                   <option value="multiple_choice">单选题</option>
@@ -327,7 +328,7 @@
               <div v-else-if="question.type === 'short_answer'">
                 <label class="block text-sm font-medium text-gray-700">参考答案</label>
                 <textarea
-                  v-model="question.answer"
+                  v-model="question.reference_answer"
                   rows="3"
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
                   placeholder="输入参考答案"
@@ -492,7 +493,8 @@ const addQuestion = () => {
     options: ['', ''],
     answer: 0,
     answers: [false, false], // 为多选题初始化answers数组
-    score: 10
+    score: 10,
+    reference_answer: '' // 为简答题初始化参考答案
   });
 };
 
@@ -811,20 +813,33 @@ const generateAssessmentWithAI = async () => {
       statusMessage.value = '正在获取生成结果...';
       
       // 设置轮询参数
-      const maxAttempts = 30; // 增加尝试次数，以适应长时间的生成过程
-      const pollingInterval = 6000; // 6秒查询一次
+      const pollingInterval = 5000; // 5秒查询一次
       let assessmentData = null;
+      let successfulResponses = 0; // 跟踪成功响应的次数
+      let directFetchAttempted = false; // 是否已尝试直接获取文件
+      let startTime = Date.now(); // 记录开始时间
+      let progressPercentage = 0; // 进度百分比
+      let attemptCount = 0; // 尝试次数计数
       
-      // 轮询等待结果
-      for (let i = 0; i < maxAttempts; i++) {
-        statusMessage.value = `正在生成评估内容 (${i+1}/${maxAttempts})...`;
+      // 动态更新进度条
+      const updateProgressBar = (percentage) => {
+        const progressBar = document.querySelector('.progress-bar');
+        if (progressBar) {
+          progressBar.style.width = `${percentage}%`;
+          progressBar.style.animation = 'none'; // 停止动画，使用实际进度
+        }
+      };
+      
+      // 持续轮询直到获取结果或出错
+      while (!assessmentData) {
+        attemptCount++;
         
         try {
           // 等待一段时间后查询
           await new Promise(resolve => setTimeout(resolve, pollingInterval));
           
           const statusResponse = await assessmentAPI.getAIGenerationStatus(requestId);
-          console.log(`查询状态 ${i+1}:`, statusResponse);
+          console.log(`查询状态 ${attemptCount}:`, statusResponse);
           
           // 安全检查: 确保statusResponse存在
           if (!statusResponse) {
@@ -832,16 +847,40 @@ const generateAssessmentWithAI = async () => {
             continue; // 继续尝试
           }
           
-          // 处理不同的响应数据结构 (拦截器可能已经提取了.data属性)
-          // 情况1: statusResponse就是原始响应对象 {status, assessment, ...}
-          // 情况2: statusResponse包含data属性 {data: {status, assessment, ...}}
+          // 处理不同的响应数据结构
           const responseData = statusResponse.data || statusResponse;
           
           console.log(`处理后的响应数据:`, responseData);
           
+          // 计算经过的时间和估计进度
+          const elapsedTime = (Date.now() - startTime) / 1000; // 经过的秒数
+          const estimatedTotalTime = 120; // 估计总时间（秒）
+          
+          // 根据后端返回的状态更新进度
+          if (responseData.progress && typeof responseData.progress === 'string') {
+            // 尝试从进度消息中提取百分比
+            const percentMatch = responseData.progress.match(/(\d+)%/);
+            if (percentMatch && percentMatch[1]) {
+              progressPercentage = parseInt(percentMatch[1]);
+            } else if (responseData.progress.includes('解析')) {
+              progressPercentage = 80;
+            } else if (responseData.progress.includes('生成中')) {
+              // 根据已经过时间估算进度
+              progressPercentage = Math.min(70, Math.round((elapsedTime / estimatedTotalTime) * 100));
+            }
+          } else {
+            // 如果没有明确的进度信息，根据时间和尝试次数估算
+            progressPercentage = Math.min(90, Math.round((elapsedTime / estimatedTotalTime) * 100));
+          }
+          
+          // 更新进度条
+          updateProgressBar(progressPercentage);
+          
           // 检查状态
           if (responseData.status === 'success' && responseData.assessment) {
             // 成功获取评估数据
+            updateProgressBar(100);
+            statusMessage.value = '评估生成完成！';
             assessmentData = processAssessmentData(responseData);
             if (assessmentData) break;
           } else if (responseData.status === 'error') {
@@ -854,13 +893,18 @@ const generateAssessmentWithAI = async () => {
             if (responseData.progress) {
               statusMessage.value = responseData.progress;
             }
+          } else if (responseData.status === 'success' || responseData.message?.includes('已生成完成')) {
+            // 后端返回成功状态但没有直接返回评估数据
+            updateProgressBar(95);
+            statusMessage.value = '评估已生成，正在获取数据...';
+            successfulResponses++;
             
-            // 检测特定条件，判断是否可能后端已完成但返回有问题
-            // 后端日志显示"评估已生成完成"但前端仍在等待的情况
-            if (i > 10 && !assessmentData) { // 如果轮询超过10次还没有数据，尝试直接获取
+            // 如果收到成功响应但没有评估数据，尝试直接获取文件
+            if (!directFetchAttempted || successfulResponses >= 2) {
+              directFetchAttempted = true;
+              console.log("检测到评估已完成，尝试直接获取评估文件内容...");
+              
               try {
-                console.log("尝试直接获取评估文件内容...");
-                // 使用一个API来请求直接获取文件内容
                 const directResponse = await fetch(`/api/assessments/ai-file/${requestId}`, {
                   method: 'GET',
                   headers: { 'Content-Type': 'application/json' }
@@ -868,8 +912,10 @@ const generateAssessmentWithAI = async () => {
                 
                 if (directResponse.ok) {
                   const fileData = await directResponse.json();
-                  if (fileData && fileData.assessment) {
+                  if (fileData && (fileData.assessment || fileData.data?.assessment)) {
                     console.log('通过直接访问文件获取评估数据:', fileData);
+                    updateProgressBar(100);
+                    statusMessage.value = '评估生成完成！';
                     assessmentData = processAssessmentData(fileData);
                     if (assessmentData) break;
                   }
@@ -879,24 +925,75 @@ const generateAssessmentWithAI = async () => {
                 // 继续轮询，不中断流程
               }
             }
-            
-            continue;
           } else {
             // 未识别的状态
             console.warn(`未识别的状态响应:`, responseData);
-            continue;
+            
+            // 如果轮询次数较多，尝试直接获取文件
+            if (attemptCount >= 4 && !directFetchAttempted) {
+              directFetchAttempted = true;
+              console.log("轮询多次后尝试直接获取评估文件...");
+              
+              try {
+                const directResponse = await fetch(`/api/assessments/ai-file/${requestId}`, {
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (directResponse.ok) {
+                  const fileData = await directResponse.json();
+                  if (fileData && (fileData.assessment || fileData.data?.assessment)) {
+                    console.log('通过直接访问文件获取评估数据:', fileData);
+                    updateProgressBar(100);
+                    statusMessage.value = '评估生成完成！';
+                    assessmentData = processAssessmentData(fileData);
+                    if (assessmentData) break;
+                  }
+                }
+              } catch (fileError) {
+                console.warn('直接获取文件失败，继续轮询:', fileError);
+              }
+            }
+          }
+          
+          // 安全机制：如果轮询时间超过3分钟，主动尝试直接获取文件并结束
+          if (elapsedTime > 180 && !assessmentData) {
+            console.log("轮询超时，最后尝试直接获取文件...");
+            try {
+              const directResponse = await fetch(`/api/assessments/ai-file/${requestId}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              
+              if (directResponse.ok) {
+                const fileData = await directResponse.json();
+                if (fileData && (fileData.assessment || fileData.data?.assessment)) {
+                  updateProgressBar(100);
+                  statusMessage.value = '评估生成完成！';
+                  assessmentData = processAssessmentData(fileData);
+                }
+              }
+            } catch (error) {
+              console.error("最终尝试获取文件失败:", error);
+            }
+            
+            // 如果仍然没有获取到数据，抛出超时错误
+            if (!assessmentData) {
+              throw new Error('生成评估超时，请稍后在评估列表中查看或重试');
+            }
+            break;
           }
         } catch (err) {
           console.error('查询状态失败:', err);
           
-          // 如果不是最后一次尝试，继续轮询
-          if (i < maxAttempts - 1) {
+          // 如果错误不是由我们主动抛出的超时错误，则尝试继续
+          if (!err.message.includes('超时')) {
             console.log(`将在${pollingInterval/1000}秒后重试...`);
             continue;
+          } else {
+            // 超时错误直接抛出
+            throw err;
           }
-          
-          // 如果是最后一次尝试，则抛出错误
-          throw new Error('多次尝试后仍无法获取生成结果，请稍后再试');
         }
       }
       
@@ -962,10 +1059,10 @@ const generateAssessmentWithAI = async () => {
                     content: q.stem || q.question || '',
                     score: parseFloat(q.score || section.score_per_question || 5),
                     options: options,
-                    answer: mappedType === 'multiple_answer' ? 0 : mappedAnswer, // 单选题用answer
+                    answer: mappedType === 'multiple_answer' ? 0 : (mappedType === 'short_answer' ? '' : mappedAnswer), // 单选题用answer
                     answers: mappedType === 'multiple_answer' ? mappedAnswer : undefined, // 多选题用answers
                     explanation: q.explanation || '',
-                    reference_answer: q.reference_answer || q.answer || '' // 保存参考答案
+                    reference_answer: mappedType === 'short_answer' ? (q.reference_answer || q.answer || '') : '' // 保存参考答案
                   });
                 });
               }
@@ -1122,6 +1219,14 @@ const generateAssessmentWithAI = async () => {
   } finally {
     isGenerating.value = false;
     showAiGenerationModal.value = false;
+  }
+};
+
+// 监听题目类型变化，确保相应字段初始化
+const handleQuestionTypeChange = (question) => {
+  // 当题目类型变为简答题时，确保reference_answer已初始化
+  if (question.type === 'short_answer' && question.reference_answer === undefined) {
+    question.reference_answer = question.answer || '';
   }
 };
 </script>

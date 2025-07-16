@@ -25,7 +25,7 @@ class Assessment(db.Model):
 
     # 关联关系
     course = db.relationship('Course', backref=db.backref('assessments', lazy=True))
-    student_answers = db.relationship('StudentAnswer', backref='assessment', lazy=True)
+    student_answers = db.relationship('StudentAnswer', backref='assessment', lazy=True, cascade="all, delete-orphan")
     creator = db.relationship('User', backref=db.backref('created_assessments', lazy=True))
 
     def __repr__(self):
@@ -164,7 +164,7 @@ class AssessmentSubmission(db.Model):
 
     # 关联关系
     student = db.relationship('User', backref=db.backref('assessment_submissions', lazy=True))
-    assessment = db.relationship('Assessment', backref=db.backref('submissions', lazy=True))
+    assessment = db.relationship('Assessment', backref=db.backref('submissions', lazy=True, cascade="all, delete-orphan"))
 
     def __repr__(self):
         return f'<AssessmentSubmission {self.id} by student {self.student_id}>'
