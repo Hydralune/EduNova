@@ -50,7 +50,7 @@
         <p class="text-gray-500">暂无课件资源</p>
       </div>
       <div v-if="!props.hideBackButton" class="mt-4 space-y-2">
-        <button @click="closePreview" class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center w-full">
+        <button @click="closePreview" class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-900 flex items-center justify-center w-full">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
           </svg>
@@ -77,7 +77,7 @@
         
         <div class="preview-body">
           <!-- PDF 预览 -->
-          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview">
+          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview h-full min-h-[900px]">
             <PdfViewer 
               :pdf-url="getFileUrl(selectedMaterial.file_path || '')" 
               @download="downloadMaterial(selectedMaterial.id)" 
@@ -92,12 +92,12 @@
           </div>
           
           <!-- 图片预览 -->
-          <div v-else-if="isImageFile(selectedMaterial)" class="image-preview">
+          <div v-else-if="isImageFile(selectedMaterial)" class="image-preview min-h-[900px] flex items-center justify-center">
             <img :src="getFileUrl(selectedMaterial.file_path)" alt="图片预览" class="max-w-full max-h-[600px] mx-auto" />
           </div>
           
           <!-- 视频预览 -->
-          <div v-else-if="isVideoFile(selectedMaterial)" class="video-preview">
+          <div v-else-if="isVideoFile(selectedMaterial)" class="video-preview min-h-[900px]">
             <video 
               :src="getFileUrl(selectedMaterial.file_path)" 
               controls 
@@ -126,7 +126,7 @@
           </div>
           
           <!-- 文本预览 -->
-          <div v-else-if="isTextFile(selectedMaterial)" class="text-preview">
+          <div v-else-if="isTextFile(selectedMaterial)" class="text-preview min-h-[900px]">
             <div v-if="textContent" class="p-4 border rounded-md bg-gray-50 whitespace-pre-wrap">
               {{ textContent }}
             </div>
@@ -136,7 +136,7 @@
           </div>
           
           <!-- Office文档预览 (Word, PowerPoint, Excel) -->
-          <div v-else-if="isOfficeDocument(selectedMaterial.material_type)" class="office-preview">
+          <div v-else-if="isOfficeDocument(selectedMaterial.material_type)" class="office-preview min-h-[900px]">
             <div class="flex flex-col items-center justify-center h-[400px]">
               <div class="text-6xl text-gray-300 mb-4" v-html="getMaterialIcon(selectedMaterial.material_type)"></div>
               <p class="text-xl text-gray-500 mb-2">使用Office Online预览</p>
@@ -160,7 +160,7 @@
           </div>
           
           <!-- 不支持预览的文件类型 -->
-          <div v-else class="unsupported-preview flex flex-col items-center justify-center h-[400px]">
+          <div v-else class="unsupported-preview flex flex-col items-center justify-center min-h-[900px]">
             <div class="text-6xl text-gray-300 mb-4" v-html="getMaterialIcon(selectedMaterial.material_type)"></div>
             <p class="text-xl text-gray-500 mb-2">无法预览此类型的文件</p>
             <p class="text-gray-400 mb-4">{{ selectedMaterial.material_type }} 文件需要下载后查看</p>
@@ -393,7 +393,7 @@ function getMaterialIcon(materialType: string) {
       `;
     case 'text':
       return `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       `;
@@ -478,7 +478,7 @@ function isTextFile(material: Material | null) {
 .material-preview-container {
   display: flex;
   height: 100%;
-  min-height: 600px;
+  min-height: 900px;
 }
 
 .file-sidebar {
@@ -507,6 +507,10 @@ function isTextFile(material: Material | null) {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.preview-body {
+  min-height: 900px;
 }
 
 /* Markdown样式 */
