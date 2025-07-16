@@ -100,6 +100,8 @@ class StudentAnswer(db.Model):
     answers = db.Column(db.Text, nullable=False)  # JSON格式存储答案
     score = db.Column(db.Float, nullable=True)
     feedback = db.Column(db.Text, nullable=True)
+    question_scores = db.Column(db.Text, nullable=True)  # JSON格式存储每道题的得分
+    question_feedback = db.Column(db.Text, nullable=True)  # JSON格式存储每道题的反馈
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
     graded_at = db.Column(db.DateTime, nullable=True)
     graded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
@@ -129,6 +131,20 @@ class StudentAnswer(db.Model):
             result['answers'] = json.loads(self.answers)
         except (json.JSONDecodeError, TypeError):
             result['answers'] = {}
+        
+        # 解析JSON格式的题目评分
+        try:
+            if self.question_scores:
+                result['question_scores'] = json.loads(self.question_scores)
+        except (json.JSONDecodeError, TypeError):
+            result['question_scores'] = []
+        
+        # 解析JSON格式的题目反馈
+        try:
+            if self.question_feedback:
+                result['question_feedback'] = json.loads(self.question_feedback)
+        except (json.JSONDecodeError, TypeError):
+            result['question_feedback'] = []
         
         return result
 

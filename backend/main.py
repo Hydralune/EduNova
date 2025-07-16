@@ -37,8 +37,10 @@ app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 604800  # 刷新令牌过期时间7天
 db.init_app(app)
 jwt.init_app(app)
 migrate.init_app(app, db)
-cors.init_app(app, resources={r"/*": {
-    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "null","*"],
+
+# 配置CORS，特别允许前端域名访问
+CORS(app, resources={r"/*": {
+    "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
     "supports_credentials": True,
     "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -50,19 +52,14 @@ cors.init_app(app, resources={r"/*": {
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/<path:path>', methods=['OPTIONS'])
 def options_handler(path):
-    origin = request.headers.get('Origin', '')
-    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
-    
     response = make_response()
-    
-    if origin in allowed_origins:
+    # 获取来源
+    origin = request.headers.get('Origin', '')
+    # 特别允许前端域名
+    if origin in ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"]:
         response.headers.add('Access-Control-Allow-Origin', origin)
-    elif origin == 'null' or not origin:
-        # 允许null origin（直接打开HTML文件的情况）
-        response.headers.add('Access-Control-Allow-Origin', '*')
     else:
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-        
+        response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Origin')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')

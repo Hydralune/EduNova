@@ -99,12 +99,37 @@
         ]
       },
       {
+        "type": "fill_blank",
+        "description": "填空题2：请在横线上填写正确的内容（使用fill_blank类型）。",
+        "score_per_question": 5,
+        "questions": [
+          {
+            "id": 6,
+            "stem": "在HTML中，使用_____标签定义网页的主体部分。",
+            "type": "fill_blank",
+            "score": 5,
+            "difficulty": "easy",
+            "answer": "body",
+            "explanation": "在HTML中，使用body标签定义网页的主体部分。"
+          },
+          {
+            "id": 7,
+            "stem": "CSS中，_____属性用于设置文本颜色，而_____属性用于设置背景颜色。",
+            "type": "fill_blank",
+            "score": 5,
+            "difficulty": "medium",
+            "answer": ["color", "background-color"],
+            "explanation": "在CSS中，color属性用于设置文本颜色，而background-color属性用于设置背景颜色。"
+          }
+        ]
+      },
+      {
         "type": "true_false",
         "description": "判断题：请判断以下说法是否正确。",
         "score_per_question": 3,
         "questions": [
           {
-            "id": 6,
+            "id": 8,
             "stem": "Vue.js是一个前端框架。",
             "type": "true_false",
             "score": 3,
@@ -113,7 +138,7 @@
             "explanation": "Vue.js是一个用于构建用户界面的渐进式JavaScript框架。"
           },
           {
-            "id": 7,
+            "id": 9,
             "stem": "React使用模板语法而不是JSX。",
             "type": "true_false",
             "score": 3,
@@ -129,7 +154,7 @@
         "score_per_question": 10,
         "questions": [
           {
-            "id": 8,
+            "id": 10,
             "stem": "简述Vue.js的生命周期钩子函数。",
             "type": "short_answer",
             "score": 10,
@@ -144,7 +169,7 @@
         "score_per_question": 20,
         "questions": [
           {
-            "id": 9,
+            "id": 11,
             "stem": "分析Vue.js和React的异同，并结合实际项目经验谈谈你的选择偏好。",
             "type": "essay",
             "score": 20,

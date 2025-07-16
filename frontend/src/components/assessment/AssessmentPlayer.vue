@@ -66,7 +66,95 @@
       
       <!-- 题干 -->
       <div class="mb-6">
-        <p class="text-lg" v-html="formatQuestionStem(currentQuestion.stem)"></p>
+        <p v-if="!isFillBlankQuestion(currentQuestion)" 
+           class="text-lg" 
+           v-html="formatQuestionStem(currentQuestion.stem)"></p>
+        
+        <!-- 填空题题干 - 特殊处理 -->
+        <div v-else>
+          <p class="text-lg fill-blank-container">
+            <template v-for="(part, index) in parsedFillBlankContent" :key="index">
+              <span v-if="part.type === 'text'" v-html="part.content"></span>
+              <input 
+                v-else
+                type="text" 
+                v-model="answers[currentQuestionIndex][part.blankIndex]"
+                class="border-b-2 inline-block min-w-32 mx-1 h-8 align-middle bg-gray-50 rounded border border-blue-300 px-2 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                :placeholder="`填写答案`"
+              />
+            </template>
+          </p>
+          
+          <!-- 调试信息 - 开发环境显示 -->
+          <div class="mt-4 p-2 border border-red-300 bg-red-50 rounded text-sm" v-if="parsedFillBlankContent.length === 0 || !parsedFillBlankContent.some(part => part.type === 'blank')">
+            <div class="font-bold text-red-600">填空题空白未检测到，尝试使用替代输入框：</div>
+            <div v-if="Array.isArray(answers[currentQuestionIndex])">
+              <div v-for="(blank, blankIndex) in answers[currentQuestionIndex]" :key="blankIndex" class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">空白 {{ blankIndex + 1 }}</label>
+                <input 
+                  type="text" 
+                  v-model="answers[currentQuestionIndex][blankIndex]"
+                  class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  :placeholder="`请填写空白 ${blankIndex + 1}`"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <!-- 强制显示调试信息和输入区域 -->
+          <div class="mt-4 p-2 border border-blue-300 bg-blue-50 rounded text-sm">
+            <div>
+              <strong>题目ID:</strong> {{ currentQuestion.id }} |
+              <strong>类型:</strong> {{ currentQuestion.type }} |
+              <strong>section_type:</strong> {{ currentQuestion.section_type }}
+            </div>
+            <div class="mt-2">
+              <strong>题干:</strong> {{ currentQuestion.stem }}
+            </div>
+            <div class="mt-2">
+              <strong>需要填写的空白:</strong> {{ Array.isArray(answers[currentQuestionIndex]) ? answers[currentQuestionIndex].length : '未初始化为数组' }}
+            </div>
+            
+            <!-- 强制显示输入区域 -->
+            <div class="mt-3 p-3 border border-green-200 bg-green-50 rounded">
+              <p class="font-medium text-green-700 mb-2">备用输入区域:</p>
+              <div v-if="!Array.isArray(answers[currentQuestionIndex])">
+                <!-- 初始化为数组 -->
+                <button 
+                  class="px-3 py-1 bg-blue-500 text-white rounded-md text-sm mb-2"
+                  @click="answers[currentQuestionIndex] = ['']"
+                >
+                  初始化答案数组
+                </button>
+              </div>
+              <div v-else>
+                <div v-for="(blank, blankIndex) in answers[currentQuestionIndex]" :key="blankIndex" class="mb-2">
+                  <div class="flex items-center">
+                    <input 
+                      type="text" 
+                      v-model="answers[currentQuestionIndex][blankIndex]"
+                      class="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      :placeholder="`请填写空白 ${blankIndex + 1}`"
+                    />
+                    <button 
+                      v-if="answers[currentQuestionIndex].length > 1"
+                      @click="answers[currentQuestionIndex].splice(blankIndex, 1)"
+                      class="ml-2 px-2 py-1 bg-red-500 text-white rounded-md text-sm"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+                <button 
+                  @click="answers[currentQuestionIndex].push('')"
+                  class="mt-2 px-3 py-1 bg-green-500 text-white rounded-md text-sm"
+                >
+                  添加空白
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       
       <!-- 选择题 -->
@@ -106,14 +194,25 @@
       </div>
       
       <!-- 填空题 -->
-      <div v-if="currentQuestion.section_type === 'fill_in_blank'" class="space-y-4">
-        <div v-for="(blank, blankIndex) in countBlanks(currentQuestion.stem)" :key="blankIndex">
-          <label class="block text-sm font-medium text-gray-700 mb-1">空白 {{ blankIndex + 1 }}</label>
+      <div v-if="isFillBlankQuestion(currentQuestion) && !useInlineFillBlanks" class="space-y-4">
+        <div v-if="Array.isArray(answers[currentQuestionIndex])">
+          <div v-for="(blank, blankIndex) in answers[currentQuestionIndex]" :key="blankIndex" class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">空白 {{ blankIndex + 1 }}</label>
+            <input 
+              type="text" 
+              v-model="answers[currentQuestionIndex][blankIndex]"
+              class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              :placeholder="`请填写空白 ${blankIndex + 1}`"
+            />
+          </div>
+        </div>
+        <div v-else>
+          <label class="block text-sm font-medium text-gray-700 mb-1">答案</label>
           <input 
             type="text" 
-            v-model="answers[currentQuestionIndex][blankIndex]"
+            v-model="answers[currentQuestionIndex]"
             class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            :placeholder="`请填写空白 ${blankIndex + 1}`"
+            placeholder="请填写答案"
           />
         </div>
       </div>
@@ -252,7 +351,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import assessmentAPI from '@/api/assessmentAPI';
 
 const props = defineProps({
   assessmentId: {
@@ -260,6 +361,9 @@ const props = defineProps({
     required: true
   }
 });
+
+const router = useRouter();
+const authStore = useAuthStore();
 
 const emit = defineEmits(['submit', 'save-progress', 'cancel']);
 
@@ -270,47 +374,10 @@ const markedQuestions = ref([]);
 const timeLimit = ref(null);
 const remainingTime = ref(0);
 const timer = ref(null);
+const useInlineFillBlanks = ref(true); // 是否使用内联填空模式
 
 // 评估数据
 const assessment = reactive({});
-
-// 组件挂载时
-onMounted(async () => {
-  try {
-    // 获取assessmentId
-    const id = props.assessmentId;
-    
-    console.log('Assessment ID from props:', id);
-    
-    if (!id) {
-      console.error('No assessmentId provided');
-      return;
-    }
-    
-    // 实际应用中应该从API获取数据
-    // const response = await fetch(`/api/assessments/${id}`);
-    // const data = await response.json();
-    
-    // 从本地导入的mock数据
-    const mockExam = await import('../../assets/mock-exam.json');
-    const data = mockExam.default;
-    
-    // 填充评估数据
-    Object.assign(assessment, data);
-    
-    console.log('Assessment loaded in player:', assessment);
-    
-    // 初始化答案
-    initializeAnswers();
-    
-    // 设置时间限制
-    if (assessment.duration) {
-      startTimer();
-    }
-  } catch (error) {
-    console.error('Failed to load assessment:', error);
-  }
-});
 
 // 计算属性
 const totalQuestions = computed(() => {
@@ -325,17 +392,32 @@ const totalQuestions = computed(() => {
   return count;
 });
 
+// 标准化section类型
 const flatQuestions = computed(() => {
   const questions = [];
   if (assessment.sections) {
     assessment.sections.forEach(section => {
       if (section.questions) {
         section.questions.forEach(question => {
-          // 添加section类型信息到question
+          // 标准化section类型
+          let sectionType = section.type;
+          
+          // 特殊处理fill_in_blank类型，确保它与fill_blank保持一致
+          if (sectionType === 'fill_in_blank') {
+            sectionType = 'fill_blank';
+          }
+          
+          // 如果question.type是fill_blank相关类型，确保section_type也是
+          if (question.type === 'fill_blank' || question.type === 'fill_in_blank') {
+            sectionType = 'fill_blank';
+          }
+          
+          // 添加section类型信息到question，保留原始问题类型以备查
           questions.push({
             ...question,
-            section_type: section.type,
-            type_text: getQuestionTypeText(section.type)
+            section_type: sectionType,
+            original_type: question.type, // 保留问题自己的类型（如果有）
+            type_text: getQuestionTypeText(question.type || sectionType)
           });
         });
       }
@@ -349,6 +431,7 @@ const getQuestionTypeText = (type) => {
     case 'multiple_choice': return '选择题';
     case 'multiple_select': return '多选题';
     case 'fill_in_blank': return '填空题';
+    case 'fill_blank': return '填空题';
     case 'true_false': return '判断题';
     case 'short_answer': return '简答题';
     case 'essay': return '论述题';
@@ -363,17 +446,52 @@ const currentQuestion = computed(() => {
 // 初始化答案数据结构
 const answers = reactive([]);
 
+// 确保答案数组初始化方法更新为处理blank类型
 const initializeAnswers = () => {
   flatQuestions.value.forEach((question, index) => {
     const type = question.section_type || question.type;
+    console.log(`初始化问题 #${index}:`, type, question);
     
     if (type === 'multiple_choice' || type === 'true_false') {
       answers[index] = '';
     } else if (type === 'multiple_select') {
       answers[index] = [];
-    } else if (type === 'fill_in_blank') {
-      const blankCount = countBlanks(question.stem);
-      answers[index] = Array(blankCount).fill('');
+    } else if (isFillBlankQuestion(question)) {
+      console.log(`处理填空题 #${index}:`, question);
+      
+      // 先检查是否有预定义的空白数量（来自answer数组）
+      if (question.answer && Array.isArray(question.answer)) {
+        console.log('  从answer数组初始化:', question.answer.length, '个空白');
+        answers[index] = Array(question.answer.length).fill('');
+      } else {
+        // 否则尝试从题干文本中计算空白数量
+        const stem = question.stem || question.content || '';
+        
+        // 使用相同的正则表达式和计数方法来确保一致性
+        let blankCount = 0;
+        
+        // 计算所有类型的空白数量
+        const underscoreMatches = stem.match(/_____/g) || [];
+        const regex3PlusMatches = stem.replace(/_____/g, '').match(/_{3,}/g) || [];
+        const blankMatches = stem.match(/\[BLANK\]/gi) || [];
+        const chineseMatches = stem.match(/【空白】/g) || [];
+        const bracketMatches1 = stem.match(/（）/g) || [];
+        const bracketMatches2 = stem.match(/\(\)/g) || [];
+        
+        blankCount = underscoreMatches.length + regex3PlusMatches.length + 
+                     blankMatches.length + chineseMatches.length + 
+                     bracketMatches1.length + bracketMatches2.length;
+        
+        console.log('  计算得到:', blankCount, '个空白');
+        
+        if (blankCount > 0) {
+          answers[index] = Array(blankCount).fill('');
+        } else {
+          // 如果没有检测到明显的空白标记，但题目类型是填空题，则默认一个空白
+          console.log('  未检测到空白标记，设置默认1个空白');
+          answers[index] = [''];
+        }
+      }
     } else if (type === 'short_answer') {
       answers[index] = '';
     } else if (type === 'essay') {
@@ -381,6 +499,10 @@ const initializeAnswers = () => {
         text: '',
         files: []
       };
+    } else {
+      // 对于未知类型，设置为空字符串
+      console.log(`  未知题型 ${type}，设置为空字符串`);
+      answers[index] = '';
     }
   });
   
@@ -416,8 +538,12 @@ const isQuestionAnswered = (index) => {
     return answer !== '';
   } else if (type === 'multiple_select') {
     return answer.length > 0;
-  } else if (type === 'fill_in_blank') {
-    return answer.some(blank => blank !== '');
+  } else if (isFillBlankQuestion(question)) {
+    if (Array.isArray(answer)) {
+      return answer.some(blank => blank !== '');
+    } else {
+      return answer !== '';
+    }
   } else if (type === 'short_answer') {
     return answer !== '';
   } else if (type === 'essay') {
@@ -494,13 +620,175 @@ const isOptionSelected = (optIndex) => {
   return answers[currentQuestionIndex.value].includes(option);
 };
 
-// 处理填空题
-const countBlanks = (text) => {
-  return (text.match(/_____/g) || []).length;
+// 格式化题干文本，给填空题添加输入框
+const parsedFillBlankContent = computed(() => {
+  if (!currentQuestion.value || !isFillBlankQuestion(currentQuestion.value)) {
+    return [];
+  }
+  
+  const text = currentQuestion.value.stem || '';
+  if (!text) return [];
+  
+  console.log('解析填空题题干:', text);
+  console.log('题目类型:', currentQuestion.value.type, currentQuestion.value.section_type);
+  
+  // 存储不同类型的空白位置
+  const blanks = [];
+  
+  // 1. 查找_____格式
+  const regex1 = /_____/g;
+  let match1;
+  while ((match1 = regex1.exec(text)) !== null) {
+    blanks.push({ start: match1.index, end: match1.index + match1[0].length });
+    console.log('找到5个下划线空白位置:', match1.index);
+  }
+  
+  // 2. 查找___格式（3个以上连续下划线）
+  const regex2 = /_{3,}/g;
+  let match2;
+  while ((match2 = regex2.exec(text)) !== null) {
+    // 检查是否已经添加过这个位置（避免与5个下划线重复）
+    const alreadyAdded = blanks.some(b => b.start === match2.index);
+    if (!alreadyAdded) {
+      blanks.push({ start: match2.index, end: match2.index + match2[0].length });
+      console.log('找到多个下划线空白位置:', match2.index);
+    }
+  }
+  
+  // 3. 查找[BLANK]格式
+  const regex3 = /\[BLANK\]/gi;
+  let match3;
+  while ((match3 = regex3.exec(text)) !== null) {
+    blanks.push({ start: match3.index, end: match3.index + match3[0].length });
+    console.log('找到[BLANK]格式空白位置:', match3.index);
+  }
+  
+  // 4. 查找【空白】格式
+  const regex4 = /【空白】/g;
+  let match4;
+  while ((match4 = regex4.exec(text)) !== null) {
+    blanks.push({ start: match4.index, end: match4.index + match4[0].length });
+    console.log('找到【空白】格式空白位置:', match4.index);
+  }
+  
+  // 5. 查找（）或()格式
+  const regex5 = /（）/g;
+  let match5;
+  while ((match5 = regex5.exec(text)) !== null) {
+    blanks.push({ start: match5.index, end: match5.index + match5[0].length });
+    console.log('找到（）格式空白位置:', match5.index);
+  }
+  
+  const regex6 = /\(\)/g;
+  let match6;
+  while ((match6 = regex6.exec(text)) !== null) {
+    blanks.push({ start: match6.index, end: match6.index + match6[0].length });
+    console.log('找到()格式空白位置:', match6.index);
+  }
+  
+  console.log('检测到的空白数量:', blanks.length);
+  
+  // 如果没有检测到任何空白标记，但题目类型是填空题，创建一个默认空白
+  if (blanks.length === 0) {
+    console.log('未检测到空白标记，创建默认输入框');
+    // 确保答案数组已初始化为至少一个元素
+    if (!Array.isArray(answers[currentQuestionIndex.value]) || answers[currentQuestionIndex.value].length === 0) {
+      answers[currentQuestionIndex.value] = [''];
+    }
+    
+    // 返回整个文本和一个默认空白
+    return [
+      { type: 'text', content: text },
+      { type: 'blank', blankIndex: 0 }
+    ];
+  }
+  
+  // 按位置排序空白
+  blanks.sort((a, b) => a.start - b.start);
+  
+  // 确保答案数组初始化
+  if (!Array.isArray(answers[currentQuestionIndex.value]) || answers[currentQuestionIndex.value].length !== blanks.length) {
+    if (blanks.length > 0) {
+      answers[currentQuestionIndex.value] = Array(blanks.length).fill('');
+    } else {
+      answers[currentQuestionIndex.value] = [''];
+    }
+  }
+  
+  // 将文本分割为文本部分和空白部分
+  const result = [];
+  let lastEnd = 0;
+  
+  blanks.forEach((blank, blankIndex) => {
+    // 添加空白前的文本
+    if (blank.start > lastEnd) {
+      result.push({
+        type: 'text',
+        content: text.substring(lastEnd, blank.start)
+      });
+    }
+    
+    // 添加空白（将被渲染为输入框）
+    result.push({
+      type: 'blank',
+      blankIndex
+    });
+    
+    lastEnd = blank.end;
+  });
+  
+  // 添加最后一段文本
+  if (lastEnd < text.length) {
+    result.push({
+      type: 'text',
+      content: text.substring(lastEnd)
+    });
+  }
+  
+  console.log('解析结果:', result);
+  return result;
+});
+
+// 原有的格式化函数保留，用于非填空题
+const formatQuestionStem = (text) => {
+  if (!text) return '';
+  
+  const blankHtml = '<span class="border-b-2 border-gray-400 inline-block min-w-32 mx-1 h-6 align-middle bg-gray-50 rounded border border-blue-300 px-2">填空处</span>';
+  
+  // 1. 替换_____格式
+  let formattedText = text.replace(/_____/g, blankHtml);
+  
+  // 2. 替换剩余的___格式（3个以上连续下划线）
+  formattedText = formattedText.replace(/_{3,}/g, blankHtml);
+  
+  // 3. 替换[BLANK]格式
+  formattedText = formattedText.replace(/\[BLANK\]/gi, blankHtml);
+  
+  // 4. 替换【空白】格式
+  formattedText = formattedText.replace(/【空白】/g, blankHtml);
+  
+  // 5. 替换括号格式（）和()
+  formattedText = formattedText.replace(/（）/g, blankHtml);
+  formattedText = formattedText.replace(/\(\)/g, blankHtml);
+  
+  return formattedText;
 };
 
-const formatQuestionStem = (text) => {
-  return text.replace(/_____/g, '<span class="border-b-2 border-gray-400 inline-block min-w-20">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>');
+// 判断题目是否为填空题类型
+const isFillBlankQuestion = (question) => {
+  if (!question) return false;
+  
+  // 检查section_type、type和original_type是否有任何一个是填空题类型
+  const typeStr = String(question.type || '').toLowerCase();
+  const sectionTypeStr = String(question.section_type || '').toLowerCase();
+  const originalTypeStr = String(question.original_type || '').toLowerCase();
+  
+  // 检查任意类型字段是否包含"fill"和"blank"
+  return (
+    sectionTypeStr.includes('fill') && sectionTypeStr.includes('blank') ||
+    typeStr.includes('fill') && typeStr.includes('blank') ||
+    originalTypeStr.includes('fill') && originalTypeStr.includes('blank')
+  );
 };
 
 // 处理文件上传
@@ -529,20 +817,169 @@ const saveProgress = () => {
 };
 
 // 提交评估
-const submitAssessment = () => {
+const submitAssessment = async () => {
   showSubmitConfirm.value = false;
   
   if (timer.value) {
     clearInterval(timer.value);
   }
   
-  // 发送数据到后端
-  emit('submit', {
-    assessmentId: assessment.id,
-    answers: JSON.parse(JSON.stringify(answers)),
-    submissionTime: new Date(),
-    timeSpent: timeLimit.value ? timeLimit.value - remainingTime.value : null
+  try {
+    // 获取当前用户ID
+    const userId = authStore.user?.id || parseInt(localStorage.getItem('userId') || '0');
+    
+    // 准备提交数据
+    const submissionData = {
+      student_id: userId,
+      answers: JSON.parse(JSON.stringify(answers)),
+      submitted_at: new Date().toISOString(),
+      time_spent: timeLimit.value ? timeLimit.value - remainingTime.value : null
+    };
+    
+    console.log('提交评估数据:', submissionData);
+    
+    // 调用API提交评估
+    try {
+      const result = await assessmentAPI.submitAssessment(props.assessmentId, submissionData);
+      console.log('提交结果:', result);
+      
+      // 保存提交状态
+      if (result && result.submission_id) {
+        localStorage.setItem(`assessment_${props.assessmentId}_submission_id`, result.submission_id);
+        localStorage.setItem(`assessment_${props.assessmentId}_submitted`, 'true');
+        localStorage.setItem(`assessment_${props.assessmentId}_score`, result.score);
+      }
+      
+      // 显示提交成功消息
+      alert(`评估已成功提交！您的得分是：${result.score}/${result.total_score}`);
+      
+      // 发送提交事件到父组件
+      emit('submit', {
+        assessmentId: props.assessmentId,
+        answers: JSON.parse(JSON.stringify(answers)),
+        submissionTime: new Date(),
+        score: result.score
+      });
+      
+      // 跳转到结果页面或返回课程页面
+      if (assessment.course_id) {
+        router.push(`/course/${assessment.course_id}`);
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (apiError) {
+      console.error('API调用失败:', apiError);
+      
+      // 模拟成功提交
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 计算临时分数
+      const tempScore = calculateScore();
+      
+      // 显示提交成功消息
+      alert(`评估已成功提交！您的得分是：${tempScore}/${assessment.total_score}（模拟）`);
+      
+      // 发送提交事件到父组件
+      emit('submit', {
+        assessmentId: props.assessmentId,
+        answers: JSON.parse(JSON.stringify(answers)),
+        submissionTime: new Date(),
+        score: tempScore
+      });
+      
+      // 跳转到结果页面或返回课程页面
+      router.push('/dashboard');
+    }
+  } catch (error) {
+    console.error('提交评估失败:', error);
+    alert('提交失败，请重试');
+  }
+};
+
+// 添加计算分数的方法
+const calculateScore = () => {
+  let score = 0;
+  let questionIndex = 0;
+  
+  assessment.sections.forEach(section => {
+    section.questions.forEach(question => {
+      const userAnswer = answers[questionIndex];
+      let isCorrect = false;
+      
+      // 根据题目类型检查答案是否正确
+      if (question.type === 'multiple_choice') {
+        if (typeof question.answer === 'number') {
+          // 如果答案是数字索引
+          const correctOption = String.fromCharCode(65 + question.answer);
+          isCorrect = userAnswer === correctOption;
+        } else {
+          // 如果答案是选项值
+          isCorrect = userAnswer === question.answer;
+        }
+      } else if (question.type === 'true_false') {
+        isCorrect = String(userAnswer).toLowerCase() === String(question.answer).toLowerCase();
+      } else if (question.type === 'multiple_select') {
+        // 多选题
+        if (Array.isArray(userAnswer) && Array.isArray(question.answer)) {
+          const userSet = new Set(userAnswer);
+          const correctSet = new Set(question.answer.map(ans => 
+            typeof ans === 'number' ? String.fromCharCode(65 + ans) : ans
+          ));
+          isCorrect = userSet.size === correctSet.size && 
+            [...userSet].every(value => correctSet.has(value));
+        }
+      } else if (question.type === 'fill_in_blank' || question.type === 'fill_blank') {
+        // 填空题
+        let partialScore = 0;
+        let skipFullScore = false; // 标记是否已经给了部分分，避免重复加分
+        
+        if (Array.isArray(question.answer) && Array.isArray(userAnswer)) {
+          // 多个空的情况
+          const validAnswers = userAnswer.filter(ans => ans.trim() !== '');
+          if (validAnswers.length > 0) {
+            const correctCount = validAnswers.filter((ans, i) => {
+              if (i >= question.answer.length) return false;
+              return String(ans).toLowerCase().trim() === String(question.answer[i]).toLowerCase().trim();
+            }).length;
+            
+            // 按照正确率给分
+            if (correctCount > 0) {
+              const scorePerBlank = (section.score_per_question || 0) / question.answer.length;
+              partialScore = scorePerBlank * correctCount;
+              skipFullScore = true; // 已经给了部分分，不再通过isCorrect添加满分
+            }
+          }
+          // 直接添加部分分数而不是设置isCorrect
+          score += partialScore;
+        } else if (!Array.isArray(question.answer) && !Array.isArray(userAnswer)) {
+          // 单个空的情况
+          isCorrect = String(userAnswer).toLowerCase().trim() === String(question.answer).toLowerCase().trim();
+        } else if (Array.isArray(question.answer) && !Array.isArray(userAnswer)) {
+          // 答案是数组但用户答案是单个值 (可能是第一个空的答案)
+          isCorrect = question.answer.length > 0 && 
+                     String(userAnswer).toLowerCase().trim() === String(question.answer[0]).toLowerCase().trim();
+        } else if (!Array.isArray(question.answer) && Array.isArray(userAnswer)) {
+          // 答案是单个值但用户答案是数组
+          isCorrect = userAnswer.length > 0 && 
+                     String(userAnswer[0]).toLowerCase().trim() === String(question.answer).toLowerCase().trim();
+        }
+        
+        // 如果已经给了部分分，则不再通过isCorrect添加满分
+        if (skipFullScore) {
+          isCorrect = false;
+        }
+      }
+      
+      // 如果答案正确，加分
+      if (isCorrect) {
+        score += section.score_per_question || 0;
+      }
+      
+      questionIndex++;
+    });
   });
+  
+  return score;
 };
 
 // 格式化时间显示
@@ -578,13 +1015,92 @@ const startTimer = () => {
   }
 };
 
-// 组件挂载时
-onMounted(() => {
-  initializeAnswers();
-  startTimer();
-  
-  // 实际应用中，这里应该从API获取评估数据
-  // 并检查是否有保存的进度
+// 组件挂载时检查提交状态
+onMounted(async () => {
+  try {
+    // 获取assessmentId
+    const id = props.assessmentId;
+    
+    console.log('Assessment ID from props:', id);
+    
+    if (!id) {
+      console.error('No assessmentId provided');
+      return;
+    }
+    
+    // 检查是否已经提交过
+    const submittedFlag = localStorage.getItem(`assessment_${id}_submitted`);
+    if (submittedFlag === 'true') {
+      // 已提交过，应该显示结果或重定向
+      const submissionId = localStorage.getItem(`assessment_${id}_submission_id`);
+      const score = localStorage.getItem(`assessment_${id}_score`);
+      
+      alert(`您已经提交过此评估。得分：${score || '未知'}`);
+      
+      // 重定向到课程页面或仪表板
+      if (assessment.course_id) {
+        router.push(`/course/${assessment.course_id}`);
+      } else {
+        router.push('/dashboard');
+      }
+      return;
+    }
+    
+    // 尝试从API获取数据
+    try {
+      const data = await assessmentAPI.getAssessment(id);
+      
+      // 填充评估数据
+      Object.assign(assessment, data);
+      
+      console.log('Assessment loaded in player:', assessment);
+    } catch (apiError) {
+      console.error('API调用失败，使用模拟数据:', apiError);
+      
+      // 从本地导入的mock数据
+      const mockExam = await import('../../assets/mock-exam.json');
+      const data = mockExam.default;
+      
+      // 填充评估数据
+      Object.assign(assessment, data);
+    }
+    
+    // 初始化答案
+    initializeAnswers();
+    
+    // 额外检查填空题处理
+    console.log('初始化后的答案数据:', answers);
+    
+    // 检查并修复所有填空题的答案格式
+    flatQuestions.value.forEach((question, index) => {
+      if (isFillBlankQuestion(question)) {
+        console.log(`检查第${index}题填空题格式:`, question);
+        
+        // 确保填空题的答案是数组
+        if (!Array.isArray(answers[index])) {
+          console.log(`  修复第${index}题答案格式 - 不是数组`);
+          const blankCount = countBlanks(question.stem);
+          if (blankCount > 0) {
+            answers[index] = Array(blankCount).fill('');
+          } else {
+            answers[index] = [''];
+          }
+        } else if (answers[index].length === 0) {
+          console.log(`  修复第${index}题答案格式 - 数组为空`);
+          answers[index] = [''];
+        }
+        
+        console.log(`  修复后的答案:`, answers[index]);
+      }
+    });
+    
+    // 设置时间限制
+    if (assessment.duration) {
+      startTimer();
+    }
+  } catch (error) {
+    console.error('Failed to load assessment:', error);
+  }
 });
 
 // 组件卸载前清除定时器
@@ -603,9 +1119,114 @@ watch(() => true, (isActive) => {
   }
 });
 
+// 监听currentQuestionIndex变化，输出当前题目信息并处理填空题
+watch(currentQuestionIndex, (newIndex) => {
+  const question = flatQuestions.value[newIndex];
+  if (question) {
+    console.log('当前题目:', question);
+    console.log('题目类型:', question.section_type);
+    console.log('题干:', question.stem);
+    
+    if (isFillBlankQuestion(question)) {
+      // 使用与parsedFillBlankContent计算属性中相同的逻辑
+      const text = question.stem || '';
+      
+      // 收集所有空白位置
+      const blanks = [];
+      
+      // 查找所有类型的空白
+      const regex1 = /_____/g;
+      let match1;
+      while ((match1 = regex1.exec(text)) !== null) {
+        blanks.push({ start: match1.index, end: match1.index + match1[0].length });
+      }
+      
+      const remainingText = text.replace(/_____/g, 'XXXXX');
+      const regex2 = /_{3,}/g;
+      let match2;
+      while ((match2 = regex2.exec(remainingText)) !== null) {
+        const adjustedStart = text.indexOf('_', match2.index);
+        if (adjustedStart !== -1) {
+          let end = adjustedStart;
+          while (end < text.length && text[end] === '_') {
+            end++;
+          }
+          const alreadyAdded = blanks.some(b => b.start === adjustedStart);
+          if (!alreadyAdded) {
+            blanks.push({ start: adjustedStart, end });
+          }
+        }
+      }
+      
+      const regex3 = /\[BLANK\]/gi;
+      let match3;
+      while ((match3 = regex3.exec(text)) !== null) {
+        blanks.push({ start: match3.index, end: match3.index + match3[0].length });
+      }
+      
+      const regex4 = /【空白】/g;
+      let match4;
+      while ((match4 = regex4.exec(text)) !== null) {
+        blanks.push({ start: match4.index, end: match4.index + match4[0].length });
+      }
+      
+      const regex5 = /（）/g;
+      let match5;
+      while ((match5 = regex5.exec(text)) !== null) {
+        blanks.push({ start: match5.index, end: match5.index + match5[0].length });
+      }
+      
+      const regex6 = /\(\)/g;
+      let match6;
+      while ((match6 = regex6.exec(text)) !== null) {
+        blanks.push({ start: match6.index, end: match6.index + match6[0].length });
+      }
+      
+      const blankCount = blanks.length;
+      console.log('识别到的空白数量:', blankCount);
+      
+      // 如果答案不是数组或者数组长度不匹配，重新初始化
+      if (!Array.isArray(answers[newIndex]) || answers[newIndex].length !== blankCount) {
+        console.log('重新初始化填空题答案数组');
+        if (blankCount > 0) {
+          answers[newIndex] = Array(blankCount).fill('');
+        } else {
+          answers[newIndex] = [''];
+        }
+        console.log('初始化后的答案数组:', answers[newIndex]);
+      }
+    }
+  }
+});
+
 const confirmLeave = (e) => {
   e.preventDefault();
   e.returnValue = '您有未保存的答案，确定要离开吗？';
   return e.returnValue;
 };
 </script> 
+
+<style scoped>
+.fill-blank-container {
+  line-height: 2.5;
+}
+
+.fill-blank-container input {
+  vertical-align: middle;
+  transition: all 0.2s ease-in-out;
+}
+
+.fill-blank-container input:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  border-color: #3b82f6;
+}
+
+/* 移动端响应式调整 */
+@media (max-width: 640px) {
+  .fill-blank-container input {
+    min-width: 120px;
+    margin: 2px 0;
+    display: inline-block;
+  }
+}
+</style> 

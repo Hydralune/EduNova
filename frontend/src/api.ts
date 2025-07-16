@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api', // 直接连接后端API
+  baseURL: 'http://localhost:5001/api', // 直接访问后端，不通过CORS代理
   timeout: 60000, // 增加超时时间到60秒
   headers: {
     'Content-Type': 'application/json',
@@ -370,6 +370,21 @@ export const assessmentAPI = {
   // 获取评估的提交数量
   getSubmissionCount: (assessmentId: number) => {
     return api.get(`/assessments/${assessmentId}/submission-count`);
+  },
+
+  // 获取学生的提交记录
+  getSubmissionsByStudent: (studentId: number, params?: any) => {
+    return api.get(`/students/${studentId}/submissions`, { params });
+  },
+
+  // 获取单个提交记录
+  getSubmission: (submissionId: number) => {
+    return api.get(`/submissions/${submissionId}`);
+  },
+
+  // 评分提交
+  gradeSubmission: (submissionId: number, data: any) => {
+    return api.post(`/submissions/${submissionId}/grade`, data);
   }
 }
 

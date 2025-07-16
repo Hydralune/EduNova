@@ -1322,198 +1322,224 @@ def delete_assessment(assessment_id):
     
     return jsonify({'message': 'Assessment deleted successfully', 'assessment': assessment_data})
 
-@learning_bp.route('/assessments/<int:assessment_id>/submit', methods=['POST'])
+@learning_bp.route('/assessments/<int:assessment_id>/submit', methods=['POST', 'OPTIONS'])
 # @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
 def submit_assessment(assessment_id):
     """提交评估答案"""
-    data = request.json
-    
-    # 在实际应用中，应该从JWT中获取学生ID
-    # student_id = get_jwt_identity()
-    student_id = data.get('student_id', 1)  # 临时使用请求中的学生ID或默认值
-    
-    # 验证评估是否存在
-    assessment = Assessment.query.get(assessment_id)
-    if not assessment:
-        return jsonify({'error': 'Assessment not found'}), 404
-    
-    # 验证截止日期
-    if assessment.due_date and datetime.utcnow() > assessment.due_date:
-        return jsonify({'error': 'Assessment submission deadline has passed'}), 400
-    
-    # 验证尝试次数
-    existing_attempts = StudentAnswer.query.filter_by(
-        student_id=student_id,
-        assessment_id=assessment_id
-    ).count()
-    
-    # 这里应该检查评估的最大尝试次数设置，但目前模型中没有此字段
-    # 暂时使用硬编码的值
-    max_attempts = 3
-    if existing_attempts >= max_attempts:
-        return jsonify({'error': 'Maximum number of attempts reached'}), 400
-    
-    # 创建学生答案记录
-    student_answer = StudentAnswer(
-        student_id=student_id,
-        assessment_id=assessment_id,
-        answers=json.dumps(data.get('answers', {})),
-        submitted_at=datetime.utcnow()
-    )
-    
-    # 自动评分逻辑
-    score = 0
-    assessment_data = json.loads(assessment.questions)
-    student_answers = data.get('answers', [])
-    
-    # 确保assessment_data是一个字典，包含sections字段
-    if isinstance(assessment_data, dict) and 'sections' in assessment_data:
-        sections = assessment_data['sections']
-    else:
-        # 如果不是新格式，将问题列表转换为单个section
-        sections = [{
-            'questions': assessment_data if isinstance(assessment_data, list) else [],
-            'score_per_question': assessment.total_score / len(assessment_data) if isinstance(assessment_data, list) and len(assessment_data) > 0 else 0
-        }]
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response
+        
+    try:
+        data = request.json
+        current_app.logger.info(f"收到评估提交请求: assessment_id={assessment_id}, data={data}")
+        
+        # 详细记录请求数据结构
+        current_app.logger.info(f"请求数据类型: {type(data)}")
+        if 'answers' in data:
+            current_app.logger.info(f"answers类型: {type(data['answers'])}")
+            current_app.logger.info(f"answers内容: {data['answers']}")
+        else:
+            current_app.logger.info("请求中没有answers字段")
+        
+        # 在实际应用中，应该从JWT中获取学生ID
+        # student_id = get_jwt_identity()
+        student_id = data.get('student_id', 1)  # 临时使用请求中的学生ID或默认值
+        current_app.logger.info(f"学生ID: {student_id}")
+        
+        # 验证评估是否存在
+        assessment = Assessment.query.get(assessment_id)
+        if not assessment:
+            current_app.logger.error(f"评估不存在: assessment_id={assessment_id}")
+            response = jsonify({'error': 'Assessment not found'})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response, 404
+        
+        # 验证截止日期
+        if assessment.due_date and datetime.utcnow() > assessment.due_date:
+            current_app.logger.warning(f"评估截止日期已过: assessment_id={assessment_id}")
+            response = jsonify({'error': 'Assessment submission deadline has passed'})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response, 400
+        
+        # 验证尝试次数
+        existing_attempts = StudentAnswer.query.filter_by(
+            student_id=student_id,
+            assessment_id=assessment_id
+        ).count()
+        
+        # 检查评估的最大尝试次数设置
+        max_attempts = assessment.max_attempts or 3
+        if existing_attempts >= max_attempts:
+            current_app.logger.warning(f"超过最大尝试次数: student_id={student_id}, assessment_id={assessment_id}")
+            response = jsonify({'error': 'Maximum number of attempts reached'})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response, 400
+        
+        # 创建学生答案记录
+        answers_json = json.dumps(data.get('answers', {}))
+        current_app.logger.info(f"答案JSON长度: {len(answers_json)}")
+        
+        # 确保answers是有效的JSON格式
+        try:
+            # 尝试解析answers，确保它是有效的JSON
+            answers_data = data.get('answers', {})
+            if isinstance(answers_data, list):
+                # 如果是列表，直接使用
+                processed_answers = answers_data
+            elif isinstance(answers_data, dict):
+                # 如果是字典，转换为列表
+                processed_answers = list(answers_data.values())
+            else:
+                # 其他情况，尝试转换为JSON字符串
+                processed_answers = answers_data
+                
+            # 重新序列化为JSON字符串
+            answers_json = json.dumps(processed_answers)
+            current_app.logger.info(f"处理后的答案JSON: {answers_json[:100]}...")
+        except Exception as e:
+            current_app.logger.error(f"处理答案数据时出错: {str(e)}")
+            return jsonify({'error': 'Invalid answers format'}), 400
+        
+        student_answer = StudentAnswer(
+            student_id=student_id,
+            assessment_id=assessment_id,
+            answers=answers_json,
+            submitted_at=datetime.utcnow()
+        )
+        
+        # 自动评分逻辑
+        score = 0
+        assessment_data = assessment.get_questions()
+        student_answers = data.get('answers', [])
+        
+        current_app.logger.info(f"题目数据类型: {type(assessment_data)}")
+        current_app.logger.info(f"学生答案类型: {type(student_answers)}")
+        
+        # 确保student_answers是列表
+        if isinstance(student_answers, dict):
+            student_answers = list(student_answers.values())
+        
+        # 确保assessment_data是一个字典，包含sections字段
+        if isinstance(assessment_data, dict) and 'sections' in assessment_data:
+            sections = assessment_data['sections']
+        else:
+            # 如果不是新格式，将问题列表转换为单个section
+            sections = [{
+                'questions': assessment_data if isinstance(assessment_data, list) else [],
+                'score_per_question': assessment.total_score / len(assessment_data) if isinstance(assessment_data, list) and len(assessment_data) > 0 else 0
+            }]
 
-    question_index = 0
-    for section in sections:
-        for question in section['questions']:
-            if question_index >= len(student_answers):
-                break
+        question_index = 0
+        question_scores = []  # 存储每道题的得分
+        question_feedback = []  # 存储每道题的反馈
+        
+        for section in sections:
+            for question in section['questions']:
+                if question_index >= len(student_answers):
+                    question_scores.append(0)
+                    question_feedback.append('')
+                    question_index += 1
+                    continue
 
-            user_answer = student_answers[question_index]
-            is_correct = False
+                user_answer = student_answers[question_index]
+                is_correct = False
+                question_score = 0
 
-            if question['type'] == 'multiple_choice':
-                # 检查选项是否匹配（考虑字母和数字格式）
-                if isinstance(user_answer, str) and len(user_answer) == 1:
-                    correct_index = int(question['answer'])
-                    user_index = ord(user_answer) - ord('A')
-                    is_correct = correct_index == user_index
+                # 客观题自动评分
+                if question['type'] in ['multiple_choice', 'true_false', 'multiple_select', 'fill_in_blank']:
+                    if question['type'] == 'multiple_choice':
+                        # 检查选项是否匹配（考虑字母和数字格式）
+                        if isinstance(user_answer, str) and len(user_answer) == 1:
+                            correct_index = int(question['answer'])
+                            user_index = ord(user_answer) - ord('A')
+                            is_correct = correct_index == user_index
+                        else:
+                            is_correct = str(user_answer) == str(question['answer'])
+
+                    elif question['type'] == 'multiple_select':
+                        # 多选题比较（转换为集合进行比较）
+                        if isinstance(user_answer, list) and isinstance(question['answer'], list):
+                            user_set = set(str(x) for x in user_answer)
+                            correct_set = set(str(x) for x in question['answer'])
+                            is_correct = user_set == correct_set
+
+                    elif question['type'] == 'fill_in_blank':
+                        # 填空题比较（考虑多个空的情况）
+                        if isinstance(question['answer'], list):
+                            if isinstance(user_answer, list) and len(user_answer) == len(question['answer']):
+                                is_correct = all(
+                                    str(u).lower().strip() == str(c).lower().strip()
+                                    for u, c in zip(user_answer, question['answer'])
+                                )
+                        else:
+                            # 单个答案的情况
+                            if isinstance(user_answer, list):
+                                user_answer = user_answer[0] if user_answer else ''
+                            is_correct = str(user_answer).lower().strip() == str(question['answer']).lower().strip()
+
+                    elif question['type'] == 'true_false':
+                        # 判断题比较
+                        is_correct = str(user_answer).lower() == str(question['answer']).lower()
+
+                    # 如果正确，加分
+                    if is_correct:
+                        question_score = section['score_per_question']
+                        score += question_score
+                
+                # 主观题需要人工评分，暂时不给分
                 else:
-                    is_correct = str(user_answer) == str(question['answer'])
+                    question_score = 0
+                
+                # 记录每道题的得分和反馈
+                question_scores.append(question_score)
+                question_feedback.append('')
+                question_index += 1
 
-            elif question['type'] == 'multiple_select':
-                # 多选题比较（转换为集合进行比较）
-                if isinstance(user_answer, list) and isinstance(question['answer'], list):
-                    user_set = set(str(x) for x in user_answer)
-                    correct_set = set(str(x) for x in question['answer'])
-                    is_correct = user_set == correct_set
-
-            elif question['type'] == 'fill_in_blank':
-                # 填空题比较（考虑多个空的情况）
-                if isinstance(question['answer'], list):
-                    if isinstance(user_answer, list) and len(user_answer) == len(question['answer']):
-                        is_correct = all(
-                            str(u).lower().strip() == str(c).lower().strip()
-                            for u, c in zip(user_answer, question['answer'])
-                        )
-                else:
-                    # 单个答案的情况
-                    if isinstance(user_answer, list):
-                        user_answer = user_answer[0] if user_answer else ''
-                    is_correct = str(user_answer).lower().strip() == str(question['answer']).lower().strip()
-
-            elif question['type'] == 'true_false':
-                # 判断题比较
-                is_correct = str(user_answer).lower() == str(question['answer']).lower()
-
-            # 简答题和论述题需要人工评分
-            elif question['type'] in ['short_answer', 'essay']:
-                pass
-
-            if is_correct:
-                score += section['score_per_question']
-
-            question_index += 1
-
-    student_answer.score = score
+        # 设置总分和题目得分
+        student_answer.score = score
+        student_answer.question_scores = json.dumps(question_scores)
+        student_answer.question_feedback = json.dumps(question_feedback)
+        
+        current_app.logger.info(f"保存学生答案: student_id={student_id}, assessment_id={assessment_id}, score={score}")
+        
+        # 保存到数据库
+        db.session.add(student_answer)
+        db.session.commit()
+        
+        current_app.logger.info(f"学生答案保存成功: submission_id={student_answer.id}")
+        
+        response = jsonify({
+            'status': 'success',
+            'message': 'Assessment submitted successfully',
+            'submission_id': student_answer.id,
+            'submitted_at': student_answer.submitted_at.isoformat(),
+            'score': student_answer.score,
+            'total_score': assessment.total_score,
+            'question_scores': question_scores
+        })
+    except Exception as e:
+        current_app.logger.error(f"提交评估失败: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        
+        db.session.rollback()
+        
+        response = jsonify({
+            'status': 'error',
+            'message': f'Failed to submit assessment: {str(e)}'
+        })
     
-    db.session.add(student_answer)
-    db.session.commit()
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     
-    return jsonify({
-        'message': 'Assessment submitted successfully',
-        'submission_id': student_answer.id,
-        'submitted_at': student_answer.submitted_at.isoformat(),
-        'score': student_answer.score
-    })
-
-@learning_bp.route('/assessments/<int:assessment_id>/submissions', methods=['GET'])
-# @jwt_required()  # 暂时禁用JWT认证要求
-def get_assessment_submissions(assessment_id):
-    """获取评估的所有提交"""
-    # 验证评估是否存在
-    assessment = Assessment.query.get(assessment_id)
-    if not assessment:
-        return jsonify({'error': 'Assessment not found'}), 404
-    
-    # 获取查询参数
-    student_id = request.args.get('student_id', type=int)
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    
-    # 构建查询
-    query = StudentAnswer.query.filter_by(assessment_id=assessment_id)
-    
-    if student_id:
-        query = query.filter_by(student_id=student_id)
-    
-    # 执行分页查询
-    submissions_pagination = query.paginate(page=page, per_page=per_page)
-    
-    # 准备响应数据
-    submissions_data = []
-    for submission in submissions_pagination.items:
-        submissions_data.append(submission.to_dict())
-    
-    return jsonify({
-        'submissions': submissions_data,
-        'total': submissions_pagination.total,
-        'pages': submissions_pagination.pages,
-        'current_page': page
-    })
-
-@learning_bp.route('/students/<int:student_id>/submissions', methods=['GET'])
-# @jwt_required()  # 暂时禁用JWT认证要求
-def get_student_submissions(student_id):
-    """获取学生的所有提交"""
-    # 验证学生是否存在
-    student = User.query.get(student_id)
-    if not student:
-        return jsonify({'error': 'Student not found'}), 404
-    
-    # 获取查询参数
-    assessment_id = request.args.get('assessment_id', type=int)
-    course_id = request.args.get('course_id', type=int)
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    
-    # 构建查询
-    query = StudentAnswer.query.filter_by(student_id=student_id)
-    
-    if assessment_id:
-        query = query.filter_by(assessment_id=assessment_id)
-    
-    if course_id:
-        # 需要联表查询
-        query = query.join(Assessment).filter(Assessment.course_id == course_id)
-    
-    # 执行分页查询
-    submissions_pagination = query.paginate(page=page, per_page=per_page)
-    
-    # 准备响应数据
-    submissions_data = []
-    for submission in submissions_pagination.items:
-        submissions_data.append(submission.to_dict())
-    
-    return jsonify({
-        'submissions': submissions_data,
-        'total': submissions_pagination.total,
-        'pages': submissions_pagination.pages,
-        'current_page': page
-    })
+    return response
 
 @learning_bp.route('/submissions/<int:submission_id>/grade', methods=['POST'])
 # @jwt_required()  # 暂时禁用JWT认证要求
@@ -1533,7 +1559,20 @@ def grade_submission(submission_id):
     if 'feedback' in data:
         submission.feedback = data['feedback']
     
+    # 更新题目评分和反馈
+    if 'question_scores' in data:
+        submission.question_scores = json.dumps(data['question_scores'])
+    
+    if 'question_feedback' in data:
+        submission.question_feedback = json.dumps(data['question_feedback'])
+    
+    # 记录评分时间和评分人
     submission.graded_at = datetime.utcnow()
+    
+    # 在实际应用中，应该从JWT中获取教师ID
+    # submission.graded_by = get_jwt_identity()
+    if 'grader_id' in data:
+        submission.graded_by = data['grader_id']
     
     db.session.commit()
     
@@ -1541,6 +1580,38 @@ def grade_submission(submission_id):
         'message': 'Submission graded successfully',
         'submission': submission.to_dict()
     })
+
+@learning_bp.route('/submissions/<int:submission_id>', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_submission(submission_id):
+    """获取单个提交记录"""
+    # 验证提交是否存在
+    submission = StudentAnswer.query.get(submission_id)
+    if not submission:
+        return jsonify({'error': 'Submission not found'}), 404
+    
+    # 获取学生信息
+    student = User.query.get(submission.student_id)
+    student_name = student.full_name if student else f"Student {submission.student_id}"
+    
+    # 获取评估信息
+    assessment = Assessment.query.get(submission.assessment_id)
+    
+    # 准备响应数据
+    submission_data = submission.to_dict()
+    submission_data['student_name'] = student_name
+    
+    # 如果有评估信息，添加到响应中
+    if assessment:
+        submission_data['assessment'] = {
+            'id': assessment.id,
+            'title': assessment.title,
+            'description': assessment.description,
+            'total_score': assessment.total_score,
+            'questions': assessment.get_questions()
+        }
+    
+    return jsonify(submission_data)
 
 @learning_bp.route('/courses/<int:course_id>/assessments', methods=['GET'])
 # @jwt_required()  # 暂时禁用JWT认证要求
@@ -2586,4 +2657,212 @@ def get_ai_assessment_file(request_id):
         })
         response.headers.add('Access-Control-Allow-Origin', '*')
         return response, 500
+
+@learning_bp.route('/assessments/<int:assessment_id>/submissions', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_assessment_submissions(assessment_id):
+    """获取评估的所有提交"""
+    current_app.logger.info(f"获取评估提交: assessment_id={assessment_id}, args={request.args}")
+    
+    # 验证评估是否存在
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        current_app.logger.error(f"评估不存在: assessment_id={assessment_id}")
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    # 获取查询参数
+    student_id = request.args.get('student_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    graded = request.args.get('graded')
+    
+    current_app.logger.info(f"查询参数: student_id={student_id}, page={page}, per_page={per_page}, graded={graded}")
+    
+    # 构建查询
+    query = StudentAnswer.query.filter_by(assessment_id=assessment_id)
+    
+    if student_id:
+        current_app.logger.info(f"按学生ID过滤: student_id={student_id}")
+        query = query.filter_by(student_id=student_id)
+    
+    # 根据评分状态过滤
+    if graded == 'true':
+        current_app.logger.info("只查询已评分的提交")
+        query = query.filter(StudentAnswer.graded_at != None)
+    elif graded == 'false':
+        current_app.logger.info("只查询未评分的提交")
+        query = query.filter(StudentAnswer.graded_at == None)
+    
+    try:
+        # 执行分页查询
+        submissions_pagination = query.paginate(page=page, per_page=per_page)
+        
+        current_app.logger.info(f"找到 {submissions_pagination.total} 条提交记录")
+        
+        # 准备响应数据
+        submissions_data = []
+        for submission in submissions_pagination.items:
+            submission_dict = submission.to_dict()
+            
+            # 添加学生信息
+            student = User.query.get(submission.student_id)
+            if student:
+                submission_dict['student_name'] = student.full_name
+                submission_dict['student_username'] = student.username
+                current_app.logger.info(f"添加学生信息: student_id={submission.student_id}, name={student.full_name}")
+            
+            submissions_data.append(submission_dict)
+        
+        response_data = {
+            'submissions': submissions_data,
+            'total': submissions_pagination.total,
+            'pages': submissions_pagination.pages,
+            'current_page': page
+        }
+        
+        current_app.logger.info(f"返回 {len(submissions_data)} 条提交记录")
+        
+        # 添加CORS头
+        response = jsonify(response_data)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        
+        return response
+    except Exception as e:
+        current_app.logger.error(f"获取评估提交失败: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        
+        # 添加CORS头
+        response = jsonify({
+            'error': f'Failed to get submissions: {str(e)}',
+            'submissions': []
+        })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        
+        return response, 500
+
+@learning_bp.route('/students/<int:student_id>/submissions', methods=['GET', 'OPTIONS'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_student_submissions(student_id):
+    """获取学生的所有提交"""
+    # 处理OPTIONS请求
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response
+        
+    # 记录请求信息
+    current_app.logger.info(f"获取学生提交记录: student_id={student_id}, args={request.args}")
+    
+    # 验证学生是否存在
+    student = User.query.get(student_id)
+    if not student:
+        current_app.logger.warning(f"学生不存在: student_id={student_id}")
+        response = jsonify({'error': 'Student not found'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response, 404
+    
+    # 获取查询参数
+    assessment_id = request.args.get('assessment_id', type=int)
+    course_id = request.args.get('course_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    graded = request.args.get('graded')
+    
+    current_app.logger.info(f"查询参数: assessment_id={assessment_id}, course_id={course_id}, page={page}, per_page={per_page}, graded={graded}")
+    
+    # 构建查询
+    query = StudentAnswer.query.filter_by(student_id=student_id)
+    
+    if assessment_id:
+        current_app.logger.info(f"按评估ID过滤: assessment_id={assessment_id}")
+        query = query.filter_by(assessment_id=assessment_id)
+    
+    if course_id:
+        # 需要联表查询
+        current_app.logger.info(f"按课程ID过滤: course_id={course_id}")
+        query = query.join(Assessment).filter(Assessment.course_id == course_id)
+    
+    # 根据评分状态过滤
+    if graded == 'true':
+        current_app.logger.info("只查询已评分的提交")
+        query = query.filter(StudentAnswer.graded_at != None)
+    elif graded == 'false':
+        current_app.logger.info("只查询未评分的提交")
+        query = query.filter(StudentAnswer.graded_at == None)
+    
+    # 按提交时间降序排序
+    query = query.order_by(StudentAnswer.submitted_at.desc())
+    
+    try:
+        # 执行分页查询
+        submissions_pagination = query.paginate(page=page, per_page=per_page)
+        
+        current_app.logger.info(f"找到 {submissions_pagination.total} 条提交记录")
+        
+        # 准备响应数据
+        submissions_data = []
+        for submission in submissions_pagination.items:
+            submission_dict = submission.to_dict()
+            
+            # 添加评估信息
+            assessment = Assessment.query.get(submission.assessment_id)
+            if assessment:
+                submission_dict['assessment_title'] = assessment.title
+                submission_dict['assessment_total_score'] = assessment.total_score
+            
+            submissions_data.append(submission_dict)
+        
+        response = jsonify({
+            'submissions': submissions_data,
+            'total': submissions_pagination.total,
+            'pages': submissions_pagination.pages,
+            'current_page': page
+        })
+    except Exception as e:
+        current_app.logger.error(f"获取学生提交记录失败: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        response = jsonify({
+            'error': f'Failed to get submissions: {str(e)}',
+            'submissions': []
+        })
+    
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    return response
+
+@learning_bp.route('/assessments/<int:assessment_id>/submission-count', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_assessment_submission_count(assessment_id):
+    """获取评估的提交数量"""
+    # 验证评估是否存在
+    assessment = Assessment.query.get(assessment_id)
+    if not assessment:
+        return jsonify({'error': 'Assessment not found'}), 404
+    
+    # 计算提交数量
+    count = StudentAnswer.query.filter_by(assessment_id=assessment_id).count()
+    
+    # 获取已评分和未评分的数量
+    graded_count = StudentAnswer.query.filter_by(assessment_id=assessment_id).filter(StudentAnswer.graded_at != None).count()
+    ungraded_count = count - graded_count
+    
+    # 返回数量信息
+    response = jsonify({
+        'count': count,
+        'graded_count': graded_count,
+        'ungraded_count': ungraded_count,
+        'assessment_id': assessment_id
+    })
+    
+    # 添加CORS头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    
+    return response
 

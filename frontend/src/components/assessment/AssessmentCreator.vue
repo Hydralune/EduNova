@@ -244,7 +244,9 @@
               class="w-full px-3 py-2 border rounded-md"
             >
               <option value="multiple_choice">选择题</option>
+              <option value="multiple_answer">多选题</option>
               <option value="fill_blank">填空题</option>
+              <option value="true_false">判断题</option>
               <option value="short_answer">简答题</option>
             </select>
           </div>
@@ -320,16 +322,111 @@
             </div>
           </div>
           
+          <!-- 多选题选项 -->
+          <div v-else-if="currentQuestion.type === 'multiple_answer'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">选项</label>
+            <div v-for="(option, index) in currentQuestion.options" :key="index" class="flex items-center mb-2">
+              <span class="w-6 h-6 flex items-center justify-center border rounded-full mr-2">
+                {{ String.fromCharCode(65 + index) }}
+              </span>
+              <input 
+                type="text" 
+                v-model="currentQuestion.options[index]" 
+                class="flex-1 px-3 py-2 border rounded-md"
+                :placeholder="`选项 ${String.fromCharCode(65 + index)}`"
+              />
+              <button 
+                type="button"
+                @click="removeOption(index)"
+                class="ml-2 text-red-600 hover:text-red-800"
+                :disabled="currentQuestion.options.length <= 2"
+              >
+                删除
+              </button>
+            </div>
+            <button 
+              type="button"
+              @click="addOption"
+              class="mt-2 text-sm text-blue-600 hover:text-blue-800"
+              :disabled="currentQuestion.options.length >= 6"
+            >
+              添加选项
+            </button>
+            
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1">正确答案（可多选）</label>
+              <div class="space-y-2">
+                <div v-for="(option, index) in currentQuestion.options" :key="index" class="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    :id="`option-${index}`" 
+                    :checked="isOptionSelected(index)"
+                    @change="toggleOption(index)"
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label :for="`option-${index}`" class="ml-2">
+                    {{ String.fromCharCode(65 + index) }}: {{ option }}
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- 填空题答案 -->
           <div v-else-if="currentQuestion.type === 'fill_blank'">
-            <label class="block text-sm font-medium text-gray-700 mb-1">正确答案</label>
-            <input 
-              type="text" 
-              v-model="currentQuestion.correct_answer" 
-              required
-              class="w-full px-3 py-2 border rounded-md"
-              placeholder="输入正确答案"
-            />
+            <label class="block text-sm font-medium text-gray-700 mb-1">空格数量</label>
+            <div class="flex items-center mb-4">
+              <input 
+                type="number" 
+                v-model.number="blankCount" 
+                min="1"
+                max="10"
+                class="w-24 px-3 py-2 border rounded-md"
+              />
+              <button 
+                type="button"
+                @click="updateBlankAnswers"
+                class="ml-2 px-3 py-2 bg-gray-100 border rounded-md text-sm"
+              >
+                更新空格
+              </button>
+            </div>
+            
+            <label class="block text-sm font-medium text-gray-700 mb-1">空格答案</label>
+            <div v-if="!Array.isArray(currentQuestion.correct_answer)">
+              <input 
+                type="text" 
+                v-model="currentQuestion.correct_answer" 
+                required
+                class="w-full px-3 py-2 border rounded-md mb-2"
+                placeholder="输入正确答案"
+              />
+              <button 
+                type="button"
+                @click="convertToMultipleBlank"
+                class="text-sm text-blue-600 hover:text-blue-800"
+              >
+                转换为多空格
+              </button>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="(answer, index) in currentQuestion.correct_answer" :key="index" class="flex items-center">
+                <span class="mr-2 w-24 text-sm">空格 {{ index + 1 }}:</span>
+                <input 
+                  type="text" 
+                  v-model="currentQuestion.correct_answer[index]" 
+                  class="flex-1 px-3 py-2 border rounded-md"
+                  :placeholder="`空格 ${index + 1} 的答案`"
+                />
+              </div>
+              <button 
+                type="button"
+                @click="convertToSingleBlank"
+                class="text-sm text-blue-600 hover:text-blue-800"
+              >
+                转换为单空格
+              </button>
+            </div>
           </div>
           
           <!-- 简答题参考答案 -->
@@ -537,6 +634,98 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { assessmentAPI } from '../../api';
 
+// Define types to fix TypeScript errors
+interface QuestionOption {
+  text: string;
+  isCorrect?: boolean;
+}
+
+interface BaseQuestion {
+  id?: number;
+  type: string;
+  question: string;
+  points: number;
+  difficulty?: string;
+  section_id?: number;
+  explanation?: string;
+}
+
+interface MultipleChoiceQuestion extends BaseQuestion {
+  type: 'multiple_choice';
+  options: string[];
+  correct_answer: number;
+}
+
+interface MultipleAnswerQuestion extends BaseQuestion {
+  type: 'multiple_answer';
+  options: string[];
+  answers: number[];
+}
+
+interface FillBlankQuestion extends BaseQuestion {
+  type: 'fill_blank';
+  correct_answer: string | string[];
+}
+
+interface ShortAnswerQuestion extends BaseQuestion {
+  type: 'short_answer';
+  reference_answer: string;
+}
+
+interface TrueFalseQuestion extends BaseQuestion {
+  type: 'true_false';
+  correct_answer: string;
+}
+
+type Question = MultipleChoiceQuestion | MultipleAnswerQuestion | FillBlankQuestion | ShortAnswerQuestion | TrueFalseQuestion;
+
+interface AssessmentSection {
+  type: string;
+  description: string;
+  score_per_question: number;
+  questions: any[];
+}
+
+interface Assessment {
+  id?: number;
+  title: string;
+  description: string;
+  type: string;
+  time_limit: number;
+  max_attempts: number;
+  start_date: string;
+  due_date: string;
+  is_published: boolean;
+  questions: Question[];
+  course_id?: number | string;
+  sections?: AssessmentSection[];
+}
+
+interface CurrentQuestion {
+  type: string;
+  question: string;
+  points: number;
+  options: string[];
+  correct_answer: number | string | string[];
+  reference_answer: string;
+  answers: number[];
+  answerSelections: boolean[];
+}
+
+// Bank question type for the predefined questions
+interface BankQuestion {
+  id: number;
+  question: string;
+  type: string;
+  options?: string[];
+  correct_answer?: number | string;
+  answers?: number[];
+  reference_answer?: string;
+  points: number;
+  difficulty: string;
+  selected: boolean;
+}
+
 const router = useRouter();
 
 const props = defineProps({
@@ -556,7 +745,8 @@ const props = defineProps({
 
 const emit = defineEmits(['save', 'cancel']);
 
-const assessment = reactive({
+// Type the assessment with our interface
+const assessment = reactive<Assessment>({
   title: '',
   description: '',
   type: 'quiz',
@@ -568,25 +758,34 @@ const assessment = reactive({
   questions: []
 });
 
+// 更新多选题的答案数组
+function updateMultipleAnswers() {
+  // 根据复选框状态更新answers数组
+  currentQuestion.answers = currentQuestion.answerSelections
+    .map((isSelected, index) => isSelected ? index : -1)
+    .filter(index => index !== -1);
+}
+
 // 加载现有评估数据
 onMounted(async () => {
   if (props.isEditing && props.assessmentId) {
     try {
       const response = await assessmentAPI.getAssessment(Number(props.assessmentId));
       
-      if (response) {
+      if (response && response.data) {
+        const assessmentData = response.data;
         // 将获取的评估数据填充到表单中
         Object.assign(assessment, {
-          title: response.title || '',
-          description: response.description || '',
-          type: response.type || 'quiz',
-          time_limit: response.time_limit || 30,
-          max_attempts: response.max_attempts || 1,
-          start_date: response.start_date ? response.start_date.split('T')[0] : '',
-          due_date: response.due_date ? response.due_date.split('T')[0] : '',
-          is_published: response.is_published || false,
-          questions: response.questions || [],
-          course_id: response.course_id
+          title: assessmentData.title || '',
+          description: assessmentData.description || '',
+          type: assessmentData.type || 'quiz',
+          time_limit: assessmentData.time_limit || 30,
+          max_attempts: assessmentData.max_attempts || 1,
+          start_date: assessmentData.start_date ? assessmentData.start_date.split('T')[0] : '',
+          due_date: assessmentData.due_date ? assessmentData.due_date.split('T')[0] : '',
+          is_published: assessmentData.is_published || false,
+          questions: assessmentData.questions || [],
+          course_id: assessmentData.course_id
         });
       }
     } catch (error) {
@@ -601,13 +800,15 @@ const showQuestionBank = ref(false);
 const isEditingQuestion = ref(false);
 const editingQuestionIndex = ref(-1);
 
-const currentQuestion = reactive({
+const currentQuestion = reactive<CurrentQuestion>({
   type: 'multiple_choice',
   question: '',
   points: 10,
   options: ['', ''],
   correct_answer: 0,
-  reference_answer: ''
+  reference_answer: '',
+  answers: [], // 新增：用于多选题的答案
+  answerSelections: [false, false] // 新增：用于UI显示的复选框状态
 });
 
 const questionBankFilters = reactive({
@@ -617,7 +818,7 @@ const questionBankFilters = reactive({
 });
 
 // 模拟题库数据
-const bankQuestions = ref([
+const bankQuestions = ref<BankQuestion[]>([
   {
     id: 1,
     question: '什么是人工智能？',
@@ -682,39 +883,81 @@ function addNewQuestion() {
     points: 10,
     options: ['', ''],
     correct_answer: 0,
-    reference_answer: ''
+    reference_answer: '',
+    answers: [], // 多选题答案数组
+    answerSelections: [false, false] // 用于UI显示的复选框状态
   });
   
   showQuestionModal.value = true;
 }
 
-function editQuestion(index) {
+function editQuestion(index: number) {
   isEditingQuestion.value = true;
   editingQuestionIndex.value = index;
   
   const question = assessment.questions[index];
+  
+  // 初始化answerSelections数组，用于多选题的UI显示
+  let answerSelections: boolean[] = [];
+  if (question.type === 'multiple_answer') {
+    const typedQuestion = question as MultipleAnswerQuestion;
+    // 为每个选项创建对应的复选框状态
+    answerSelections = typedQuestion.options?.map((_, i) => 
+      typedQuestion.answers ? typedQuestion.answers.includes(i) : false
+    ) || [];
+  } else if (question.type === 'multiple_choice') {
+    const typedQuestion = question as MultipleChoiceQuestion;
+    // 默认为全部未选中
+    answerSelections = typedQuestion.options?.map(() => false) || [];
+  } else {
+    // 其他题型使用默认空数组
+    answerSelections = [false, false];
+  }
   
   // 复制题目数据到当前题目
   Object.assign(currentQuestion, {
     type: question.type,
     question: question.question,
     points: question.points,
-    options: question.options ? [...question.options] : ['', ''],
-    correct_answer: question.correct_answer,
-    reference_answer: question.reference_answer || ''
+    options: (() => {
+      if (question.type === 'multiple_choice') {
+        return [...(question as MultipleChoiceQuestion).options];
+      } else if (question.type === 'multiple_answer') {
+        return [...(question as MultipleAnswerQuestion).options];
+      } else {
+        return ['', ''];
+      }
+    })(),
+    correct_answer: (() => {
+      if (question.type === 'multiple_choice') {
+        return (question as MultipleChoiceQuestion).correct_answer;
+      } else if (question.type === 'fill_blank') {
+        return (question as FillBlankQuestion).correct_answer || '';
+      } else if (question.type === 'true_false') {
+        return (question as TrueFalseQuestion).correct_answer || '';
+      } else {
+        return 0;
+      }
+    })(),
+    reference_answer: question.type === 'short_answer' ? 
+      (question as ShortAnswerQuestion).reference_answer || '' : '',
+    answers: question.type === 'multiple_answer' ? 
+      [...(question as MultipleAnswerQuestion).answers] : [],
+    answerSelections: answerSelections
   });
   
   showQuestionModal.value = true;
 }
 
-function removeQuestion(index) {
+function removeQuestion(index: number) {
   if (confirm('确定要删除这个题目吗？')) {
     assessment.questions.splice(index, 1);
   }
 }
 
 function saveQuestion() {
-  const questionData = {
+  // Use type assertion to make the compiler happy
+  const questionData: any = {
     type: currentQuestion.type,
     question: currentQuestion.question,
     points: currentQuestion.points
@@ -723,6 +966,9 @@ function saveQuestion() {
   if (currentQuestion.type === 'multiple_choice') {
     questionData.options = [...currentQuestion.options];
     questionData.correct_answer = currentQuestion.correct_answer;
+  } else if (currentQuestion.type === 'multiple_answer') {
+    questionData.options = [...currentQuestion.options];
+    questionData.answers = [...currentQuestion.answers]; // 保存多选题答案
   } else if (currentQuestion.type === 'fill_blank') {
     questionData.correct_answer = currentQuestion.correct_answer;
   } else if (currentQuestion.type === 'short_answer') {
@@ -741,20 +987,26 @@ function saveQuestion() {
 }
 
 function addOption() {
-  if (currentQuestion.options.length < 6) {
+  if (currentQuestion.type === 'multiple_choice' && currentQuestion.options.length < 6) {
+    currentQuestion.options.push('');
+  } else if (currentQuestion.type === 'multiple_answer' && currentQuestion.options.length < 6) {
     currentQuestion.options.push('');
   }
 }
 
-function removeOption(index) {
-  if (currentQuestion.options.length > 2) {
+function removeOption(index: number) {
+  if (currentQuestion.type === 'multiple_choice' && currentQuestion.options.length > 2) {
     currentQuestion.options.splice(index, 1);
     // 如果删除的是正确答案，重置正确答案
-    if (currentQuestion.correct_answer === index) {
+    if (typeof currentQuestion.correct_answer === 'number' && currentQuestion.correct_answer === index) {
       currentQuestion.correct_answer = 0;
-    } else if (currentQuestion.correct_answer > index) {
-      currentQuestion.correct_answer--;
+    } else if (typeof currentQuestion.correct_answer === 'number' && currentQuestion.correct_answer > index) {
+      currentQuestion.correct_answer = currentQuestion.correct_answer - 1;
     }
+  } else if (currentQuestion.type === 'multiple_answer' && currentQuestion.options.length > 2) {
+    currentQuestion.options.splice(index, 1);
+    // 如果删除的是答案，重置答案
+    currentQuestion.answers = currentQuestion.answers.filter(ans => ans !== index);
   }
 }
 
@@ -762,15 +1014,19 @@ function addSelectedQuestions() {
   const selectedQuestions = bankQuestions.value.filter(q => q.selected);
   
   selectedQuestions.forEach(q => {
-    const questionData = {
+    // Use type assertion to make the compiler happy
+    const questionData: any = {
       type: q.type,
       question: q.question,
       points: q.points
     };
     
     if (q.type === 'multiple_choice') {
-      questionData.options = [...q.options];
+      questionData.options = q.options ? [...q.options] : [];
       questionData.correct_answer = q.correct_answer;
+    } else if (q.type === 'multiple_answer') {
+      questionData.options = q.options ? [...q.options] : [];
+      questionData.answers = q.answers ? [...q.answers] : []; // 复制多选题答案
     } else if (q.type === 'fill_blank') {
       questionData.correct_answer = q.correct_answer;
     } else if (q.type === 'short_answer') {
@@ -790,6 +1046,7 @@ function randomizeQuestionOrder() {
   assessment.questions = [...assessment.questions].sort(() => Math.random() - 0.5);
 }
 
+// 保存评估
 function saveAssessment() {
   // 准备评估数据
   const assessmentData = {
@@ -797,10 +1054,78 @@ function saveAssessment() {
     course_id: props.courseId || assessment.course_id
   };
   
+  // 将题目转换为sections格式
+  const sections: AssessmentSection[] = [];
+  
+  // 按题目类型分组
+  const groupedQuestions: Record<string, any[]> = {};
+  
+  assessment.questions.forEach((question: Question) => {
+    if (!groupedQuestions[question.type]) {
+      groupedQuestions[question.type] = [];
+    }
+    
+    // 准备题目数据，保留原始结构
+    const questionData: any = {
+      id: question.id || Date.now() + Math.floor(Math.random() * 1000),
+      stem: question.question,
+      score: question.points,
+      type: question.type
+    };
+    
+    // 根据题目类型设置特定属性
+    if (question.type === 'multiple_choice') {
+      questionData.options = (question as MultipleChoiceQuestion).options;
+      questionData.answer = (question as MultipleChoiceQuestion).correct_answer; // 可能是索引或值
+    } else if (question.type === 'multiple_answer') {
+      questionData.options = (question as MultipleAnswerQuestion).options;
+      questionData.answer = (question as MultipleAnswerQuestion).answers || []; // 答案数组
+    } else if (question.type === 'fill_blank') {
+      // 确保填空题答案格式正确
+      if (Array.isArray((question as FillBlankQuestion).correct_answer) && 
+          (question as FillBlankQuestion).correct_answer.length > 0) {
+        questionData.answer = ((question as FillBlankQuestion).correct_answer as string[]).map((item: string) => item || '');
+      } else {
+        // 如果是单个空白或没有正确格式
+        questionData.answer = (question as FillBlankQuestion).correct_answer || '';
+      }
+      
+      // 设置section_type为fill_blank确保兼容性
+      questionData.section_type = 'fill_blank';
+    } else if (question.type === 'true_false') {
+      questionData.answer = (question as TrueFalseQuestion).correct_answer;
+    } else if (question.type === 'short_answer') {
+      questionData.reference_answer = (question as ShortAnswerQuestion).reference_answer || '';
+    }
+    
+    groupedQuestions[question.type].push(questionData);
+  });
+  
+  // 构建sections
+  Object.entries(groupedQuestions).forEach(([type, questions]) => {
+    if (questions.length > 0) {
+      // 填空题类型特殊处理，保持与后端一致
+      let sectionType = type;
+      if (type === 'fill_blank') {
+        sectionType = 'fill_in_blank'; // 使用后端期望的类型
+      }
+      
+      sections.push({
+        type: sectionType,
+        description: getSectionDescription(type),
+        score_per_question: getAverageScore(questions),
+        questions: questions
+      });
+    }
+  });
+  
   // 如果是编辑模式，添加ID
   if (props.isEditing && props.assessmentId) {
     assessmentData.id = Number(props.assessmentId);
   }
+  
+  // 添加sections到评估数据
+  assessmentData.sections = sections;
   
   // 保存评估
   emit('save', assessmentData);
@@ -811,8 +1136,27 @@ function saveAssessment() {
   }
 }
 
+// 获取分区描述
+function getSectionDescription(type: string): string {
+  switch (type) {
+    case 'multiple_choice': return '选择题：请在每小题给出的选项中选出一个正确答案。';
+    case 'multiple_answer': return '多选题：请在每小题给出的选项中选出所有正确答案。';
+    case 'fill_blank': return '填空题：请在横线上填写正确的内容。';
+    case 'true_false': return '判断题：请判断以下说法是否正确。';
+    case 'short_answer': return '简答题：请简要回答以下问题。';
+    default: return `${type}题`;
+  }
+}
+
+// 计算平均分值
+function getAverageScore(questions: any[]): number {
+  if (!questions || questions.length === 0) return 10;
+  const totalScore = questions.reduce((sum, q) => sum + (q.score || 0), 0);
+  return Math.round(totalScore / questions.length);
+}
+
 // 保存到服务器
-async function saveAssessmentToServer(assessmentData) {
+async function saveAssessmentToServer(assessmentData: any) {
   try {
     if (props.isEditing && props.assessmentId) {
       // 更新现有评估
@@ -861,16 +1205,17 @@ function cancel() {
   }
 }
 
-function questionTypeText(type) {
+function questionTypeText(type: string) {
   switch (type) {
     case 'multiple_choice': return '选择题';
+    case 'multiple_answer': return '多选题';
     case 'fill_blank': return '填空题';
     case 'short_answer': return '简答题';
     default: return '未知类型';
   }
 }
 
-function difficultyClass(difficulty) {
+function difficultyClass(difficulty: string) {
   switch (difficulty) {
     case 'easy': return 'bg-green-100 text-green-800';
     case 'medium': return 'bg-yellow-100 text-yellow-800';
@@ -879,7 +1224,7 @@ function difficultyClass(difficulty) {
   }
 }
 
-function difficultyText(difficulty) {
+function difficultyText(difficulty: string) {
   switch (difficulty) {
     case 'easy': return '简单';
     case 'medium': return '中等';
@@ -923,13 +1268,13 @@ async function generateAssessmentWithAI() {
       
       // 处理sections数据，转换为questions数组
       if (generatedData.sections && generatedData.sections.length > 0) {
-        const processedQuestions = [];
+        const processedQuestions: Question[] = [];
         
-        generatedData.sections.forEach((section, sectionIndex) => {
+        generatedData.sections.forEach((section: any, sectionIndex: number) => {
           if (section.questions && section.questions.length > 0) {
-            section.questions.forEach((question, questionIndex) => {
+            section.questions.forEach((question: any, questionIndex: number) => {
               // 处理每个问题
-              const processedQuestion = {
+              const processedQuestion: any = {
                 id: processedQuestions.length + 1,
                 section_id: sectionIndex + 1,
                 type: question.type || section.type || 'multiple_choice',
@@ -950,7 +1295,7 @@ async function generateAssessmentWithAI() {
         assessment.questions = processedQuestions;
       } else if (generatedData.questions) {
         // 直接使用questions数组
-        assessment.questions = generatedData.questions.map((q, index) => ({
+        assessment.questions = generatedData.questions.map((q: any, index: number) => ({
           id: index + 1,
           type: q.type || 'multiple_choice',
           question: q.stem || q.question || '',
@@ -977,5 +1322,67 @@ async function generateAssessmentWithAI() {
   } finally {
     isGenerating.value = false;
   }
+}
+
+// 填空题相关
+const blankCount = ref(1);
+
+// 更新填空题空格数量
+function updateBlankAnswers() {
+  if (!Array.isArray(currentQuestion.correct_answer)) {
+    // 如果当前不是数组，先转换为数组
+    convertToMultipleBlank();
+  }
+  
+  // 调整数组大小以匹配空格数量
+  const newArray = [...(currentQuestion.correct_answer as string[])];
+  while (newArray.length < blankCount.value) {
+    newArray.push('');
+  }
+  while (newArray.length > blankCount.value) {
+    newArray.pop();
+  }
+  
+  currentQuestion.correct_answer = newArray;
+}
+
+// 转换为多空格填空题
+function convertToMultipleBlank() {
+  const currentAnswer = currentQuestion.correct_answer;
+  if (!Array.isArray(currentAnswer)) {
+    currentQuestion.correct_answer = [currentAnswer as string || ''];
+    blankCount.value = 1;
+  }
+}
+
+// 转换为单空格填空题
+function convertToSingleBlank() {
+  const currentAnswers = currentQuestion.correct_answer;
+  if (Array.isArray(currentAnswers) && currentAnswers.length > 0) {
+    currentQuestion.correct_answer = currentAnswers[0] || '';
+  } else {
+    currentQuestion.correct_answer = '';
+  }
+}
+
+// 多选题选项相关
+function isOptionSelected(index: number) {
+  // 确保answerSelections数组已初始化
+  if (!currentQuestion.answerSelections) {
+    currentQuestion.answerSelections = Array(currentQuestion.options.length).fill(false);
+  }
+  
+  return currentQuestion.answerSelections[index];
+}
+
+function toggleOption(index: number) {
+  // 确保answerSelections数组已初始化
+  if (!currentQuestion.answerSelections) {
+    currentQuestion.answerSelections = Array(currentQuestion.options.length).fill(false);
+  }
+  
+  currentQuestion.answerSelections[index] = !currentQuestion.answerSelections[index];
+  // 更新answers数组以反映当前选中的选项
+  updateMultipleAnswers();
 }
 </script> 
