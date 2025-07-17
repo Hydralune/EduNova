@@ -5,7 +5,19 @@
     <form @submit.prevent="saveAssessment" class="space-y-6">
       <!-- 基本信息 -->
       <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <h3 class="text-lg font-semibold mb-4">基本信息</h3>
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold mb-4">基本信息</h3>
+          <button 
+            @click="showAiGenerationModal = true" 
+            type="button"
+            class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h7z"></path>
+            </svg>
+            AI生成评估
+          </button>
+        </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -448,16 +460,97 @@
         </div>
       </div>
     </div>
+    
+    <!-- 添加AI生成评估模态框 -->
+    <div v-if="showAiGenerationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-xl">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+          <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          AI生成评估
+        </h3>
+        
+        <div v-if="isGenerating" class="py-8 text-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p class="text-gray-600">AI正在生成评估内容，请稍候...</p>
+        </div>
+        
+        <form v-else @submit.prevent="generateAssessmentWithAI" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">评估类型</label>
+            <select 
+              v-model="aiGenerationParams.assessment_type" 
+              class="w-full px-3 py-2 border rounded-md"
+            >
+              <option value="quiz">测验</option>
+              <option value="exam">考试</option>
+              <option value="homework">作业</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">难度</label>
+            <select 
+              v-model="aiGenerationParams.difficulty" 
+              class="w-full px-3 py-2 border rounded-md"
+            >
+              <option value="easy">简单</option>
+              <option value="medium">中等</option>
+              <option value="hard">困难</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">额外要求或提示（可选）</label>
+            <textarea 
+              v-model="aiGenerationParams.extra_info" 
+              rows="3"
+              class="w-full px-3 py-2 border rounded-md"
+              placeholder="例如：侧重于某个章节内容、特定题型要求等"
+            ></textarea>
+          </div>
+          
+          <div class="flex justify-end space-x-3 mt-6">
+            <button 
+              type="button"
+              @click="showAiGenerationModal = false"
+              class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+            >
+              取消
+            </button>
+            <button 
+              type="submit"
+              class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              开始生成
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { assessmentAPI } from '../../api';
+
+const router = useRouter();
 
 const props = defineProps({
   courseId: {
     type: [Number, String],
-    required: true
+    required: false
+  },
+  assessmentId: {
+    type: [Number, String],
+    required: false
+  },
+  isEditing: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -473,6 +566,34 @@ const assessment = reactive({
   due_date: '',
   is_published: false,
   questions: []
+});
+
+// 加载现有评估数据
+onMounted(async () => {
+  if (props.isEditing && props.assessmentId) {
+    try {
+      const response = await assessmentAPI.getAssessment(Number(props.assessmentId));
+      
+      if (response) {
+        // 将获取的评估数据填充到表单中
+        Object.assign(assessment, {
+          title: response.title || '',
+          description: response.description || '',
+          type: response.type || 'quiz',
+          time_limit: response.time_limit || 30,
+          max_attempts: response.max_attempts || 1,
+          start_date: response.start_date ? response.start_date.split('T')[0] : '',
+          due_date: response.due_date ? response.due_date.split('T')[0] : '',
+          is_published: response.is_published || false,
+          questions: response.questions || [],
+          course_id: response.course_id
+        });
+      }
+    } catch (error) {
+      console.error('加载评估数据失败:', error);
+      alert('无法加载评估数据，请重试');
+    }
+  }
 });
 
 const showQuestionModal = ref(false);
@@ -670,18 +791,74 @@ function randomizeQuestionOrder() {
 }
 
 function saveAssessment() {
-  // 这里应该调用API保存评估
-  // 添加课程ID
+  // 准备评估数据
   const assessmentData = {
     ...assessment,
-    course_id: props.courseId
+    course_id: props.courseId || assessment.course_id
   };
   
+  // 如果是编辑模式，添加ID
+  if (props.isEditing && props.assessmentId) {
+    assessmentData.id = Number(props.assessmentId);
+  }
+  
+  // 保存评估
   emit('save', assessmentData);
+  
+  // 如果没有父组件处理保存操作，则自行处理
+  if (emit.length === 0) {
+    saveAssessmentToServer(assessmentData);
+  }
+}
+
+// 保存到服务器
+async function saveAssessmentToServer(assessmentData) {
+  try {
+    if (props.isEditing && props.assessmentId) {
+      // 更新现有评估
+      await assessmentAPI.updateAssessment(Number(props.assessmentId), assessmentData);
+      alert('评估更新成功');
+    } else {
+      // 创建新评估
+      await assessmentAPI.createAssessment(assessmentData);
+      alert('评估创建成功');
+    }
+    
+    // 返回到课程详情页
+    if (assessmentData.course_id) {
+      router.push({
+        path: `/course/${assessmentData.course_id}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else {
+      router.push('/assessments');
+    }
+  } catch (error) {
+    console.error('保存评估失败:', error);
+    alert('保存评估失败，请重试');
+  }
 }
 
 function cancel() {
   emit('cancel');
+  
+  // 如果没有父组件处理取消操作，则自行处理
+  if (emit.length === 0) {
+    // 返回到课程详情页或评估列表
+    if (props.courseId) {
+      router.push({
+        path: `/course/${props.courseId}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else if (assessment.course_id) {
+      router.push({
+        path: `/course/${assessment.course_id}`,
+        query: { activeTab: 'assessments' }
+      });
+    } else {
+      router.push('/assessments');
+    }
+  }
 }
 
 function questionTypeText(type) {
@@ -708,6 +885,97 @@ function difficultyText(difficulty) {
     case 'medium': return '中等';
     case 'hard': return '困难';
     default: return '未知';
+  }
+}
+
+const showAiGenerationModal = ref(false);
+const isGenerating = ref(false);
+const aiGenerationParams = reactive({
+  assessment_type: 'quiz',
+  difficulty: 'easy',
+  extra_info: ''
+});
+
+async function generateAssessmentWithAI() {
+  isGenerating.value = true;
+  
+  try {
+    // 准备请求数据
+    const requestData = {
+      course_name: assessment.title || '',
+      course_description: assessment.description || '',
+      assessment_type: aiGenerationParams.assessment_type,
+      difficulty: aiGenerationParams.difficulty,
+      extra_info: aiGenerationParams.extra_info,
+      course_id: props.courseId || assessment.course_id
+    };
+    
+    // 调用API生成评估
+    const response = await assessmentAPI.generateAssessmentWithAI(requestData);
+    
+    if (response && response.data && response.data.assessment) {
+      const generatedData = response.data.assessment;
+      
+      // 将AI生成的评估数据应用到表单
+      assessment.title = generatedData.title || assessment.title;
+      assessment.description = generatedData.description || assessment.description;
+      assessment.type = generatedData.type || assessment.type;
+      
+      // 处理sections数据，转换为questions数组
+      if (generatedData.sections && generatedData.sections.length > 0) {
+        const processedQuestions = [];
+        
+        generatedData.sections.forEach((section, sectionIndex) => {
+          if (section.questions && section.questions.length > 0) {
+            section.questions.forEach((question, questionIndex) => {
+              // 处理每个问题
+              const processedQuestion = {
+                id: processedQuestions.length + 1,
+                section_id: sectionIndex + 1,
+                type: question.type || section.type || 'multiple_choice',
+                question: question.stem || question.question || '',
+                points: question.score || section.score_per_question || 5,
+                options: question.options || [],
+                correct_answer: question.answer || '',
+                difficulty: question.difficulty || aiGenerationParams.difficulty,
+                explanation: question.explanation || '',
+                reference_answer: question.reference_answer || ''
+              };
+              
+              processedQuestions.push(processedQuestion);
+            });
+          }
+        });
+        
+        assessment.questions = processedQuestions;
+      } else if (generatedData.questions) {
+        // 直接使用questions数组
+        assessment.questions = generatedData.questions.map((q, index) => ({
+          id: index + 1,
+          type: q.type || 'multiple_choice',
+          question: q.stem || q.question || '',
+          points: q.score || 5,
+          options: q.options || [],
+          correct_answer: q.answer || '',
+          difficulty: q.difficulty || aiGenerationParams.difficulty,
+          explanation: q.explanation || '',
+          reference_answer: q.reference_answer || ''
+        }));
+      }
+      
+      // 关闭模态框
+      showAiGenerationModal.value = false;
+      
+      // 显示成功消息
+      alert('评估内容生成成功！');
+    } else {
+      throw new Error('无效的AI响应数据');
+    }
+  } catch (error) {
+    console.error('生成评估失败:', error);
+    alert('生成评估失败，请重试');
+  } finally {
+    isGenerating.value = false;
   }
 }
 </script> 

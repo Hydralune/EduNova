@@ -6,11 +6,8 @@ import json
 import sqlite3
 import argparse
 
-# 设置环境变量
-os.environ["LLM_API_KEY"] = "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh"  # 替换为实际的API密钥
-os.environ["LLM_API_BASE"] = "https://api.siliconflow.cn/v1"
-os.environ["LLM_MODEL"] = "deepseek-chat"
-os.environ["EMBEDDING_MODEL"] = "BAAI/bge-large-zh-v1.5"
+# 加载.env文件
+from dotenv import load_dotenv
 
 # Add the project root to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +16,20 @@ sys.path.insert(0, current_dir)
 # 设置日志记录
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# 首先尝试加载backend/.env
+backend_env_path = os.path.join(current_dir, 'backend', '.env')
+if os.path.exists(backend_env_path):
+    load_dotenv(backend_env_path)
+    logger.info(f"已加载环境变量从: {backend_env_path}")
+
+# 设置默认环境变量（如果.env中没有设置）
+if not os.getenv("LLM_API_BASE"):
+    os.environ["LLM_API_BASE"] = "https://api.siliconflow.cn/v1"
+if not os.getenv("LLM_MODEL"):
+    os.environ["LLM_MODEL"] = "Qwen/Qwen3-32B"
+if not os.getenv("EMBEDDING_MODEL"):
+    os.environ["EMBEDDING_MODEL"] = "BAAI/bge-large-zh-v1.5"
 
 # 创建一个单独的队列状态数据库
 QUEUE_DB_PATH = os.path.join(current_dir, "rag_queue.db")

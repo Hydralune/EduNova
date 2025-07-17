@@ -32,9 +32,12 @@ class KnowledgeGraphBuilder:
     def __init__(self, course_id: str, progress_callback=None):
         self.course_id = course_id
         self.progress_callback = progress_callback
-        self.api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+        self.api_key = os.getenv("LLM_API_KEY")
         self.api_base = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
-        self.model_name = "Qwen/Qwen3-14B"
+        self.model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
+        
+        if not self.api_key:
+            raise ValueError("LLM_API_KEY not found in .env file.")
         
         # 初始化LLM
         self.llm = ChatOpenAI(
@@ -236,10 +239,13 @@ class KnowledgeGraphRetriever:
     
     def __init__(self, course_id: str):
         self.course_id = course_id
-        self.api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+        self.api_key = os.getenv("LLM_API_KEY")
         self.api_base = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
         # 检索时用.env配置模型
         self.model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
+        
+        if not self.api_key:
+            raise ValueError("LLM_API_KEY not found in .env file.")
         
         # 初始化LLM
         self.llm = ChatOpenAI(

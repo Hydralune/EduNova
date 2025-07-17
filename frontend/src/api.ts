@@ -3,7 +3,7 @@ import axios from 'axios'
 // 创建axios实例
 const api = axios.create({
   baseURL: 'http://localhost:5001/api', // 直接连接后端API
-  timeout: 10000,
+  timeout: 60000, // 增加超时时间到60秒
   headers: {
     'Content-Type': 'application/json',
   },
@@ -117,7 +117,35 @@ export const authAPI = {
 
 // 用户管理API
 export const userAPI = {
-  getUsers: (params?: any) => api.get('/admin/users', { params }),
+  getUsers: (params?: any) => {
+    console.log('调用getUsers API, params:', params);
+    return api.get('/admin/users', { params })
+      .then((response: any) => {
+        console.log('原始API响应:', response);
+        // 检查响应格式
+        if (response && typeof response === 'object') {
+          // 如果直接包含users数组
+          if (Array.isArray(response.users)) {
+            return response;
+          }
+          // 如果包含在data中
+          else if (response.data && Array.isArray(response.data.users)) {
+            return response.data;
+          }
+          // 如果直接是数组
+          else if (Array.isArray(response)) {
+            return { users: response, total: response.length };
+          }
+        }
+        // 如果格式不符合预期，返回一个标准格式
+        console.warn('API响应格式与预期不符:', response);
+        return { users: [], total: 0 };
+      })
+      .catch(error => {
+        console.error('getUsers API错误:', error);
+        throw error;
+      });
+  },
   getUser: (userId: number) => api.get(`/admin/users/${userId}`),
   createUser: (data: any) => api.post('/admin/users', data),
   updateUser: (userId: number, data: any) => api.put(`/admin/users/${userId}`, data),
@@ -162,6 +190,7 @@ export const courseAPI = {
     api.post(`/courses/${courseId}/students`, { student_ids: studentIds }),
   removeStudentFromCourse: (courseId: number, studentId: number) => 
     api.delete(`/courses/${courseId}/students/${studentId}`),
+  getCourseChapters: (courseId: number) => api.get(`/courses/${courseId}/chapters`),
 }
 
 // 课件资源API
@@ -205,6 +234,112 @@ export const assessmentAPI = {
   // 创建评估
   createAssessment: (data: any) => {
     return api.post('/assessments', data);
+  },
+
+  // 使用AI自动生成评估
+  generateAssessmentWithAI: async (data: any) => {
+    try {
+      console.log('发送评估生成请求:', data);
+      
+      // 使用更健壮的错误处理方式发送请求
+      let response;
+      try {
+        response = await api.post('/assessments/ai-generate', data, {
+          timeout: 200000, // 增加到200秒超时，因为初始请求可能需要更多时间
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+        console.log('API原始响应:', response);
+      } catch (axiosError: any) {
+        console.error('API请求错误:', axiosError);
+        
+        // 如果有响应但状态码不是2xx
+        if (axiosError.response) {
+          console.log('错误响应数据:', axiosError.response.data);
+          // 尝试从错误响应中提取请求ID
+          if (axiosError.response.data && axiosError.response.data.request_id) {
+            return { data: axiosError.response.data };
+          }
+        }
+        throw axiosError;
+      }
+      
+      // 确保我们返回的是一个标准格式的响应对象
+      if (!response) {
+        return { data: null };
+      }
+      
+      // 特别处理: 检查data是否是直接的响应对象
+      if (response.data === undefined) {
+        console.log('响应中没有data属性，尝试直接使用response');
+        return { data: response };
+      }
+      
+      console.log('收到生成响应:', response.data);
+      
+      // 确保响应格式一致
+      if (response && response.data && !response.data.request_id && typeof response.data === 'string') {
+        try {
+          // 尝试将字符串解析为JSON
+          const parsedData = JSON.parse(response.data);
+          return { data: parsedData };
+        } catch (e) {
+          console.error('无法将响应解析为JSON:', e);
+        }
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('AI生成评估请求失败:', error);
+      throw error;
+    }
+  },
+
+  // 查询AI评估生成状态
+  getAIGenerationStatus: async (requestId: string) => {
+    try {
+      console.log('查询生成状态:', requestId);
+      const response = await api.get(`/assessments/ai-generate/${requestId}`, {
+        timeout: 15000 // 增加到15秒超时，确保获取状态的稳定性
+      });
+      
+      console.log('状态查询原始响应:', response);
+      
+      // 确保返回标准格式的响应对象
+      if (!response) {
+        return { data: { status: 'error', message: '无响应' } };
+      }
+      
+      // 特别处理: 检查响应格式
+      if (response.data === undefined) {
+        console.log('状态响应中没有data属性，尝试直接使用response');
+        // 解构response对象，但不包含可能导致重复的属性
+        const { status, ...restProps } = response;
+        return { data: { status: 'processing', ...restProps } };
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('查询AI生成状态失败:', error);
+      
+      // 尝试从错误响应中提取有用信息
+      if (error.response && error.response.data) {
+        return { data: { 
+          status: 'error', 
+          message: error.response.data.message || '状态查询失败',
+          error: error.message 
+        }};
+      }
+      
+      // 返回一个带有错误信息的标准响应对象，而不是抛出异常
+      return { data: { 
+        status: 'error', 
+        message: error.message || '状态查询失败',
+        error: '连接服务器失败'
+      }};
+    }
   },
 
   // 更新评估
@@ -287,6 +422,22 @@ export const ragAiAPI = {
     api.post('/rag/search', data),
   
   // AI生成功能
+  generateLessonPlan: (data: {
+    outlineType: 'course' | 'class';
+    courseId?: number | string;
+    chapterId?: number | string;
+    gradeSubject: string;
+    duration?: string;
+    learningObjectives?: string;
+    keyPoints?: string;
+    studentLevel?: string;
+    customStudentLevel?: string;
+    activities?: string[];
+    teachingStyle?: string;
+    assessmentMethods?: string[];
+    detailLevel?: number;
+  }) => api.post('/rag/generate-lesson-plan', data),
+  
   generateCourseContent: (data: any) => api.post('/ai/generate-course-content', data),
   generateAssessment: (data: any) => api.post('/ai/generate-assessment', data),
   autoGradeAnswer: (data: any) => api.post('/ai/auto-grade', data),

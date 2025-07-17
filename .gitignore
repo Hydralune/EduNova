@@ -98,3 +98,9 @@ RAG/__pycache__/
 RAG/hirag/__pycache__/
 RAG/examples/outputs/
 RAG/assignments/private/ 
+
+# Explicitly NOT ignore these dependency files
+!requirements.txt
+!package.json
+!*/requirements.txt
+!*/package.json 

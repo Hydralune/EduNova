@@ -11,7 +11,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-load_dotenv()  # First try to load from backend/.env
+backend_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+if os.path.exists(backend_env_path):
+    load_dotenv(backend_env_path)  # Load from backend/.env
 rag_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'RAG', '.env')
 if os.path.exists(rag_env_path):
     load_dotenv(rag_env_path)  # If exists, load from RAG/.env
@@ -28,9 +30,12 @@ def get_embedding(texts: Union[str, List[str]], max_retries: int = 3) -> Dict[st
         Dictionary containing the embedding results
     """
     # 使用Silicon Flow API配置
-    api_key = "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh"
-    api_base = "https://api.siliconflow.cn/v1"
+    api_key = os.getenv("LLM_API_KEY")
+    api_base = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
     embedding_model = "BAAI/bge-large-zh-v1.5"
+    
+    if not api_key:
+        raise ValueError("LLM_API_KEY not found in .env file.")
     
     # Ensure texts is a list
     if isinstance(texts, str):

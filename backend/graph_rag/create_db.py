@@ -53,9 +53,9 @@ def get_llm():
     """Initializes and returns the LLM."""
     # Fetch credentials from generic environment variables so that any provider compatible with
     # the OpenAI API can be plugged in by simply editing the .env file (no code changes needed).
-    api_key = os.getenv("LLM_API_KEY", "sk-dfthbfklqzgxhhrfiwukmgfakpcfuletjjvapquirwwcuteh")
+    api_key = os.getenv("LLM_API_KEY")
     base_url = os.getenv("LLM_API_BASE", "https://api.siliconflow.cn/v1")
-    model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-8B")
+    model_name = os.getenv("LLM_MODEL", "Qwen/Qwen3-32B")
 
     if not api_key:
         raise ValueError("LLM_API_KEY not found in .env file.")

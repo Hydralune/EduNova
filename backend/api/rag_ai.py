@@ -332,11 +332,11 @@ def chat_with_ai():
             def generate():
                 # 流式请求
                 with requests.post(
-                    f"{api_base}/chat/completions", 
-                    headers=headers, 
+                    f"{api_base}/chat/completions",  # 直接使用API基础URL，不添加额外路径前缀
+                    headers=headers,
                     json=payload,
                     stream=True,
-                    timeout=60
+                    timeout=120  # 增加超时时间到120秒
                 ) as response:
                     
                     if response.status_code != 200:
@@ -914,4 +914,253 @@ def batch_remove_from_knowledge_base():
         return jsonify({
             'status': 'error',
             'message': f'批量删除失败: {str(e)}'
+        }), 500
+
+@rag_api.route('/generate-lesson-plan', methods=['POST'])
+@jwt_required()
+def generate_lesson_plan():
+    """生成课程教案或总纲"""
+    # 在应用上下文中记录日志
+    app_logger = current_app.logger
+    app_logger.info("收到生成教案/总纲的请求")
+    
+    # 获取请求数据
+    data = request.json
+    if not data:
+        app_logger.error("无效的请求数据")
+        return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+    
+    # 获取用户ID
+    user_id = get_jwt_identity()
+    app_logger.info(f"用户ID: {user_id}")
+    
+    # 获取请求参数
+    outline_type = data.get('outlineType', 'course')  # 'course'或'class'
+    course_id = data.get('courseId')
+    chapter_id = data.get('chapterId')
+    grade_subject = data.get('gradeSubject')
+    duration = data.get('duration', '')
+    learning_objectives = data.get('learningObjectives', '')
+    key_points = data.get('keyPoints', '')
+    student_level = data.get('studentLevel', '')
+    custom_student_level = data.get('customStudentLevel', '')
+    activities = data.get('activities', [])
+    teaching_style = data.get('teachingStyle', '')
+    assessment_methods = data.get('assessmentMethods', [])
+    detail_level = data.get('detailLevel', 2)  # 默认为2级详细度
+    
+    # 验证必填参数
+    if not grade_subject:
+        app_logger.error("缺少必填参数: gradeSubject")
+        return jsonify({'status': 'error', 'message': '缺少必填参数: 学段/年级/学科'}), 400
+    
+    app_logger.info(f"开始生成{outline_type}，学科: {grade_subject}")
+    
+    try:
+        # 获取API配置
+        api_key, api_base, model_name = get_api_config()
+        
+        if not api_key or not api_base:
+            app_logger.error("API密钥或基础URL未配置")
+            return jsonify({
+                'status': 'error',
+                'message': 'API密钥或基础URL未配置'
+            }), 500
+        
+        model_name = "deepseek-ai/DeepSeek-R1"
+        app_logger.info(f"生成教案使用模型: {model_name}")
+        
+        # 获取课程和章节信息（如果有）
+        course_info = ""
+        chapter_info = ""
+        selected_chapter_title = ""
+        
+        if course_id:
+            course = Course.query.get(course_id)
+            if course:
+                course_info = f"\n- 课程名称：{course.name}"
+                if course.description:
+                    course_info += f"\n- 课程描述：{course.description}"
+                
+                # 如果是课堂教案且指定了章节
+                if outline_type == 'class' and chapter_id:
+                    try:
+                        # 获取章节文件路径
+                        chapters_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'chapters')
+                        course_chapters_folder = os.path.join(chapters_folder, str(course_id))
+                        chapters_file_path = os.path.join(course_chapters_folder, 'chapters.json')
+                        
+                        # 如果章节文件存在，则读取指定章节
+                        if os.path.exists(chapters_file_path):
+                            with open(chapters_file_path, 'r', encoding='utf-8') as f:
+                                chapters_data = json.load(f)
+                            
+                            # 在前端，章节ID是从1开始的索引，这里需要转换为基于0的索引
+                            try:
+                                idx = int(chapter_id) - 1
+                                if 0 <= idx < len(chapters_data):
+                                    chapter = chapters_data[idx]
+                                    selected_chapter_title = chapter.get('title', '')
+                                    chapter_info = f"\n- 选择章节：{selected_chapter_title}"
+                                    
+                                    # 添加小节信息
+                                    if 'sections' in chapter and chapter['sections']:
+                                        chapter_info += "\n- 章节小节："
+                                        for section in chapter['sections']:
+                                            chapter_info += f"\n  * {section.get('title', '')}"
+                                            if 'content' in section:
+                                                chapter_info += f"：{section.get('content', '')}"
+                            except (ValueError, IndexError):
+                                app_logger.warning(f"无法获取章节信息，ID: {chapter_id}")
+                    except Exception as e:
+                        app_logger.error(f"获取章节信息失败: {str(e)}")
+        
+        # 学生学情
+        student_level_text = student_level or custom_student_level
+        
+        # 构建活动类型字符串
+        activities_text = "、".join(activities) if activities else ""
+        
+        # 构建评估方式字符串
+        assessment_text = "、".join(assessment_methods) if assessment_methods else ""
+        
+        # 构建系统提示词
+        system_prompt = f"""你是一位专业的教育教学专家，精通课程设计和教案编写。
+现在，你需要为教师生成一个{'课程总纲' if outline_type == 'course' else '课堂教案'}，请确保内容专业、实用且格式美观。
+
+请根据以下提供的信息，生成完整的{'课程总纲' if outline_type == 'course' else '课堂教案'}:
+{course_info}
+{chapter_info}
+
+{'课程总纲应包含整体课程规划、学习目标、教学方法和评价方式等内容。' if outline_type == 'course' else '课堂教案应包含本节课的教学设计、活动安排、教学流程和时间分配等内容。'}
+
+请按照Markdown格式输出，确保层次清晰，内容详实。
+"""
+
+        # 构建用户提示词
+        user_prompt = f"""请为以下条件生成一个专业的{'课程总纲' if outline_type == 'course' else '课堂教案'}:
+
+- 学段/年级/学科：{grade_subject}
+{f"- 课时长度：{duration}" if duration else ""}
+{f"- 核心教学目标/学习目标：{learning_objectives}" if learning_objectives else ""}
+{f"- 教学重点与难点：{key_points}" if key_points else ""}
+{f"- 学生学情预设：{student_level_text}" if student_level_text else ""}
+{f"- 所需课堂活动类型：{activities_text}" if activities_text else ""}
+{f"- 教学风格/模式倾向：{teaching_style}" if teaching_style else ""}
+{f"- 评估方式：{assessment_text}" if assessment_text else ""}
+- 详细程度：{detail_level}（1-简洁，3-详细）
+
+请提供结构化、专业的{'课程总纲' if outline_type == 'course' else '课堂教案'}，使用Markdown格式，包含清晰的标题、列表和合适的结构安排。
+"""
+
+        # 准备API请求头
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        # 准备API请求体
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 4000,
+            "stream": True  # 启用流式响应
+        }
+        
+        app_logger.info(f"向API发送请求, 基础URL: {api_base}, 模型: {model_name}")
+        
+        # 创建会话ID
+        conversation_id = f"lesson_plan_{user_id}_{int(time.time())}"
+        
+        # 采用流式响应
+        def generate():
+            # 流式请求API
+            full_response = ""
+            try:
+                with requests.post(
+                    f"{api_base}/chat/completions",  # 直接使用API基础URL，不添加额外路径前缀
+                    headers=headers,
+                    json=payload,
+                    stream=True,
+                    timeout=120  # 增加超时时间到120秒
+                ) as response:
+                    
+                    if response.status_code != 200:
+                        error_msg = f"API请求失败: {response.status_code}, {response.text}"
+                        app_logger.error(error_msg)
+                        yield f"data: {json.dumps({'status': 'error', 'message': error_msg})}\n\n"
+                        return
+                    
+                    # 处理流式响应
+                    for line in response.iter_lines():
+                        if line:
+                            line_text = line.decode('utf-8')
+                            if line_text.startswith('data: '):
+                                line_json = line_text[6:]  # 移除 'data: ' 前缀
+                                if line_json.strip() == '[DONE]':
+                                    break
+                                
+                                try:
+                                    chunk = json.loads(line_json)
+                                    if 'choices' in chunk and len(chunk['choices']) > 0:
+                                        if 'delta' in chunk['choices'][0] and 'content' in chunk['choices'][0]['delta']:
+                                            content = chunk['choices'][0]['delta']['content']
+                                            if content:
+                                                full_response += content
+                                                # 发送数据到客户端
+                                                yield f"data: {json.dumps({'status': 'chunk', 'content': content})}\n\n"
+                                except json.JSONDecodeError:
+                                    continue
+                
+                # 保存用户请求到数据库
+                user_message = ChatHistory(
+                    user_id=user_id,
+                    course_id=course_id,
+                    conversation_id=conversation_id,
+                    role='user',
+                    message=user_prompt,
+                    timestamp=int(time.time())
+                )
+                db.session.add(user_message)
+                
+                # 保存AI回复到数据库
+                ai_message = ChatHistory(
+                    user_id=user_id,
+                    course_id=course_id,
+                    conversation_id=conversation_id,
+                    role='assistant',
+                    message=full_response,
+                    timestamp=int(time.time())
+                )
+                db.session.add(ai_message)
+                db.session.commit()
+                
+                # 发送结束信号
+                yield f"data: {json.dumps({'status': 'done', 'conversation_id': conversation_id, 'outline_type': outline_type, 'selected_chapter': selected_chapter_title})}\n\n"
+                
+            except requests.exceptions.Timeout:
+                error_msg = "请求超时，请稍后再试"
+                app_logger.error(f"生成教案时出错: {error_msg}")
+                yield f"data: {json.dumps({'status': 'error', 'message': error_msg})}\n\n"
+            except Exception as e:
+                error_msg = f"生成教案时出错: {str(e)}"
+                app_logger.error(error_msg)
+                yield f"data: {json.dumps({'status': 'error', 'message': error_msg})}\n\n"
+        
+        # 设置CORS头并返回流式响应
+        response = Response(stream_with_context(generate()), content_type='text/event-stream')
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['X-Accel-Buffering'] = 'no'  # 禁用Nginx缓冲
+        response.headers['Access-Control-Allow-Origin'] = '*'  # 允许任何源访问
+        return response
+    
+    except Exception as e:
+        app_logger.error(f"生成教案时出错: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'生成教案失败: {str(e)}'
         }), 500
