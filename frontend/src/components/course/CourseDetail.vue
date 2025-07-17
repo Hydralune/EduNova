@@ -8,6 +8,7 @@
       <MaterialPreview 
         :courseId="courseId" 
         :initialMaterialId="previewMaterialId"
+        :userId="authStore.user?.id"
         @close="showMaterialPreview = false"
       />
     </div>
@@ -94,7 +95,7 @@
           </div>
 
           <div v-if="course.chapters && course.chapters.length > 0" class="space-y-4">
-            <div v-for="(chapter, index) in course.chapters" :key="index" class="border rounded-md overflow-hidden cursor-pointer hover:bg-gray-50" @click="goLearning(index)">
+            <div v-for="(chapter, index) in course.chapters" :key="index" class="border rounded-md overflow-hidden">
               <div class="flex justify-between items-center p-4 bg-gray-50">
                 <h4 class="font-medium">{{ chapter.title }}</h4>
                 <span class="text-sm text-gray-500">{{ chapter.duration }}分钟</span>
@@ -1596,10 +1597,5 @@ function handleFileDrop(event: DragEvent) {
       materialTitle.value = materialFile.value.name;
     }
   }
-}
-
-// in <script setup> section after router const or other functions
-function goLearning(idx: number) {
-  router.push({ name: 'learning', params: { courseId: courseId.value }, query: { chapter: idx } })
 }
 </script> 

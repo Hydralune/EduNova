@@ -156,6 +156,14 @@ export const userAPI = {
 export const courseAPI = {
   getCourses: (params?: any) => api.get('/courses', { params }),
   getCourse: (courseId: number) => api.get(`/courses/${courseId}`),
+  getCourseLearningTime: (courseId: number) => api.get(`/courses/${courseId}/learning-time`),
+  recordLearning: (data: {
+    student_id: number | string;
+    course_id: number | string;
+    activity_type: string;
+    activity_detail?: any;
+    duration?: number;
+  }) => api.post('/record', data),
   createCourse: (data: any, coverImage?: File) => {
     if (coverImage) {
       const formData = new FormData()

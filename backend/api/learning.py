@@ -816,9 +816,6 @@ def get_course_students(course_id):
                 filtered_students.append(student)
         students = filtered_students
     
-    # 获取课程的所有评估
-    assessments = Assessment.query.filter_by(course_id=course_id).all()
-    
     # 准备响应数据
     students_data = []
     for student in students:
@@ -828,40 +825,23 @@ def get_course_students(course_id):
             course_id=course_id
         ).order_by(LearningRecord.timestamp.desc()).first()
         
+        # 计算学生进度（这里简化为随机值，实际应用中应该基于完成的材料和评估）
+        progress = 0
+        if learning_records:
+            # 这里可以实现更复杂的进度计算逻辑
+            progress = 50  # 示例值
+        
         # 获取最后活动时间
         last_activity = None
         if learning_records:
             last_activity = learning_records.timestamp.strftime('%Y-%m-%d %H:%M')
-        
-        # 获取学生的评估完成情况
-        assessment_status = []
-        for assessment in assessments:
-            # 获取学生的最新提交
-            latest_submission = StudentAnswer.query.filter_by(
-                student_id=student.id,
-                assessment_id=assessment.id
-            ).order_by(StudentAnswer.submitted_at.desc()).first()
-            
-            status = {
-                'assessment_id': assessment.id,
-                'title': assessment.title,
-                'completed': False,
-                'score': 0,
-                'total_score': assessment.total_score
-            }
-            
-            if latest_submission:
-                status['completed'] = True
-                status['score'] = latest_submission.score
-            
-            assessment_status.append(status)
         
         # 构建学生数据
         student_data = {
             'id': student.id,
             'name': student.full_name or student.username,
             'email': student.email,
-            'assessments': assessment_status,
+            'progress': progress,
             'last_activity': last_activity or '未活动'
         }
         students_data.append(student_data)
@@ -2606,4 +2586,29 @@ def get_ai_assessment_file(request_id):
         })
         response.headers.add('Access-Control-Allow-Origin', '*')
         return response, 500
+
+@learning_bp.route('/courses/<int:course_id>/learning-time', methods=['GET'])
+@jwt_required()
+def get_course_learning_time(course_id):
+    """获取课程的学习时间统计"""
+    # 获取当前用户ID
+    user_id = get_jwt_identity()
+    
+    # 查询该用户在这门课程上的所有学习记录
+    learning_records = LearningRecord.query.filter_by(
+        student_id=user_id,
+        course_id=course_id
+    ).all()
+    
+    # 计算总学习时间（秒）
+    total_time = sum(record.duration or 0 for record in learning_records)
+    
+    # 转换为小时，保留一位小数
+    total_hours = round(total_time / 3600, 1)
+    
+    return jsonify({
+        'course_id': course_id,
+        'total_time_seconds': total_time,
+        'total_time_hours': total_hours
+    })
 

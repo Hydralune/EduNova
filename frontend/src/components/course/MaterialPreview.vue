@@ -1,36 +1,8 @@
 <template>
-  <div class="material-preview-container flex">
+  <div class="material-preview-container">
     <!-- 左侧文件列表 -->
-    <div
-      :class="[
-        'file-sidebar transition-all duration-200 relative overflow-visible',
-        isSidebarCollapsed ? 'w-20 rounded-r-lg cursor-pointer' : 'w-72'
-      ]"
-      @click="isSidebarCollapsed && toggleSidebar"
-    >
-      <!-- 折叠状态下显示大图标 -->
-      <template v-if="isSidebarCollapsed">
-        <div
-          class="flex flex-col items-center justify-center py-4 space-y-3 cursor-pointer"
-          @click.stop="toggleSidebar"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M3 4.5A1.5 1.5 0 014.5 3h6.379a1.5 1.5 0 011.06.44l1.621 1.62a1.5 1.5 0 001.06.44H19.5A1.5 1.5 0 0121 6v13.5A1.5 1.5 0 0119.5 21h-15A1.5 1.5 0 013 19.5v-15z" />
-          </svg>
-        </div>
-      </template>
-
-      <!-- 展开时内容 -->
-      <template v-if="!isSidebarCollapsed">
-      <h3
-        class="text-lg font-semibold flex items-center space-x-1 whitespace-nowrap cursor-pointer"
-        @click.stop="toggleSidebar"
-      >
-        <span>课程资源</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M3 4.5A1.5 1.5 0 014.5 3h6.379a1.5 1.5 0 011.06.44l1.621 1.62a1.5 1.5 0 001.06.44H19.5A1.5 1.5 0 0121 6v13.5A1.5 1.5 0 0119.5 21h-15A1.5 1.5 0 013 19.5v-15z" />
-        </svg>
-      </h3>
+    <div class="file-sidebar">
+      <h3 class="text-lg font-semibold mb-4">课程文件</h3>
       <div v-if="materials.length > 0" class="space-y-2">
         <div 
           v-for="material in materials" 
@@ -49,7 +21,7 @@
       <div v-else class="text-center py-4">
         <p class="text-gray-500">暂无课件资源</p>
       </div>
-      <div v-if="!props.hideBackButton" class="mt-4 space-y-2">
+      <div class="mt-4 space-y-2">
         <button @click="closePreview" class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center w-full">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -57,11 +29,10 @@
           返回课程
         </button>
       </div>
-      </template>
     </div>
 
     <!-- 右侧预览区域 -->
-    <div class="preview-area flex-1 overflow-auto">
+    <div class="preview-area">
       <div v-if="selectedMaterial" class="preview-content">
         <div class="preview-header">
           <h2 class="text-xl font-bold">{{ selectedMaterial.title }}</h2>
@@ -77,10 +48,10 @@
         
         <div class="preview-body">
           <!-- PDF 预览 -->
-          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview h-[85vh]">
-            <PdfViewer
-              :pdf-url="getFileUrl(selectedMaterial.file_path || '')" 
-              @download="downloadMaterial(selectedMaterial.id)" 
+          <div v-if="isPdfFile(selectedMaterial)" class="pdf-preview">
+            <PdfEmbed 
+              :source="getFileUrl(selectedMaterial.file_path || '')" 
+              style="width: 100%; height: 600px;" 
             />
           </div>
           
@@ -183,11 +154,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, defineProps, defineEmits, watch, computed, nextTick } from 'vue';
-import { materialAPI } from '../../api';
+import { ref, onMounted, defineProps, defineEmits, watch, computed, onBeforeUnmount } from 'vue';
+import { materialAPI, courseAPI } from '../../api';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import PdfViewer from './PdfViewer.vue';
+import PdfEmbed from 'vue-pdf-embed'; // 使用vue-pdf-embed
 import MarkdownViewer from './MarkdownViewer.vue';
 
 interface Material {
@@ -210,9 +181,9 @@ const props = defineProps({
     type: [Number, String, null],
     default: null
   },
-  hideBackButton: {
-    type: Boolean,
-    default: false
+  userId: {  // 添加userId prop
+    type: [Number, String],
+    required: true
   }
 });
 
@@ -223,20 +194,46 @@ const selectedMaterial = ref<Material | null>(null);
 const textContent = ref<string | null>(null);
 const markdownContent = ref<string | null>(null);
 
-// 折叠侧边栏状态
-const isSidebarCollapsed = ref(false);
-function toggleSidebar() {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+// 添加学习时间记录相关变量
+const startTime = ref<number>(0);
+const isTracking = ref(false);
+
+// 开始记录学习时间
+function startTimeTracking() {
+  if (!isTracking.value) {
+    startTime.value = Date.now();
+    isTracking.value = true;
+  }
 }
 
-watch(isSidebarCollapsed, () => {
-  // After the sidebar state changes, wait for the DOM to update, then for the animation to finish.
-  nextTick(() => {
-    setTimeout(() => {
-      // Dispatch a standard 'resize' event, which many components listen for to re-calculate their size.
-      window.dispatchEvent(new Event('resize'));
-    }, 300); // This duration should match the CSS transition duration.
-  });
+// 结束记录学习时间并发送到后端
+async function endTimeTracking() {
+  if (isTracking.value) {
+    const endTime = Date.now();
+    const duration = Math.round((endTime - startTime.value) / 1000); // 转换为秒
+    
+    try {
+      await courseAPI.recordLearning({
+        student_id: props.userId,
+        course_id: props.courseId,
+        activity_type: 'view_material',
+        activity_detail: {
+          material_id: selectedMaterial.value?.id,
+          material_title: selectedMaterial.value?.title
+        },
+        duration: duration
+      });
+    } catch (error) {
+      console.error('记录学习时间失败:', error);
+    }
+    
+    isTracking.value = false;
+  }
+}
+
+// 在组件卸载前记录学习时间
+onBeforeUnmount(() => {
+  endTimeTracking();
 });
 
 const renderedMarkdown = computed(() => {
@@ -274,9 +271,17 @@ async function fetchMaterials() {
 }
 
 function selectMaterial(material: Material) {
+  // 如果之前在查看其他材料，先记录那个材料的学习时间
+  if (selectedMaterial.value) {
+    endTimeTracking();
+  }
+  
   selectedMaterial.value = material;
   textContent.value = null;
   markdownContent.value = null;
+  
+  // 开始记录新材料的学习时间
+  startTimeTracking();
   
   console.log('选择的文件:', material);
   console.log('文件类型:', material.material_type);
@@ -486,13 +491,14 @@ function isTextFile(material: Material | null) {
 
 <style scoped>
 .material-preview-container {
-  display: flex;
+  display: grid;
+  grid-template-columns: 300px 1fr;
   height: 100%;
   min-height: 600px;
 }
 
 .file-sidebar {
-  padding: 1rem 1.5rem; /* default padding, will be zero when collapsed via px-0 */
+  padding: 1.5rem;
   border-right: 1px solid #e5e7eb;
   overflow-y: auto;
   background-color: #f9fafb;
