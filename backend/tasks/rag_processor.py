@@ -81,7 +81,8 @@ def process_knowledge_queue(queue_id):
             success = process_document_with_progress(
                 course_id=str(queue_item.course_id),
                 file_path=file_path,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                purpose=queue_item.purpose or 'general'  # 传递文件用途参数
             )
             
             # Update status based on result

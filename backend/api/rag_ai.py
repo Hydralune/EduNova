@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from backend.models.learning import ChatHistory, KnowledgeBaseQueue
 from backend.extensions import db
 from backend.models.course import Course
+import hashlib
 
 # 禁用 ChromaDB telemetry 以防止崩溃
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
@@ -22,6 +23,32 @@ logger = logging.getLogger(__name__)
 RAG_AVAILABLE = False
 hybrid_retriever = None
 format_docs = None
+
+# 文件哈希计算函数
+def calculate_file_hash(file_path):
+    """计算文件的SHA-256哈希值，用于检测重复文件"""
+    try:
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # 读取文件块并更新哈希
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        logger.error(f"计算文件哈希值时出错: {str(e)}")
+        return None
+
+def check_file_exists_by_hash(file_hash, course_id=None):
+    """检查具有相同哈希值的文件是否已存在于知识库队列中"""
+    try:
+        query = KnowledgeBaseQueue.query.filter_by(file_hash=file_hash)
+        if course_id:
+            query = query.filter_by(course_id=course_id)
+        existing_file = query.first()
+        return existing_file
+    except Exception as e:
+        logger.error(f"检查文件哈希值时出错: {str(e)}")
+        return None
 
 # 加载环境变量
 load_dotenv()  # 首先尝试加载backend/.env
@@ -250,7 +277,13 @@ def chat_with_ai():
                     
                     # 使用RAG检索相关文档
                     app_logger.info(f"使用RAG检索，课程ID: {course_id}")
-                    retrieved_docs = hybrid_retriever(message, str(course_id))
+                    
+                    # 确保hybrid_retriever不是None
+                    if hybrid_retriever is None:
+                        app_logger.error("hybrid_retriever未初始化")
+                        retrieved_docs = []
+                    else:
+                        retrieved_docs = hybrid_retriever(message, str(course_id))
                     
                     # 添加调试日志，查看文档元数据
                     app_logger.info(f"检索到 {len(retrieved_docs) if retrieved_docs else 0} 个文档")
@@ -259,7 +292,12 @@ def chat_with_ai():
                     
                     # 格式化检索到的文档
                     if retrieved_docs:
-                        context = format_docs(retrieved_docs)
+                        # 确保format_docs不是None
+                        if format_docs is None:
+                            app_logger.error("format_docs未初始化")
+                            context = "\n".join([doc.page_content for doc in retrieved_docs])
+                        else:
+                            context = format_docs(retrieved_docs)
                         
                         # 提取文档源信息 - 改进的版本
                         for doc in retrieved_docs:
@@ -333,10 +371,9 @@ def chat_with_ai():
 3. 如果参考资料中包含完整的教程或步骤，请完整保留这些步骤的顺序和细节
 4. 对于代码示例，保持原样引用，不要简化或修改
 5. 只有在参考资料中信息有限或没有相关信息时，才使用你自身的知识进行补充
-6. 在回答中，当引用特定内容时，使用括号标注来源，例如：(参考文档片段7)
-7. 在回答结束时，必须添加一行"参考来源:"，然后列出你使用的所有参考资料
+6.  在回答结束时，必须添加一行"参考来源:"，然后列出你使用的所有参考资料
 
-你的回答应该尽可能地忠于参考资料中的原始内容，同时保持友好、专业且易于理解。
+你的回答应该尽可能地忠于参考资料中的原始内容，同时保持友好、专业且易于理解，当参考资料完全无法满足要求时，你再开始考虑用自己的知识进行回答。
 
 参考资料:
 {context}"""
@@ -665,8 +702,12 @@ def add_to_knowledge_base():
     from backend.tasks.rag_processor import start_processing_queue_item
     
     data = request.json
+    if not data:
+        return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+        
     course_id = data.get('course_id')
     file_path = data.get('file_path')
+    purpose = data.get('purpose', 'general')  # 新增：文件用途，默认为general
     
     if not course_id or not file_path:
         return jsonify({'status': 'error', 'message': '参数不完整'}), 400
@@ -676,42 +717,58 @@ def add_to_knowledge_base():
     if not os.path.exists(full_path):
         return jsonify({'status': 'error', 'message': '文件不存在'}), 404
     
-    # Check if file is already in queue or processed
-    existing_queue = KnowledgeBaseQueue.query.filter_by(
-        course_id=course_id,
-        file_path=file_path
-    ).first()
+    # 计算文件哈希值
+    file_hash = calculate_file_hash(full_path)
+    if not file_hash:
+        return jsonify({'status': 'error', 'message': '无法计算文件哈希值'}), 500
     
-    if existing_queue:
-        # If it's completed, we can reprocess it
-        if existing_queue.status == 'completed':
-            existing_queue.status = 'pending'
-            existing_queue.progress = 0.0
-            existing_queue.error_message = None
-            existing_queue.completed_at = None
+    # 检查是否已存在相同哈希值的文件
+    existing_file = check_file_exists_by_hash(file_hash, course_id)
+    if existing_file:
+        # 如果文件已存在但用途不同，更新用途
+        if existing_file.purpose != purpose and existing_file.purpose == 'general':
+            existing_file.purpose = purpose
+            db.session.commit()
+            return jsonify({
+                'status': 'success',
+                'message': '文件已存在，已更新用途标记',
+                'queue_id': existing_file.id,
+                'file_hash': file_hash
+            })
+        # 如果文件已完成处理，可以重新处理
+        elif existing_file.status == 'completed':
+            existing_file.status = 'pending'
+            existing_file.progress = 0.0
+            existing_file.error_message = None
+            existing_file.completed_at = None
+            existing_file.purpose = purpose  # 更新用途
             db.session.commit()
             
             # Start processing in background
-            start_processing_queue_item(existing_queue.id)
+            start_processing_queue_item(existing_file.id)
             
             return jsonify({
                 'status': 'success',
                 'message': '文件已重新添加到知识库处理队列',
-                'queue_id': existing_queue.id
+                'queue_id': existing_file.id,
+                'file_hash': file_hash
             })
-        # If it's pending or processing, return error
-        elif existing_queue.status in ['pending', 'processing']:
+        # 如果文件已在队列中处理
+        elif existing_file.status in ['pending', 'processing']:
             return jsonify({
                 'status': 'error',
                 'message': '文件已在处理队列中',
-                'queue_id': existing_queue.id,
-                'progress': existing_queue.progress
+                'queue_id': existing_file.id,
+                'progress': existing_file.progress,
+                'file_hash': file_hash
             }), 409
     
     # Add to queue
     queue_item = KnowledgeBaseQueue(
         course_id=course_id,
-        file_path=file_path
+        file_path=file_path,
+        file_hash=file_hash,
+        purpose=purpose
     )
     db.session.add(queue_item)
     db.session.commit()
@@ -722,7 +779,8 @@ def add_to_knowledge_base():
     return jsonify({
         'status': 'success',
         'message': '文件已添加到知识库处理队列',
-        'queue_id': queue_item.id
+        'queue_id': queue_item.id,
+        'file_hash': file_hash
     })
 
 @rag_api.route('/knowledge/status', methods=['GET'])
@@ -766,6 +824,9 @@ def process_knowledge_now():
     """立即处理文件并添加到知识库，不使用队列"""
     try:
         data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+            
         course_id = data.get('course_id')
         file_path = data.get('file_path')
         
@@ -825,6 +886,9 @@ def remove_from_knowledge_base():
     """Remove a file from the knowledge base"""
     try:
         data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+            
         queue_id = data.get('queue_id')
         
         if not queue_id:
@@ -872,6 +936,9 @@ def clear_knowledge_base_queue():
     """Clear the knowledge base processing queue for a course"""
     try:
         data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+            
         course_id = data.get('course_id')
         
         if not course_id:
@@ -915,6 +982,9 @@ def batch_remove_from_knowledge_base():
     """Batch remove files from the knowledge base"""
     try:
         data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+            
         queue_ids = data.get('queue_ids', [])
         
         if not queue_ids:
@@ -1007,6 +1077,10 @@ def generate_lesson_plan():
     assessment_methods = data.get('assessmentMethods', [])
     detail_level = data.get('detailLevel', 2)  # 默认为2级详细度
     
+    # 新增参数：是否使用知识库
+    use_knowledge_base = data.get('useKnowledgeBase', False)
+    temp_files = data.get('tempFiles', [])  # 临时文件IDs
+    
     # 验证必填参数
     if not grade_subject:
         app_logger.error("缺少必填参数: gradeSubject")
@@ -1082,6 +1156,87 @@ def generate_lesson_plan():
         # 构建评估方式字符串
         assessment_text = "、".join(assessment_methods) if assessment_methods else ""
         
+        # 如果启用知识库，从知识库检索相关内容
+        knowledge_context = ""
+        sources = []
+        
+        if use_knowledge_base and course_id:
+            app_logger.info("启用知识库增强备课")
+            try:
+                # 确保RAG模块已初始化
+                global RAG_AVAILABLE
+                if not RAG_AVAILABLE:
+                    initialize_rag()
+                
+                if RAG_AVAILABLE:
+                    from backend.rag.rag_query import hybrid_retriever, format_docs
+                    
+                    # 构建针对备课的查询
+                    query_parts = []
+                    
+                    # 基础信息
+                    query_parts.append(f"学科：{grade_subject}")
+                    
+                    # 根据类型添加特定查询
+                    if outline_type == "course":
+                        query_parts.append("课程总纲 课程大纲 教学计划 学期规划")
+                    else:
+                        query_parts.append("课堂教案 教学设计 课时计划")
+                        if selected_chapter_title:
+                            query_parts.append(f"章节：{selected_chapter_title}")
+                    
+                    # 添加目标和重点
+                    if learning_objectives:
+                        query_parts.append(f"教学目标：{learning_objectives}")
+                    
+                    if key_points:
+                        query_parts.append(f"教学重点：{key_points}")
+                    
+                    # 组合查询
+                    search_query = " ".join(query_parts)
+                    app_logger.info(f"知识库查询: {search_query}")
+                    
+                    # 从知识库检索内容，优先使用lesson_plan用途的文档
+                    retrieved_docs = hybrid_retriever(search_query, str(course_id))
+                    
+                    # 过滤和排序文档：优先返回lesson_plan用途的文档
+                    if retrieved_docs:
+                        # 按用途排序
+                        retrieved_docs.sort(key=lambda doc: 0 if doc.metadata.get('purpose') == 'lesson_plan' else 1)
+                        
+                        # 格式化文档
+                        knowledge_context = format_docs(retrieved_docs)
+                        
+                        # 提取来源
+                        for doc in retrieved_docs:
+                            source_url = None
+                            source_title = None
+                            
+                            if 'source' in doc.metadata:
+                                source_url = doc.metadata['source']
+                            elif 'file_path' in doc.metadata:
+                                source_url = doc.metadata['file_path']
+                            
+                            if source_url and source_url not in [s.get('url') for s in sources]:
+                                if 'title' in doc.metadata:
+                                    source_title = doc.metadata['title']
+                                else:
+                                    source_title = os.path.basename(source_url)
+                                
+                                sources.append({
+                                    'title': source_title,
+                                    'url': source_url,
+                                    'purpose': doc.metadata.get('purpose', 'general')
+                                })
+                    
+                    app_logger.info(f"从知识库检索到 {len(retrieved_docs) if retrieved_docs else 0} 个文档")
+            except Exception as e:
+                app_logger.error(f"知识库检索失败: {str(e)}")
+                # 如果知识库检索失败，继续不使用知识库
+        
+        # 处理临时文件（如果有）
+        # 这里可以添加临时文件处理逻辑
+        
         # 构建系统提示词
         system_prompt = f"""你是一位专业的教育教学专家，精通课程设计和教案编写。
 现在，你需要为教师生成一个{'课程总纲' if outline_type == 'course' else '课堂教案'}，请确保内容专业、实用且格式美观。
@@ -1093,6 +1248,21 @@ def generate_lesson_plan():
 {'课程总纲应包含整体课程规划、学习目标、教学方法和评价方式等内容。' if outline_type == 'course' else '课堂教案应包含本节课的教学设计、活动安排、教学流程和时间分配等内容。'}
 
 请按照Markdown格式输出，确保层次清晰，内容详实。
+
+重要提示：
+1. 请直接输出最终内容，不要包含你的思考过程、说明或解释
+2. 不要在输出中添加"说明"、"结构设计"、"内容适配"等元信息
+3. 不要在最后添加任何非正文内容，除非是参考资料部分
+4. 不要在输出内容的开头或结尾添加```markdown或```标记
+"""
+
+        # 如果有知识库内容，添加到提示词中
+        if knowledge_context:
+            system_prompt += f"\n\n请参考以下资料生成内容:\n{knowledge_context}"
+            
+            # 添加引用指南
+            system_prompt += """
+
 """
 
         # 构建用户提示词
@@ -1197,8 +1367,8 @@ def generate_lesson_plan():
                 db.session.add(ai_message)
                 db.session.commit()
                 
-                # 发送结束信号
-                yield f"data: {json.dumps({'status': 'done', 'conversation_id': conversation_id, 'outline_type': outline_type, 'selected_chapter': selected_chapter_title})}\n\n"
+                # 发送结束信号，包含引用源
+                yield f"data: {json.dumps({'status': 'done', 'conversation_id': conversation_id, 'outline_type': outline_type, 'selected_chapter': selected_chapter_title, 'sources': sources})}\n\n"
                 
             except requests.exceptions.Timeout:
                 error_msg = "请求超时，请稍后再试"
@@ -1221,4 +1391,158 @@ def generate_lesson_plan():
         return jsonify({
             'status': 'error',
             'message': f'生成教案失败: {str(e)}'
+        }), 500
+
+@rag_api.route('/knowledge/upload-temp', methods=['POST'])
+@jwt_required()
+def upload_temp_file():
+    """上传临时文件用于备课，不保存到知识库"""
+    app_logger = current_app.logger
+    user_id = get_jwt_identity()
+    
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': '没有上传文件'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': '没有选择文件'}), 400
+    
+    # 检查文件类型
+    if file.filename is None:
+        return jsonify({'status': 'error', 'message': '无效的文件名'}), 400
+        
+    _, ext = os.path.splitext(file.filename)
+    ext = ext.lower()
+    
+    supported_exts = ['.pdf', '.docx', '.doc', '.txt', '.md']
+    if ext not in supported_exts:
+        return jsonify({
+            'status': 'error', 
+            'message': f'不支持的文件类型，仅支持: {", ".join(supported_exts)}'
+        }), 400
+    
+    try:
+        # 创建临时文件目录
+        temp_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'temp', str(user_id))
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # 生成安全的文件名
+        import uuid
+        safe_filename = f"{uuid.uuid4().hex}{ext}"
+        file_path = os.path.join(temp_dir, safe_filename)
+        
+        # 保存文件
+        file.save(file_path)
+        
+        # 计算文件哈希值
+        file_hash = calculate_file_hash(file_path)
+        
+        # 返回文件信息
+        return jsonify({
+            'status': 'success',
+            'message': '文件上传成功',
+            'file_info': {
+                'original_name': file.filename,
+                'saved_name': safe_filename,
+                'file_path': f"temp/{user_id}/{safe_filename}",
+                'file_hash': file_hash,
+                'file_size': os.path.getsize(file_path)
+            }
+        })
+        
+    except Exception as e:
+        app_logger.error(f"上传临时文件失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'上传文件失败: {str(e)}'
+        }), 500
+
+@rag_api.route('/knowledge/process-temp', methods=['POST'])
+@jwt_required()
+def process_temp_files():
+    """处理临时文件，提取内容用于备课"""
+    app_logger = current_app.logger
+    user_id = get_jwt_identity()
+    
+    data = request.json
+    if not data:
+        return jsonify({'status': 'error', 'message': '无效的请求数据'}), 400
+    
+    file_paths = data.get('file_paths', [])
+    if not file_paths:
+        return jsonify({'status': 'error', 'message': '未提供文件路径'}), 400
+    
+    try:
+        context = ""
+        sources = []
+        
+        for rel_path in file_paths:
+            # 构建完整路径
+            full_path = os.path.join(current_app.config['UPLOAD_FOLDER'], rel_path.lstrip('/'))
+            
+            # 检查文件是否存在
+            if not os.path.exists(full_path):
+                app_logger.warning(f"文件不存在: {full_path}")
+                continue
+            
+            # 根据文件类型处理文件
+            _, ext = os.path.splitext(full_path)
+            ext = ext.lower()
+            
+            try:
+                # 使用RAG模块中的加载器处理文件
+                if ext == '.pdf':
+                    from langchain_community.document_loaders import PyMuPDFLoader
+                    loader = PyMuPDFLoader(full_path)
+                    docs = loader.load()
+                elif ext in ['.docx', '.doc']:
+                    from langchain_community.document_loaders import Docx2txtLoader
+                    loader = Docx2txtLoader(full_path)
+                    docs = loader.load()
+                elif ext in ['.md', '.markdown']:
+                    from langchain_core.documents import Document
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    docs = [Document(page_content=content, metadata={"source": os.path.basename(full_path)})]
+                elif ext == '.txt':
+                    from langchain_core.documents import Document
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    docs = [Document(page_content=content, metadata={"source": os.path.basename(full_path)})]
+                else:
+                    # 不支持的文件类型
+                    app_logger.warning(f"不支持的文件类型: {ext}")
+                    continue
+                
+                # 分割文档
+                from backend.rag.segmentor import segment_text
+                for doc in docs:
+                    # 对文本进行分段
+                    segments = segment_text(doc.page_content)
+                    
+                    # 添加到上下文
+                    context += "\n\n" + "\n".join(segments)
+                
+                # 添加来源
+                sources.append({
+                    'title': os.path.basename(full_path),
+                    'url': f"temp_file:{rel_path}",
+                    'purpose': 'temp'
+                })
+                
+            except Exception as e:
+                app_logger.error(f"处理文件失败: {full_path}, 错误: {str(e)}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'成功处理 {len(sources)} 个文件',
+            'context': context,
+            'sources': sources
+        })
+        
+    except Exception as e:
+        app_logger.error(f"处理临时文件失败: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'处理临时文件失败: {str(e)}'
         }), 500

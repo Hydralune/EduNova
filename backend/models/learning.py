@@ -73,6 +73,8 @@ class KnowledgeBaseQueue(db.Model):
     progress = db.Column(db.Float, default=0.0)  # 0-100%
     progress_detail = db.Column(db.Text, nullable=True)  # JSON格式的详细进度信息
     last_updated = db.Column(db.Integer, default=lambda: int(time.time()))
+    file_hash = db.Column(db.String(64), nullable=True, index=True)  # SHA-256哈希值
+    purpose = db.Column(db.String(20), default='general')  # general, lesson_plan, assessment, etc.
     
     # Add relationship
     course = db.relationship('Course')
@@ -95,5 +97,7 @@ class KnowledgeBaseQueue(db.Model):
             'error_message': self.error_message,
             'progress': self.progress,
             'progress_detail': progress_detail_obj,
-            'last_updated': self.last_updated
+            'last_updated': self.last_updated,
+            'file_hash': self.file_hash,
+            'purpose': self.purpose
         } 

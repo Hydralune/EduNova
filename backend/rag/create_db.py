@@ -527,8 +527,15 @@ def transcribe_audio(audio_path: str) -> str:
             return data.get("text", "")
         return data
 
-def process_document_with_progress(course_id: str, file_path: str, progress_callback: Optional[Callable[[float], None]] = None):
-    """Process a single document and report progress - 简化版本，暂时关闭知识图谱构建"""
+def process_document_with_progress(course_id: str, file_path: str, progress_callback: Optional[Callable[[float], None]] = None, purpose: str = 'general'):
+    """Process a single document and report progress - 简化版本，暂时关闭知识图谱构建
+    
+    Args:
+        course_id: 课程ID
+        file_path: 文件路径
+        progress_callback: 进度回调函数
+        purpose: 文件用途，如'general'(一般),'lesson_plan'(备课),'assessment'(考核)等
+    """
     
     def report_progress(stage: str, current: int, total: int):
         """Report progress for a specific stage"""
@@ -609,6 +616,8 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
             docs = loader.load()
         for doc in docs:
             doc.metadata['source'] = filename
+            # 添加文件用途标记
+            doc.metadata['purpose'] = purpose
         
         print(f"✓ 文档加载完成，共 {len(docs)} 个文档")
         report_progress('loading', 1, 1)
@@ -622,6 +631,9 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         # Add a unique ID to each split
         for i, doc in enumerate(splits):
             doc.metadata['chunk_id'] = f"chunk_{i}"
+            # 确保每个分割后的文档也有用途标记
+            if 'purpose' not in doc.metadata:
+                doc.metadata['purpose'] = purpose
         
         print(f"✓ 文档分割完成，共 {len(splits)} 个文本块")
         report_progress('splitting', 1, 1)
@@ -669,7 +681,8 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         processed_files[filename] = {
             'hash': file_hash,
             'processed_at': int(time.time()),
-            'chunks': len(splits)
+            'chunks': len(splits),
+            'purpose': purpose  # 添加文件用途
         }
         
         with open(metadata_path, 'w') as f:
@@ -681,6 +694,7 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         print(f"=== 文档处理完成: {filename} ===")
         print(f"✓ 文本块数量: {len(splits)}")
         print(f"✓ 向量数据库位置: {persist_dir}")
+        print(f"✓ 文件用途: {purpose}")
         
         return True
         
