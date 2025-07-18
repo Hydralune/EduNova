@@ -252,33 +252,91 @@ def chat_with_ai():
                     app_logger.info(f"使用RAG检索，课程ID: {course_id}")
                     retrieved_docs = hybrid_retriever(message, str(course_id))
                     
+                    # 添加调试日志，查看文档元数据
+                    app_logger.info(f"检索到 {len(retrieved_docs) if retrieved_docs else 0} 个文档")
+                    for i, doc in enumerate(retrieved_docs[:3]):  # 只记录前3个文档的元数据，避免日志过长
+                        app_logger.info(f"文档 {i+1} 元数据: {doc.metadata}")
+                    
                     # 格式化检索到的文档
                     if retrieved_docs:
                         context = format_docs(retrieved_docs)
                         
-                        # 提取文档源信息
+                        # 提取文档源信息 - 改进的版本
                         for doc in retrieved_docs:
-                            if 'source' in doc.metadata and doc.metadata['source'] not in [s.get('url') for s in sources]:
-                                sources.append({
-                                    'title': doc.metadata.get('title', os.path.basename(doc.metadata['source'])),
-                                    'url': doc.metadata['source']
-                                })
+                            # 检查多种可能的元数据字段
+                            source_url = None
+                            source_title = None
+                            
+                            # 尝试从不同的元数据字段获取源URL
+                            if 'source' in doc.metadata:
+                                source_url = doc.metadata['source']
+                            elif 'file_path' in doc.metadata:
+                                source_url = doc.metadata['file_path']
+                            elif 'path' in doc.metadata:
+                                source_url = doc.metadata['path']
+                            
+                            # 如果找到了源URL
+                            if source_url:
+                                # 尝试从不同的元数据字段获取标题
+                                if 'title' in doc.metadata and doc.metadata['title']:
+                                    source_title = doc.metadata['title']
+                                elif 'file_name' in doc.metadata and doc.metadata['file_name']:
+                                    source_title = doc.metadata['file_name']
+                                else:
+                                    # 如果没有标题，使用文件名
+                                    source_title = os.path.basename(source_url)
+                                    # 移除文件扩展名
+                                    source_title = os.path.splitext(source_title)[0]
+                                    # 美化标题格式
+                                    source_title = source_title.replace('-', ' ').replace('_', ' ')
+                                
+                                # 添加页码或章节信息（如果有）
+                                source_info = ""
+                                if 'page' in doc.metadata and doc.metadata['page'] is not None:
+                                    page_num = doc.metadata['page']
+                                    source_info += f"第{page_num+1}页" if isinstance(page_num, int) else f"第{page_num}页"
+                                
+                                if 'chunk_id' in doc.metadata and doc.metadata['chunk_id']:
+                                    chunk_id = doc.metadata['chunk_id']
+                                    if chunk_id.startswith('chunk_'):
+                                        chunk_num = chunk_id[6:]
+                                        if source_info:
+                                            source_info += f", 片段{chunk_num}"
+                                        else:
+                                            source_info += f"片段{chunk_num}"
+                                
+                                # 如果有额外信息，添加到标题中
+                                if source_info:
+                                    full_title = f"{source_title} ({source_info})"
+                                else:
+                                    full_title = source_title
+                                
+                                # 检查是否已经添加过这个源
+                                if source_url not in [s.get('url') for s in sources]:
+                                    sources.append({
+                                        'title': full_title,
+                                        'url': source_url
+                                    })
+                        
+                        # 记录提取的源信息
+                        app_logger.info(f"提取的源信息: {sources}")
                     
                     # 构建带有上下文的系统提示
                     system_prompt = f"""你是一个智能教育助手，名为EduNova。你的任务是帮助学生解答问题、提供学习建议和解释复杂概念。
 你正在辅助以下课程的学习：
 {course_info}
 
-请基于以下参考资料回答用户的问题。如果参考资料中信息有限或没有相关信息，请：
+请基于以下参考资料回答用户的问题。请遵循以下指导原则：
 
-1. 明确指出参考资料中的局限性，但不要仅仅停留在"无法找到信息"
-2. 根据课程名称、简介和类别，利用你自身的专业知识推断可能的课程内容
-3. 为该课程主题生成一个合理、结构化的大纲或内容框架
-4. 提供与课程主题相关的核心概念解释和实际例子
-5. 推荐学习资源、练习方法或项目创意
-6. 如果是编程类课程，提供代码示例；如果是理论课程，提供概念框架
+1. 优先直接引用参考资料中的内容，尽可能保留原始文本的细节和结构
+2. 不要过度概括或简化参考资料中的技术细节、代码示例或步骤说明
+3. 如果参考资料中包含完整的教程或步骤，请完整保留这些步骤的顺序和细节
+4. 对于代码示例，保持原样引用，不要简化或修改
+5. 只有在参考资料中信息有限或没有相关信息时，才使用你自身的知识进行补充
+6. 在回答中，当引用特定内容时，使用括号标注来源，例如：(参考文档片段7)
+7. 在回答结束时，必须添加一行"参考来源:"，然后列出你使用的所有参考资料
 
-你的目标是即使在参考资料有限的情况下，也能为学生提供最大价值的回答。请保持回答友好、专业且易于理解。
+你的回答应该尽可能地忠于参考资料中的原始内容，同时保持友好、专业且易于理解。
 
 参考资料:
 {context}"""

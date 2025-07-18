@@ -178,10 +178,18 @@
                   
                   <!-- 如果有引用来源 -->
                   <div v-if="message.sources && message.sources.length > 0" class="mt-3 pt-2 border-t border-gray-200">
-                    <p class="text-xs text-gray-500 font-medium">参考来源:</p>
+                    <p class="text-xs font-bold text-gray-700">参考来源:</p>
                     <ul class="mt-1 space-y-1">
-                      <li v-for="(source, sIdx) in message.sources" :key="sIdx" class="text-xs">
-                        <a :href="source.url" class="text-blue-600 hover:underline" target="_blank">{{ source.title }}</a>
+                      <li v-for="(source, sIdx) in message.sources" :key="sIdx" class="text-xs flex items-center">
+                        <span class="mr-1 text-gray-500">•</span>
+                        <a 
+                          :href="formatFileUrl(source.url)" 
+                          class="text-blue-600 hover:underline hover:text-blue-800" 
+                          target="_blank"
+                          :title="source.url"
+                        >
+                          {{ source.title || source.url }}
+                        </a>
                       </li>
                     </ul>
                   </div>
@@ -378,6 +386,24 @@ function formatAvatarUrl(url: string): string {
   
   // 如果是相对路径，添加基础URL
   return `http://localhost:5001${url}`;
+}
+
+// 格式化文件URL
+function formatFileUrl(url: string): string {
+  if (!url) return '';
+  
+  // 如果已经是完整URL，直接返回
+  if (url.startsWith('http')) {
+    return url;
+  }
+  
+  // 如果是相对路径，根据课程ID构建URL
+  if (props.courseId) {
+    return `http://localhost:5001/uploads/materials/${props.courseId}/${encodeURIComponent(url)}`;
+  }
+  
+  // 如果没有课程ID，尝试构建一个基本URL
+  return `http://localhost:5001/uploads/${encodeURIComponent(url)}`;
 }
 
 const emit = defineEmits(['collapseRequest']);
@@ -626,7 +652,17 @@ async function sendMessage() {
               
               // 添加引用来源
               if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+                console.log("收到引用来源:", data.sources);
                 chatMessages.value[chatMessages.value.length - 1].sources = data.sources;
+                
+                // 检查AI回复是否已经包含"参考来源:"，如果没有则添加
+                const currentMessage = chatMessages.value[chatMessages.value.length - 1].content;
+                if (!currentMessage.includes("参考来源:") && !currentMessage.includes("参考来源：")) {
+                  // 添加一个空行和参考来源标记
+                  chatMessages.value[chatMessages.value.length - 1].content += "\n\n参考来源: 见下方链接";
+                }
+              } else {
+                console.log("没有收到引用来源");
               }
               
               // 最后一次渲染，确保所有内容都已渲染
