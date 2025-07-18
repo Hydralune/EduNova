@@ -10,7 +10,18 @@
       <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
         <div class="flex justify-between items-start">
           <div>
-            <h2 class="text-2xl font-bold mb-2">{{ assessment.title }}</h2>
+            <div class="flex items-center gap-3 mb-2">
+              <button 
+                @click="goBack" 
+                class="p-2 bg-white shadow-md rounded-lg hover:bg-gray-50 text-gray-700 flex items-center justify-center" 
+                style="width: 40px; height: 40px;"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+              </button>
+              <h2 class="text-2xl font-bold">{{ assessment.title }}</h2>
+            </div>
             <p v-if="isReadOnly" class="text-blue-600 font-medium mb-2">查看提交详情</p>
             <p v-else class="text-blue-600 font-medium mb-2">评分界面</p>
             <p class="text-gray-600 mb-4">{{ assessment.description }}</p>
@@ -592,7 +603,14 @@ const getCorrectBlankAnswer = (question, index) => {
 };
 
 const goBack = () => {
-  router.back();
+  // 获取当前用户角色
+  const userRole = 'teacher'; // 这里应该从authStore获取，但为简化直接使用teacher
+  
+  // 返回到教师工作台的评估测试页面
+  router.push({ 
+    path: `/${userRole}`, 
+    query: { activeTab: 'assessments' } 
+  });
 };
 
 // 获取提交数据

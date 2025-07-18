@@ -168,7 +168,7 @@
 
         <!-- 学习分析 -->
         <div v-if="activeTab === 'analytics'">
-          <LearningAnalytics :user-id="userId || ''" />
+          <TeacherAnalytics />
         </div>
 
         <!-- 知识库 -->
@@ -219,6 +219,7 @@ import KnowledgeBase from '@/components/rag/KnowledgeBase.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
 import AssessmentList from '@/components/assessment/AssessmentList.vue';
 import SubmissionList from '@/components/assessment/SubmissionList.vue';
+import TeacherAnalytics from '@/components/analytics/TeacherAnalytics.vue';
 
 const authStore = useAuthStore();
 const route = useRoute();

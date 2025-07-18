@@ -2,13 +2,13 @@ from flask import Blueprint, request, jsonify, current_app, make_response, send_
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 from backend.models.user import User, db
 from backend.models.course import Course
 from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.material import Material
-from backend.models.assessment import Assessment, StudentAnswer
+from backend.models.assessment import Assessment, StudentAnswer, AssessmentSubmission
 import hashlib
 import requests
 import openai
@@ -19,6 +19,7 @@ import uuid
 import threading
 import functools
 from backend.api.rag_ai import get_api_config
+from sqlalchemy import func, desc, and_
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -3152,4 +3153,332 @@ def get_assessment_submission_count(assessment_id):
     response.headers.add('Access-Control-Allow-Origin', '*')
     
     return response
+
+@learning_bp.route('/analytics/student/<int:student_id>', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+def get_student_analytics(student_id):
+    """获取单个学生的学习分析数据"""
+    try:
+        # 检查学生是否存在
+        student = User.query.get(student_id)
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+            
+        # 获取学生的总体学习进度
+        # 这里简化计算，实际应该基于课程完成情况计算
+        student_courses = db.session.query(Course).join(
+            Course.students
+        ).filter(User.id == student_id).all()
+        
+        total_courses = len(student_courses)
+        completed_courses = 0
+        in_progress_courses = 0
+        not_started_courses = 0
+        
+        # 获取学生的学习记录
+        learning_records = LearningRecord.query.filter_by(student_id=student_id).all()
+        
+        # 按课程ID分组学习记录
+        course_records = {}
+        for record in learning_records:
+            if record.course_id not in course_records:
+                course_records[record.course_id] = []
+            course_records[record.course_id].append(record)
+        
+        # 计算每个课程的进度
+        course_progress = {}
+        for course in student_courses:
+            # 这里简化计算，实际应该基于完成的材料和评估来计算
+            records = course_records.get(course.id, [])
+            if not records:
+                course_progress[course.id] = 0
+                not_started_courses += 1
+            else:
+                # 简单计算进度：基于活动记录数量
+                materials_count = db.session.query(Material).filter_by(course_id=course.id).count()
+                if materials_count == 0:
+                    materials_count = 1  # 避免除以零
+                
+                # 查看过的材料数量
+                viewed_materials = len(set([r.activity_detail for r in records if r.activity_type == 'view_material']))
+                progress = min(100, int((viewed_materials / materials_count) * 100))
+                course_progress[course.id] = progress
+                
+                if progress == 100:
+                    completed_courses += 1
+                elif progress > 0:
+                    in_progress_courses += 1
+                else:
+                    not_started_courses += 1
+        
+        # 计算总体进度
+        overall_progress = 0
+        if total_courses > 0:
+            overall_progress = int(sum(course_progress.values()) / total_courses)
+        
+        # 计算本周和上周的学习时间
+        today = datetime.now().date()
+        week_start = today - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6)
+        last_week_start = week_start - timedelta(days=7)
+        last_week_end = week_start - timedelta(days=1)
+        
+        # 本周学习时间
+        weekly_learning_time = db.session.query(func.sum(LearningRecord.duration)).filter(
+            LearningRecord.student_id == student_id,
+            LearningRecord.timestamp >= week_start,
+            LearningRecord.timestamp <= week_end
+        ).scalar() or 0
+        
+        # 上周学习时间
+        previous_week_time = db.session.query(func.sum(LearningRecord.duration)).filter(
+            LearningRecord.student_id == student_id,
+            LearningRecord.timestamp >= last_week_start,
+            LearningRecord.timestamp <= last_week_end
+        ).scalar() or 0
+        
+        # 转换为小时
+        weekly_learning_time = round(weekly_learning_time / 3600, 1)
+        previous_week_time = round(previous_week_time / 3600, 1)
+        
+        # 获取学习趋势数据（最近7天）
+        trend_data = []
+        for i in range(6, -1, -1):
+            date = today - timedelta(days=i)
+            day_learning_time = db.session.query(func.sum(LearningRecord.duration)).filter(
+                LearningRecord.student_id == student_id,
+                func.date(LearningRecord.timestamp) == date
+            ).scalar() or 0
+            
+            # 转换为小时
+            day_learning_time = round(day_learning_time / 3600, 1)
+            
+            # 格式化日期标签
+            if i == 0:
+                label = "今天"
+            elif i == 1:
+                label = "昨天"
+            else:
+                label = date.strftime("%m-%d")
+                
+            trend_data.append({
+                "label": label,
+                "value": day_learning_time
+            })
+        
+        # 获取课程详情
+        courses_details = []
+        for course in student_courses:
+            # 计算学习时间
+            course_learning_time = db.session.query(func.sum(LearningRecord.duration)).filter(
+                LearningRecord.student_id == student_id,
+                LearningRecord.course_id == course.id
+            ).scalar() or 0
+            
+            # 转换为小时
+            course_learning_time = round(course_learning_time / 3600, 1)
+            
+            # 最后学习时间
+            last_activity = db.session.query(LearningRecord).filter(
+                LearningRecord.student_id == student_id,
+                LearningRecord.course_id == course.id
+            ).order_by(LearningRecord.timestamp.desc()).first()
+            
+            last_activity_date = last_activity.timestamp.strftime("%Y-%m-%d") if last_activity else "未学习"
+            
+            # 评分（基于评估成绩）
+            submissions = db.session.query(AssessmentSubmission).join(
+                Assessment, Assessment.id == AssessmentSubmission.assessment_id
+            ).filter(
+                AssessmentSubmission.student_id == student_id,
+                Assessment.course_id == course.id
+            ).all()
+            
+            score = 0
+            if submissions:
+                total_score = sum([s.score for s in submissions if s.score is not None])
+                score = int(total_score / len(submissions))
+            
+            courses_details.append({
+                "id": course.id,
+                "name": course.name,
+                "category": course.category,
+                "progress": course_progress.get(course.id, 0),
+                "learningTime": course_learning_time,
+                "lastActivity": last_activity_date,
+                "score": score
+            })
+        
+        # 模拟知识点掌握情况数据
+        # 实际应该基于评估题目的知识点标签和得分情况计算
+        knowledge_points = [
+            {"label": "编程基础", "value": 85},
+            {"label": "数据结构", "value": 65},
+            {"label": "算法设计", "value": 70},
+            {"label": "数据库", "value": 90},
+            {"label": "网络原理", "value": 60},
+            {"label": "软件工程", "value": 75}
+        ]
+        
+        return jsonify({
+            "overallProgress": overall_progress,
+            "weeklyLearningTime": weekly_learning_time,
+            "previousWeekTime": previous_week_time,
+            "completedCourses": completed_courses,
+            "inProgressCourses": in_progress_courses,
+            "notStartedCourses": not_started_courses,
+            "trendData": {
+                "week": trend_data,
+                # 简化版本，实际应该计算月和年的数据
+                "month": [{"label": f"第{i+1}周", "value": 20 + i*5} for i in range(4)],
+                "year": [{"label": f"{i+1}月", "value": 15 + i*3} for i in range(6)]
+            },
+            "courseDetails": courses_details,
+            "knowledgePoints": knowledge_points
+        })
+    except Exception as e:
+        current_app.logger.error(f"获取学生学习分析数据失败: {str(e)}")
+        return jsonify({'error': f'获取学习分析数据失败: {str(e)}'}), 500
+
+@learning_bp.route('/analytics/course/<int:course_id>', methods=['GET'])
+# @jwt_required()  # 暂时禁用JWT认证要求
+@api_error_handler
+def get_course_analytics(course_id):
+    """获取课程的整体学习分析数据"""
+    try:
+        current_app.logger.info(f"获取课程学情分析数据: 课程ID = {course_id}")
+        
+        # 检查课程是否存在
+        course = Course.query.get(course_id)
+        if not course:
+            current_app.logger.error(f"课程不存在: ID = {course_id}")
+            return jsonify({'error': 'Course not found'}), 404
+            
+        # 获取课程的学生
+        students = course.students if hasattr(course, 'students') else []
+        current_app.logger.info(f"课程学生数量: {len(students)}")
+        
+        # 学生完成情况统计
+        total_students = len(students)
+        completed_students = 0
+        in_progress_students = 0
+        not_started_students = 0
+        
+        # 学生进度数据
+        student_progress = []
+        
+        for student in students:
+            try:
+                # 获取学生在此课程的学习记录
+                records = LearningRecord.query.filter_by(
+                    student_id=student.id,
+                    course_id=course_id
+                ).all()
+                
+                if not records:
+                    not_started_students += 1
+                    progress = 0
+                else:
+                    # 简单计算进度：基于活动记录数量
+                    materials_count = db.session.query(Material).filter_by(course_id=course_id).count()
+                    if materials_count == 0:
+                        materials_count = 1  # 避免除以零
+                    
+                    # 查看过的材料数量
+                    viewed_materials = len(set([r.activity_detail for r in records if r.activity_type == 'view_material']))
+                    progress = min(100, int((viewed_materials / materials_count) * 100))
+                    
+                    if progress == 100:
+                        completed_students += 1
+                    else:
+                        in_progress_students += 1
+                
+                # 计算学习时间
+                learning_time = db.session.query(func.sum(LearningRecord.duration)).filter(
+                    LearningRecord.student_id == student.id,
+                    LearningRecord.course_id == course_id
+                ).scalar() or 0
+                
+                # 转换为小时
+                learning_time = round(learning_time / 3600, 1)
+                
+                student_progress.append({
+                    "id": student.id,
+                    "name": student.full_name if hasattr(student, 'full_name') else f"学生{student.id}",
+                    "progress": progress,
+                    "learningTime": learning_time
+                })
+            except Exception as e:
+                current_app.logger.error(f"处理学生数据时出错: 学生ID = {student.id}, 错误 = {str(e)}")
+                # 继续处理下一个学生
+        
+        # 按进度排序
+        student_progress.sort(key=lambda x: x["progress"], reverse=True)
+        
+        # 获取评估数据
+        assessment_data = []
+        try:
+            # 直接查询数据库获取评估数据
+            current_app.logger.info("使用直接查询获取评估数据")
+            assessments = Assessment.query.filter_by(course_id=course_id).all()
+            current_app.logger.info(f"课程评估数量: {len(assessments)}")
+            
+            for assessment in assessments:
+                try:
+                    # 获取提交数量 - 使用StudentAnswer而不是AssessmentSubmission
+                    submissions_count = db.session.query(StudentAnswer).filter_by(
+                        assessment_id=assessment.id
+                    ).count()
+                    
+                    # 获取平均分 - 使用StudentAnswer而不是AssessmentSubmission
+                    avg_score_result = db.session.query(func.avg(StudentAnswer.score)).filter(
+                        StudentAnswer.assessment_id == assessment.id,
+                        StudentAnswer.score != None
+                    ).scalar()
+                    
+                    avg_score = 0
+                    if avg_score_result is not None:
+                        avg_score = round(float(avg_score_result), 1)
+                    
+                    assessment_data.append({
+                        "id": assessment.id,
+                        "title": assessment.title,
+                        "submissionsCount": submissions_count,
+                        "averageScore": avg_score
+                    })
+                    current_app.logger.info(f"添加评估: ID={assessment.id}, 标题={assessment.title}, 提交数={submissions_count}, 平均分={avg_score}")
+                except Exception as e:
+                    current_app.logger.error(f"处理评估数据时出错: 评估ID = {assessment.id}, 错误 = {str(e)}")
+                    # 继续处理下一个评估
+        except Exception as e:
+            current_app.logger.error(f"获取评估列表时出错: {str(e)}")
+        
+        # 知识点掌握情况（基于评估结果）
+        # 这里简化处理，实际应该基于评估题目的知识点标签和得分情况计算
+        knowledge_points = [
+            {"label": "编程基础", "value": 78},
+            {"label": "数据结构", "value": 62},
+            {"label": "算法设计", "value": 68},
+            {"label": "数据库", "value": 85},
+            {"label": "网络原理", "value": 55},
+            {"label": "软件工程", "value": 70}
+        ]
+        
+        response_data = {
+            "totalStudents": total_students,
+            "completedStudents": completed_students,
+            "inProgressStudents": in_progress_students,
+            "notStartedStudents": not_started_students,
+            "studentProgress": student_progress,
+            "assessments": assessment_data,
+            "knowledgePoints": knowledge_points
+        }
+        
+        current_app.logger.info(f"成功获取课程学情分析数据: 课程ID = {course_id}, 评估数量: {len(assessment_data)}")
+        return jsonify(response_data)
+    except Exception as e:
+        current_app.logger.error(f"获取课程学习分析数据失败: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'error': f'获取学习分析数据失败: {str(e)}'}), 500
 

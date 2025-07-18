@@ -79,7 +79,11 @@ const md = new MarkdownIt({
 const renderedContent = computed(() => {
   if (!markdownContent.value) return '';
   try {
-    const html = md.render(markdownContent.value);
+    // 预处理Markdown内容
+    let processedContent = preprocessMarkdown(markdownContent.value);
+    
+    // 渲染处理后的内容
+    const html = md.render(processedContent);
     return DOMPurify.sanitize(html);
   } catch (err) {
     console.error('Markdown渲染错误:', err);
@@ -88,6 +92,25 @@ const renderedContent = computed(() => {
     return '';
   }
 });
+
+// Markdown预处理函数
+function preprocessMarkdown(content: string): string {
+  // 移除开头的```markdown标记
+  let processed = content.replace(/^\s*```markdown\s*\n/i, '');
+  
+  // 移除结尾的```标记
+  processed = processed.replace(/\n\s*```\s*$/i, '');
+  
+  // 移除内容中可能导致渲染问题的说明部分
+  processed = processed.replace(/\n\s*说明[\s\S]*$/, '');
+  
+  // 移除其他可能的元信息标记
+  processed = processed.replace(/\n\s*结构设计:[\s\S]*$/, '');
+  processed = processed.replace(/\n\s*内容适配:[\s\S]*$/, '');
+  processed = processed.replace(/\n\s*引用处理:[\s\S]*$/, '');
+  
+  return processed;
+}
 
 // 监听props变化
 watch(() => props.content, (newContent) => {

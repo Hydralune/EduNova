@@ -2,20 +2,18 @@
   <div class="lesson-planner">
     <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden relative">
       <!-- 智能备课页面头部 -->
-      <div class="px-6 py-4 border-b">
-        <div class="flex justify-between items-center mb-4">
-          <div class="flex items-center space-x-3">
-            <!-- 侧边栏切换按钮 -->
-            <button 
-              @click="toggleHistorySidebar"
-              class="text-gray-500 hover:text-gray-700 focus:outline-none"
-              title="显示/隐藏历史记录"
-            >
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      <div class="px-6 py-3 border-b">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center">
+            <!-- 智能备课图标 -->
+            <div class="flex items-center">
+              <svg class="w-6 h-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                <circle cx="12" cy="12" r="3"></circle>
               </svg>
-            </button>
-            <h3 class="text-lg font-semibold">智能备课</h3>
+              <h3 class="text-lg font-semibold ml-2">智能备课</h3>
+            </div>
           </div>
           <div class="flex items-center space-x-4">
             <span class="inline-block w-2 h-2 rounded-full mr-2" 
@@ -102,10 +100,7 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-              </div>
-              
-              <!-- 第二列：教学内容 -->
-              <div class="space-y-4">
+                
                 <!-- 课时长度 -->
                 <div class="form-group">
                   <label class="block text-sm font-medium text-gray-700 mb-1">课时长度</label>
@@ -116,14 +111,17 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                
+              </div>
+              
+              <!-- 第二列：教学内容 -->
+              <div class="space-y-4">
                 <!-- 核心教学目标/学习目标 -->
                 <div class="form-group">
                   <label class="block text-sm font-medium text-gray-700 mb-1">核心教学目标/学习目标</label>
                   <textarea 
                     v-model="formData.learningObjectives" 
                     placeholder="输入关键词或完整句子描述教学目标"
-                    rows="2"
+                    rows="3"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   ></textarea>
                 </div>
@@ -134,14 +132,11 @@
                   <textarea 
                     v-model="formData.keyPoints" 
                     placeholder="明确指定教学重点与难点"
-                    rows="2"
+                    rows="3"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   ></textarea>
                 </div>
-              </div>
-              
-              <!-- 第三列：教学方法和评估 -->
-              <div class="space-y-4">
+                
                 <!-- 教学风格/模式倾向 -->
                 <div class="form-group">
                   <label class="block text-sm font-medium text-gray-700 mb-1">教学风格/模式倾向</label>
@@ -157,7 +152,10 @@
                     <option value="翻转课堂">翻转课堂</option>
                   </select>
                 </div>
-                
+              </div>
+              
+              <!-- 第三列：学生情况和知识库 -->
+              <div class="space-y-4">
                 <!-- 学生学情预设 -->
                 <div class="form-group">
                   <label class="block text-sm font-medium text-gray-700 mb-1">学生学情预设</label>
@@ -196,6 +194,47 @@
                   </div>
                   <div class="mt-1 text-center text-sm text-gray-500">
                     {{ detailLevelText }}
+                  </div>
+                </div>
+                
+                <!-- 知识库增强 -->
+                <div class="form-group" v-if="formData.courseId">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">知识库增强</label>
+                  <div class="flex items-center space-x-2">
+                    <input 
+                      type="checkbox" 
+                      id="use-knowledge-base" 
+                      v-model="formData.useKnowledgeBase" 
+                      class="form-checkbox h-4 w-4"
+                    />
+                    <label for="use-knowledge-base" class="text-sm">使用课程知识库辅助生成</label>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">
+                    启用此选项将使用课程知识库中的内容增强备课质量
+                  </p>
+                  
+                  <!-- 临时文件上传 -->
+                  <div v-if="formData.useKnowledgeBase" class="mt-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm">上传参考文件（可选）</span>
+                      <span class="text-xs text-gray-500">支持PDF、Word、TXT等</span>
+                    </div>
+                    <input 
+                      type="file" 
+                      @change="handleFileUpload" 
+                      class="mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      accept=".pdf,.docx,.doc,.txt,.md"
+                    />
+                    <div v-if="uploadedFiles.length > 0" class="mt-2">
+                      <div v-for="file in uploadedFiles" :key="file.path" class="flex items-center justify-between text-sm py-1">
+                        <span class="truncate">{{ file.name }}</span>
+                        <button @click="removeFile(file)" class="text-red-500 hover:text-red-700">
+                          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -261,10 +300,17 @@
 
         <!-- 内容区域和侧边栏 -->
         <div class="relative flex h-full">
-          <!-- 侧边栏历史记录 -->
+          <!-- 遮罩层 -->
           <div 
-            v-show="isHistorySidebarVisible"
-            class="history-sidebar border-r border-gray-200 bg-gray-50 w-72 h-full overflow-auto"
+            v-if="isHistorySidebarVisible" 
+            class="sidebar-overlay md:hidden"
+            @click="toggleHistorySidebar"
+          ></div>
+          
+          <!-- 侧边栏历史记录 - 使用v-if而不是v-show或:style来控制显示 -->
+          <div 
+            v-if="isHistorySidebarVisible"
+            class="history-sidebar fixed md:relative left-0 top-0 h-full z-20 border-r border-gray-200 bg-gray-50 w-72 overflow-auto shadow-lg md:shadow-none"
           >
             <div class="sticky top-0 bg-gray-50 z-10 p-4 border-b border-gray-200">
               <div class="flex items-center justify-between mb-2">
@@ -324,7 +370,22 @@
           
           <!-- 预览区域 -->
           <div class="p-6 flex-1">
-            <h4 class="text-lg font-medium mb-4">备课内容预览</h4>
+            <div class="flex justify-between items-center mb-4">
+              <div class="flex items-center space-x-3">
+                <!-- 历史记录按钮 -->
+                <button 
+                  @click="toggleHistorySidebar" 
+                  class="flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white hover:bg-gray-50 text-sm transition-colors duration-200 hover:bg-blue-50 hover:border-blue-300"
+                  title="显示历史记录"
+                >
+                  <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>历史记录</span>
+                </button>
+              </div>
+              <h4 class="text-lg font-medium">备课内容预览</h4>
+            </div>
             
             <div v-if="isGenerating" class="flex flex-col items-center justify-center h-96">
               <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -333,6 +394,21 @@
             
             <div v-else-if="lessonPlanContent" class="border rounded-md overflow-hidden">
               <MarkdownViewer :content="lessonPlanContent" />
+              
+              <!-- 引用来源显示 -->
+              <div v-if="sources.length > 0" class="p-4 border-t border-gray-200 bg-gray-50">
+                <h5 class="font-medium text-gray-700 mb-2">参考来源</h5>
+                <ul class="text-sm text-gray-600 space-y-1">
+                  <li v-for="(source, index) in sources" :key="index" class="flex items-start">
+                    <span class="inline-block w-5 text-right mr-2">{{ index + 1 }}.</span>
+                    <span>{{ source.title }}</span>
+                    <span v-if="source.purpose && source.purpose !== 'general'" 
+                          class="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-800">
+                      {{ source.purpose === 'lesson_plan' ? '备课' : source.purpose }}
+                    </span>
+                  </li>
+                </ul>
+              </div>
             </div>
             
             <div v-else class="flex flex-col items-center justify-center h-96 border border-dashed border-gray-300 rounded-md">
@@ -375,6 +451,12 @@ interface HistoryRecord {
   message_count: number;
 }
 
+interface HistoryMessage {
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
 // 定义表单数据接口
 interface FormData {
   courseId: string;
@@ -390,7 +472,8 @@ interface FormData {
   teachingStyle: string;
   assessmentMethods: string[];
   detailLevel: number;
-  [key: string]: string | string[] | number; // 添加索引签名
+  useKnowledgeBase: boolean; // 新增知识库增强选项
+  [key: string]: string | string[] | number | boolean; // 添加索引签名
 }
 
 // 课堂活动选项
@@ -428,7 +511,8 @@ const formData = ref<FormData>({
   activities: [] as string[],
   teachingStyle: '',
   assessmentMethods: [] as string[],
-  detailLevel: 2
+  detailLevel: 2,
+  useKnowledgeBase: false // 初始化知识库增强选项
 });
 
 // 状态变量
@@ -440,6 +524,8 @@ const chapters = ref<Chapter[]>([]);
 const currentConversationId = ref('');
 const showAdvancedOptions = ref(false);
 const isHistorySidebarVisible = ref(false); // 控制侧边栏可见性
+const sources = ref<Array<{title: string, url: string, purpose?: string}>>([]);  // 引用来源
+const uploadedFiles = ref<Array<{name: string, path: string, hash: string}>>([]);  // 上传的临时文件
 
 // 历史记录相关
 const historyRecords = ref<HistoryRecord[]>([]);
@@ -469,7 +555,6 @@ watch(() => formData.value.courseId, async (newCourseId) => {
 // 初始化
 onMounted(async () => {
   await fetchCourses();
-  await fetchHistoryRecords();
   
   // 尝试从localStorage恢复表单状态
   const savedForm = localStorage.getItem('lessonPlannerForm');
@@ -499,13 +584,38 @@ onMounted(async () => {
     currentConversationId.value = savedConversationId;
     selectedHistoryId.value = savedConversationId;
   }
+  
+  // 确保历史记录侧边栏初始状态为关闭
+  isHistorySidebarVisible.value = false;
+  
+  // 预加载历史记录数据，但不显示侧边栏
+  console.log('预加载历史记录数据');
+  setTimeout(() => {
+    fetchHistoryRecords();
+  }, 1000);
 });
 
 // 切换侧边栏可见性
 function toggleHistorySidebar() {
-  isHistorySidebarVisible.value = !isHistorySidebarVisible.value;
-  if (isHistorySidebarVisible.value && historyRecords.value.length === 0) {
-    fetchHistoryRecords();
+  console.log('切换历史记录侧边栏，当前状态:', isHistorySidebarVisible.value);
+  
+  // 先获取数据，再显示侧边栏
+  if (!isHistorySidebarVisible.value) {
+    // 如果要显示侧边栏，先加载数据
+    isLoadingHistory.value = true;
+    fetchHistoryRecords().then(() => {
+      // 数据加载完成后显示侧边栏
+      isHistorySidebarVisible.value = true;
+      console.log('侧边栏已显示，历史记录数量:', historyRecords.value.length);
+    }).catch(error => {
+      console.error('加载历史记录失败:', error);
+      // 即使加载失败也显示侧边栏
+      isHistorySidebarVisible.value = true;
+    });
+  } else {
+    // 如果要隐藏侧边栏，直接隐藏
+    isHistorySidebarVisible.value = false;
+    console.log('侧边栏已隐藏');
   }
 }
 
@@ -549,21 +659,47 @@ async function fetchChapters(courseId: number) {
 // 获取历史记录
 async function fetchHistoryRecords() {
   isLoadingHistory.value = true;
+  console.log('开始获取历史记录');
+  
   try {
-    // 调用API获取会话列表
-    const courseId = formData.value.courseId ? Number(formData.value.courseId) : undefined;
-    const response = await ragAiAPI.getConversations(courseId);
-    if (response && typeof response === 'object' && 'status' in response && 
-        (response as any).status == 'success' && 'conversations' in response && 
-        Array.isArray(response.conversations)) {
+    // 获取token
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('未找到认证token');
+      return;
+    }
+
+    // 构建API URL
+    let url = 'http://localhost:5001/api/rag/conversations';
+    if (formData.value.courseId) {
+      url += `?course_id=${formData.value.courseId}`;
+    }
+    
+    // 发送请求
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`获取历史记录失败: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('历史记录API返回:', data);
+    
+    if (data.status === 'success' && Array.isArray(data.conversations)) {
       // 过滤出以lesson_plan_开头的会话
-      const lessonPlanRecords = response.conversations.filter(conv => 
-        conv.conversation_id.startsWith('lesson_plan_')
+      const lessonPlanRecords = data.conversations.filter((conv: any) => 
+        conv.conversation_id && conv.conversation_id.startsWith('lesson_plan_')
       );
       
-      historyRecords.value = lessonPlanRecords.map(record => ({
+      console.log('过滤后的备课记录:', lessonPlanRecords);
+      
+      historyRecords.value = lessonPlanRecords.map((record: any) => ({
         ...record,
-        outline_type: record.title.includes('课程总纲') ? 'course' : 'class'
+        outline_type: record.title && record.title.includes('课程总纲') ? 'course' : 'class'
       }));
       
       // 如果有当前会话ID，将其置顶
@@ -576,9 +712,14 @@ async function fetchHistoryRecords() {
           historyRecords.value.unshift(current);
         }
       }
+    } else {
+      console.error('历史记录数据格式不正确:', data);
+      historyRecords.value = [];
     }
   } catch (error) {
     console.error('获取历史记录失败:', error);
+    historyRecords.value = [];
+    throw error; // 重新抛出错误，让调用者知道失败了
   } finally {
     isLoadingHistory.value = false;
   }
@@ -586,64 +727,72 @@ async function fetchHistoryRecords() {
 
 // 加载历史记录内容
 async function loadHistoryRecord(conversationId: string) {
+  if (isGenerating.value) return;
+  
+  selectedHistoryId.value = conversationId;
+  currentConversationId.value = conversationId;
+  
   try {
-    selectedHistoryId.value = conversationId;
-    isGenerating.value = true;
-    lessonPlanContent.value = '';
-    
     // 获取聊天历史
-    const response = await ragAiAPI.getChatHistory(conversationId);
+    const response = await fetch(`http://localhost:5001/api/rag/history?conversation_id=${conversationId}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
     
-    if (response && typeof response === 'object' && 'status' in response && 
-        (response as any).status == 'success' && 'history' in response && 
-        Array.isArray(response.history)) {
-      // 获取助手的回复内容
-      const assistantMessages = response.history.filter(msg => msg.role === 'assistant');
+    if (!response.ok) {
+      throw new Error('获取历史记录失败');
+    }
+    
+    const data = await response.json();
+    
+    if (data.status === 'success' && data.history && data.history.length > 0) {
+      // 找到最后一条助手消息
+      const assistantMessages = data.history.filter((msg: HistoryMessage) => msg.role === 'assistant');
       if (assistantMessages.length > 0) {
-        // 使用最新的助手消息
-        lessonPlanContent.value = assistantMessages[assistantMessages.length - 1].content;
-        currentConversationId.value = conversationId;
+        const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+        lessonPlanContent.value = lastAssistantMessage.content;
         
         // 保存到localStorage
         localStorage.setItem('lessonPlannerContent', lessonPlanContent.value);
         localStorage.setItem('lessonPlannerConversationId', conversationId);
         
-        // 尝试获取用户消息以恢复表单
-        const userMessages = response.history.filter(msg => msg.role === 'user');
+        // 清空引用来源（历史记录中可能没有）
+        sources.value = [];
+        
+        // 尝试从用户消息中提取表单数据
+        const userMessages = data.history.filter((msg: HistoryMessage) => msg.role === 'user');
         if (userMessages.length > 0) {
           const firstUserMessage = userMessages[0].content;
-          try {
-            // 尝试从用户消息中提取表单信息
-            // 这里可以添加更复杂的逻辑来解析用户消息并恢复表单状态
-            // 简单起见，这里仅提取学科信息
-            const subjectMatch = firstUserMessage.match(/学段\/年级\/学科：(.+?)($|\n)/);
-            if (subjectMatch && subjectMatch[1]) {
-              formData.value.gradeSubject = subjectMatch[1].trim();
-            }
-            
-            // 提取大纲类型
-            if (firstUserMessage.includes('课程总纲')) {
-              formData.value.outlineType = 'course';
-            } else if (firstUserMessage.includes('课堂教案')) {
-              formData.value.outlineType = 'class';
-            }
-            
-            // 保存表单状态
-            localStorage.setItem('lessonPlannerForm', JSON.stringify(formData.value));
-          } catch (e) {
-            console.error('解析用户消息失败:', e);
+          
+          // 提取学科信息
+          const subjectMatch = firstUserMessage.match(/学段\/年级\/学科：(.+?)($|\n)/);
+          if (subjectMatch && subjectMatch[1]) {
+            formData.value.gradeSubject = subjectMatch[1].trim();
           }
+          
+          // 提取大纲类型
+          if (firstUserMessage.includes('课程总纲')) {
+            formData.value.outlineType = 'course';
+          } else if (firstUserMessage.includes('课堂教案')) {
+            formData.value.outlineType = 'class';
+          }
+
+          // 提取知识库增强选项
+          if (firstUserMessage.includes('知识库增强')) {
+            formData.value.useKnowledgeBase = true;
+          } else {
+            formData.value.useKnowledgeBase = false;
+          }
+          
+          // 保存表单状态
+          localStorage.setItem('lessonPlannerForm', JSON.stringify(formData.value));
         }
       }
     }
   } catch (error) {
     console.error('加载历史记录失败:', error);
-  } finally {
-    isGenerating.value = false;
-    // 选择后关闭侧边栏（仅在移动设备上）
-    if (window.innerWidth < 768) {
-      isHistorySidebarVisible.value = false;
-    }
+    alert('加载历史记录失败，请重试');
   }
 }
 
@@ -657,7 +806,9 @@ async function saveLessonPlan() {
     if (!currentConversationId.value) {
       // 创建一个新的聊天会话保存内容
       const type = formData.value.outlineType === 'course' ? '课程总纲' : '课堂教案';
-      const title = `${type}: ${formData.value.gradeSubject}`;
+      const subject = formData.value.gradeSubject || '未命名';
+      const title = `${type}: ${subject}`;
+      const useKnowledgeBase = formData.value.useKnowledgeBase ? '是' : '否';
       
       // 这里可以添加保存到后端的逻辑，例如创建一个新的聊天记录
       // 由于之前的代码中已经自动保存了生成内容，这里只需刷新历史记录列表
@@ -717,6 +868,59 @@ function formatDate(timestamp: number): string {
   });
 }
 
+// 文件上传处理
+async function handleFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+  
+  try {
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // 发送上传请求
+    const response = await fetch('http://localhost:5001/api/rag/knowledge/upload-temp', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error(`上传失败: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      // 添加到上传文件列表
+      uploadedFiles.value.push({
+        name: data.file_info.original_name,
+        path: data.file_info.file_path,
+        hash: data.file_info.file_hash
+      });
+      
+      // 清除文件输入框
+      target.value = '';
+    } else {
+      throw new Error(data.message || '上传失败');
+    }
+  } catch (error: any) {
+    console.error('文件上传失败:', error);
+    alert(`文件上传失败: ${error.message}`);
+  }
+}
+
+// 移除上传的文件
+function removeFile(file: {name: string, path: string, hash: string}) {
+  const index = uploadedFiles.value.findIndex(f => f.path === file.path);
+  if (index !== -1) {
+    uploadedFiles.value.splice(index, 1);
+  }
+}
+
 // 生成备课内容
 async function generateLessonPlan() {
   if (!formData.value.gradeSubject) {
@@ -748,7 +952,9 @@ async function generateLessonPlan() {
       activities: formData.value.activities.length > 0 ? formData.value.activities : undefined,
       teachingStyle: formData.value.teachingStyle || undefined,
       assessmentMethods: formData.value.assessmentMethods.length > 0 ? formData.value.assessmentMethods : undefined,
-      detailLevel: formData.value.detailLevel
+      detailLevel: formData.value.detailLevel,
+      useKnowledgeBase: formData.value.useKnowledgeBase, // 添加知识库增强选项
+      tempFiles: uploadedFiles.value.map(file => file.path) // 添加临时文件路径
     };
     
     // 准备请求头
@@ -808,6 +1014,15 @@ async function generateLessonPlan() {
               // 保存会话ID到localStorage
               localStorage.setItem('lessonPlannerConversationId', jsonData.conversation_id);
               
+              // 保存引用来源
+              if (jsonData.sources) {
+                sources.value = jsonData.sources;
+                console.log('接收到引用来源:', sources.value);
+              } else {
+                sources.value = [];
+                console.log('未接收到引用来源');
+              }
+              
               // 刷新历史记录
               setTimeout(() => fetchHistoryRecords(), 1000);
               isGenerating.value = false;
@@ -839,6 +1054,8 @@ async function generateLessonPlan() {
 .lesson-planner {
   width: 100%;
   max-width: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .form-checkbox, .form-radio {
@@ -861,9 +1078,32 @@ async function generateLessonPlan() {
   }
 }
 
-/* 遮罩层动画 */
+/* 遮罩层 */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+/* 移除可能导致问题的动画和变换 */
 .history-sidebar {
+  display: block;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
   height: 100vh;
-  overflow-y: auto;
+  z-index: 20;
+}
+
+@media (min-width: 768px) {
+  .history-sidebar {
+    position: relative;
+    height: auto;
+  }
 }
 </style> 

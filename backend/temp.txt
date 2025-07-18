@@ -1,0 +1,88 @@
+“你帮我看看我的rag是用的具体哪一块的函数，我好像没看到关于重排序的内容，貌似还是和之前的chunks数差不多，[2025-07-17 22:54:57,885] INFO in rag_ai: 获取到课程信息: 低空无人机智能体安全
+INFO:backend.main:获取到课程信息: 低空无人机智能体安全
+[2025-07-17 22:54:57,885] INFO in rag_ai: 使用RAG检索，课程ID: 8
+INFO:backend.main:使用RAG检索，课程ID: 8
+找到知识库路径: C:\Users\Ylon\Desktop\EduNova\backend\uploads\knowledge_base\8
+找到向量数据库路径: C:\Users\Ylon\Desktop\EduNova\backend\uploads\knowledge_base\8\vectordb
+ERROR:chromadb.telemetry.product.posthog:Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given
+ERROR:chromadb.telemetry.product.posthog:Failed to send telemetry event ClientCreateCollectionEvent: capture() takes 1 positional argument but 3 were given
+--- Performing vector search ---
+INFO:backend.rag.embedding_util:向量化请求 (尝试 1/3): 1 个文本
+INFO:backend.rag.embedding_util:向量化成功: 1 个embedding
+ERROR:chromadb.telemetry.product.posthog:Failed to send telemetry event CollectionQueryEvent: capture() takes 1 positional argument but 3 were given
+--- Retrieved 4 chunks from vector search ---
+[2025-07-17 22:55:00,855] INFO in rag_ai: 成功构建RAG增强的请求
+INFO:backend.main:成功构建RAG增强的请求
+127.0.0.1 - - [17/Jul/2025 22:55:13] "POST /api/rag/chat HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [17/Jul/2025 22:55:13] "POST /api/rag/chat HTTP/1.1" 200 -
+根据日志信息，我可以看到你的RAG系统目前使用的是向量检索功能，但还没有使用我们刚刚实现的重排序功能。
+
+从日志中可以看到以下关键信息：
+1. `--- Performing vector search ---` - 这表明系统正在使用向量搜索
+2. `--- Retrieved 4 chunks from vector search ---` - 系统找到了4个相关文档块
+3. 没有看到任何关于重排序的日志信息，如 `使用模型进行重排序` 或 `重排序成功`
+
+这说明你的系统目前正在使用 `hybrid_retriever` 函数，但该函数只执行了向量搜索部分，没有调用重排序功能。
+
+查看我们修改的代码，问题可能在于 `hybrid_retriever` 函数没有被更新，它直接返回了向量搜索结果：
+
+```python
+def hybrid_retriever(query: str, course_id: str):
+    """Retrieves relevant documents using vector search for a given query and course."""
+    resources = initialize_resources(course_id)
+    
+    # 完全跳过知识图谱检索
+    # graph_docs = get_graph_context(query, resources['graph'], resources['all_chunks_map'], resources['llm'])
+    
+    # 只使用向量检索
+    print("--- Performing vector search ---")
+    vector_docs = resources['vector_retriever'].invoke(query)
+    print(f"--- Retrieved {len(vector_docs)} chunks from vector search ---")
+
+    # 不再需要合并和去重，直接返回向量检索结果
+    return vector_docs
+```
+
+要启用重排序功能，你需要修改 `hybrid_retriever` 函数，使其在向量检索后调用重排序功能。以下是需要修改的内容：
+
+```python
+def hybrid_retriever(query: str, course_id: str):
+    """Retrieves relevant documents using vector search and reranking for a given query and course."""
+    resources = initialize_resources(course_id)
+    
+    # 只使用向量检索
+    print("--- Performing vector search ---")
+    vector_docs = resources['vector_retriever'].invoke(query)
+    print(f"--- Retrieved {len(vector_docs)} chunks from vector search ---")
+
+    # 如果找到足够的文档，执行重排序
+    if len(vector_docs) > 1:
+        print("--- Performing reranking ---")
+        # 提取文档内容
+        documents = [doc.page_content for doc in vector_docs]
+        # 执行重排序
+        rerank_results = rerank_documents(query, documents)
+        
+        if rerank_results:
+            # 根据重排序结果重新排列文档
+            reranked_docs = []
+            for item in rerank_results:
+                doc_idx = item.get('index')
+                if doc_idx is not None and isinstance(doc_idx, int) and 0 <= doc_idx < len(vector_docs):
+                    reranked_docs.append(vector_docs[doc_idx])
+            
+            print(f"--- Reranking successful, returned {len(reranked_docs)} documents ---")
+            return reranked_docs
+
+    # 如果重排序失败或文档不足，直接返回向量检索结果
+    return vector_docs
+```
+
+此外，你还需要确保 `backend/api/rag_ai.py` 中的代码使用了这个更新后的 `hybrid_retriever` 函数。
+
+要使这些更改生效，你需要:
+1. 修改 `hybrid_retriever` 函数以添加重排序功能
+2. 确保 `.env` 文件中有 `RERANK_MODEL` 环境变量，或者使用默认值 `BAAI/bge-reranker-v2-m3`
+3. 重启你的后端服务以应用这些更改
+
+完成这些步骤后，你的RAG系统应该会先执行向量检索，然后对结果进行重排序，从而提供更相关的文档内容。”

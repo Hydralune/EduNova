@@ -104,3 +104,4 @@ RAG/assignments/private/
 !package.json
 !*/requirements.txt
 !*/package.json 
+backend/rag/query_cache/

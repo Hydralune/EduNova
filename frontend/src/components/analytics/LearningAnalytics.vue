@@ -2,142 +2,156 @@
   <div class="learning-analytics">
     <h2 class="text-2xl font-bold mb-6">学习分析</h2>
     
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <!-- 学习进度 -->
-      <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold">整体学习进度</h3>
-          <span class="text-2xl font-bold text-blue-600">{{ overallProgress }}%</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
-          <div class="bg-blue-600 h-3 rounded-full" :style="`width: ${overallProgress}%`"></div>
-        </div>
-        <div class="flex justify-between text-sm text-gray-500">
-          <span>开始</span>
-          <span>完成</span>
-        </div>
-      </div>
-      
-      <!-- 学习时间 -->
-      <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold">本周学习时间</h3>
-          <span class="text-2xl font-bold text-green-600">{{ weeklyLearningTime }}小时</span>
-        </div>
-        <div class="flex items-center">
-          <span class="text-sm text-gray-500 mr-2">上周：</span>
-          <div class="w-full bg-gray-200 rounded-full h-2">
-            <div class="bg-green-600 h-2 rounded-full" :style="`width: ${(previousWeekTime / 10) * 100}%`"></div>
-          </div>
-          <span class="text-sm text-gray-500 ml-2">{{ previousWeekTime }}小时</span>
-        </div>
-      </div>
-      
-      <!-- 完成课程 -->
-      <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold">课程完成情况</h3>
-        </div>
-        <div class="flex items-center justify-center">
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <div class="text-2xl font-bold text-blue-600">{{ completedCourses }}</div>
-              <div class="text-sm text-gray-500">已完成</div>
-            </div>
-            <div>
-              <div class="text-2xl font-bold text-yellow-600">{{ inProgressCourses }}</div>
-              <div class="text-sm text-gray-500">进行中</div>
-            </div>
-            <div>
-              <div class="text-2xl font-bold text-gray-600">{{ notStartedCourses }}</div>
-              <div class="text-sm text-gray-500">未开始</div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- 加载状态 -->
+    <div v-if="loading" class="flex justify-center items-center py-20">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <span class="ml-3 text-gray-600">加载中...</span>
     </div>
     
-    <!-- 学习趋势图 -->
-    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold">学习趋势</h3>
-        <div class="flex items-center">
-          <button 
-            v-for="period in trendPeriods" 
-            :key="period.value"
-            @click="selectedTrendPeriod = period.value"
-            class="px-2 py-1 text-sm rounded-md mr-1"
-            :class="selectedTrendPeriod === period.value ? 'bg-blue-100 text-blue-800' : 'text-gray-500 hover:bg-gray-100'"
-          >
-            {{ period.label }}
-          </button>
-        </div>
-      </div>
-      
-      <div class="h-64 flex items-center justify-center">
-        <!-- 这里是趋势图，实际项目中可以使用Chart.js或ECharts等库 -->
-        <div class="w-full h-full flex items-end justify-between px-4">
-          <div v-for="(item, index) in trendData" :key="index" class="flex flex-col items-center">
-            <div class="w-8 bg-blue-500 rounded-t-md" :style="`height: ${item.value * 2}px`"></div>
-            <div class="text-xs text-gray-500 mt-2">{{ item.label }}</div>
+    <div v-else>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- 学习进度 -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">整体学习进度</h3>
+            <span class="text-2xl font-bold text-blue-600">{{ overallProgress }}%</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+            <div class="bg-blue-600 h-3 rounded-full" :style="`width: ${overallProgress}%`"></div>
+          </div>
+          <div class="flex justify-between text-sm text-gray-500">
+            <span>开始</span>
+            <span>完成</span>
           </div>
         </div>
-      </div>
-    </div>
-    
-    <!-- 课程详情 -->
-    <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b">
-        <h3 class="text-lg font-semibold">课程学习详情</h3>
+        
+        <!-- 学习时间 -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">本周学习时间</h3>
+            <span class="text-2xl font-bold text-green-600">{{ weeklyLearningTime }}小时</span>
+          </div>
+          <div class="flex items-center">
+            <span class="text-sm text-gray-500 mr-2">上周：</span>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div class="bg-green-600 h-2 rounded-full" :style="`width: ${(previousWeekTime / 10) * 100}%`"></div>
+            </div>
+            <span class="text-sm text-gray-500 ml-2">{{ previousWeekTime }}小时</span>
+          </div>
+        </div>
+        
+        <!-- 完成课程 -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">课程完成情况</h3>
+          </div>
+          <CoursePieChart 
+            :completed="completedCourses" 
+            :in-progress="inProgressCourses" 
+            :not-started="notStartedCourses" 
+          />
+        </div>
       </div>
       
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">课程名称</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">进度</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学习时间</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后学习</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">评分</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="course in courseDetails" :key="course.id">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <div class="flex-shrink-0 h-8 w-8 rounded bg-gray-200"></div>
-                  <div class="ml-4">
-                    <div class="text-sm font-medium text-gray-900">{{ course.name }}</div>
-                    <div class="text-xs text-gray-500">{{ course.category }}</div>
+      <!-- 学习趋势图 -->
+      <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold">学习趋势</h3>
+          <div class="flex items-center">
+            <button 
+              v-for="period in trendPeriods" 
+              :key="period.value"
+              @click="selectedTrendPeriod = period.value"
+              class="px-2 py-1 text-sm rounded-md mr-1"
+              :class="selectedTrendPeriod === period.value ? 'bg-blue-100 text-blue-800' : 'text-gray-500 hover:bg-gray-100'"
+            >
+              {{ period.label }}
+            </button>
+          </div>
+        </div>
+        
+        <LearningTrendChart :data="trendData" :title="`${selectedTrendPeriod}学习时长`" />
+      </div>
+      
+      <!-- 知识点掌握情况 -->
+      <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold">知识点掌握情况</h3>
+          <div class="flex items-center">
+            <select 
+              v-model="selectedCourseId" 
+              class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">所有课程</option>
+              <option v-for="course in courseDetails" :key="course.id" :value="course.id">
+                {{ course.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+        
+        <KnowledgeRadarChart :data="knowledgePointsData" />
+      </div>
+      
+      <!-- AI学习建议 -->
+      <div class="mb-6">
+        <AIAnalysisPanel :user-id="props.userId" :course-id="selectedCourseId" />
+      </div>
+      
+      <!-- 课程详情 -->
+      <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b">
+          <h3 class="text-lg font-semibold">课程学习详情</h3>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">课程名称</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">进度</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学习时间</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后学习</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">评分</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="course in courseDetails" :key="course.id">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 h-8 w-8 rounded bg-gray-200"></div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">{{ course.name }}</div>
+                      <div class="text-xs text-gray-500">{{ course.category }}</div>
+                    </div>
                   </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="w-full bg-gray-200 rounded-full h-2.5 max-w-[150px]">
-                  <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${course.progress}%`"></div>
-                </div>
-                <div class="text-xs text-gray-500 mt-1">{{ course.progress }}%</div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ course.learningTime }}小时
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ course.lastActivity }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <span class="text-sm font-medium text-gray-900 mr-2">{{ course.score }}</span>
-                  <div class="flex">
-                    <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="i <= Math.round(course.score / 20) ? 'text-yellow-400' : 'text-gray-300'" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                    </svg>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="w-full bg-gray-200 rounded-full h-2.5 max-w-[150px]">
+                    <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${course.progress}%`"></div>
                   </div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                  <div class="text-xs text-gray-500 mt-1">{{ course.progress }}%</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {{ course.learningTime }}小时
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {{ course.lastActivity }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <span class="text-sm font-medium text-gray-900 mr-2">{{ course.score }}</span>
+                    <div class="flex">
+                      <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="i <= Math.round(course.score / 20) ? 'text-yellow-400' : 'text-gray-300'" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                      </svg>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -145,6 +159,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import LearningTrendChart from './LearningTrendChart.vue';
+import CoursePieChart from './CoursePieChart.vue';
+import KnowledgeRadarChart from './KnowledgeRadarChart.vue';
+import AIAnalysisPanel from './AIAnalysisPanel.vue'; // Added import for AIAnalysisPanel
+import { analyticsAPI } from '@/api';
 
 const props = defineProps({
   userId: {
@@ -153,7 +172,10 @@ const props = defineProps({
   }
 });
 
-// 模拟数据
+// 加载状态
+const loading = ref(true);
+
+// 数据
 const overallProgress = ref(68);
 const weeklyLearningTime = ref(7.5);
 const previousWeekTime = ref(5.2);
@@ -168,9 +190,10 @@ const trendPeriods = [
 ];
 
 const selectedTrendPeriod = ref('week');
+const selectedCourseId = ref('');
 
-// 模拟趋势数据
-const weekTrendData = [
+// 趋势数据
+const weekTrendData = ref([
   { label: '周一', value: 25 },
   { label: '周二', value: 18 },
   { label: '周三', value: 30 },
@@ -178,34 +201,45 @@ const weekTrendData = [
   { label: '周五', value: 15 },
   { label: '周六', value: 10 },
   { label: '周日', value: 5 }
-];
+]);
 
-const monthTrendData = [
+const monthTrendData = ref([
   { label: '第1周', value: 20 },
   { label: '第2周', value: 25 },
   { label: '第3周', value: 18 },
   { label: '第4周', value: 30 }
-];
+]);
 
-const yearTrendData = [
+const yearTrendData = ref([
   { label: '1月', value: 15 },
   { label: '2月', value: 20 },
   { label: '3月', value: 25 },
   { label: '4月', value: 18 },
   { label: '5月', value: 30 },
   { label: '6月', value: 22 }
-];
+]);
 
+// 知识点掌握情况数据
+const knowledgePointsData = ref([
+  { label: '编程基础', value: 85 },
+  { label: '数据结构', value: 65 },
+  { label: '算法设计', value: 70 },
+  { label: '数据库', value: 90 },
+  { label: '网络原理', value: 60 },
+  { label: '软件工程', value: 75 }
+]);
+
+// 计算当前趋势数据
 const trendData = computed(() => {
   switch (selectedTrendPeriod.value) {
     case 'week':
-      return weekTrendData;
+      return weekTrendData.value;
     case 'month':
-      return monthTrendData;
+      return monthTrendData.value;
     case 'year':
-      return yearTrendData;
+      return yearTrendData.value;
     default:
-      return weekTrendData;
+      return weekTrendData.value;
   }
 });
 
@@ -259,21 +293,52 @@ const courseDetails = ref([
 ]);
 
 onMounted(async () => {
-  // 这里可以调用API获取学习分析数据
+  // 获取学习分析数据
   await fetchAnalyticsData();
 });
 
 async function fetchAnalyticsData() {
   try {
-    // 实际项目中应该调用API获取数据
-    // const response = await api.getLearningAnalytics(props.userId);
-    // overallProgress.value = response.overallProgress;
-    // ...
+    loading.value = true;
     
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 500));
+    if (props.userId) {
+      try {
+        const response = await analyticsAPI.getStudentAnalytics(props.userId);
+        const data = response.data || {};
+        
+        // 更新组件数据，添加空值检查
+        overallProgress.value = data.overallProgress !== undefined ? data.overallProgress : overallProgress.value;
+        weeklyLearningTime.value = data.weeklyLearningTime !== undefined ? data.weeklyLearningTime : weeklyLearningTime.value;
+        previousWeekTime.value = data.previousWeekTime !== undefined ? data.previousWeekTime : previousWeekTime.value;
+        completedCourses.value = data.completedCourses !== undefined ? data.completedCourses : completedCourses.value;
+        inProgressCourses.value = data.inProgressCourses !== undefined ? data.inProgressCourses : inProgressCourses.value;
+        notStartedCourses.value = data.notStartedCourses !== undefined ? data.notStartedCourses : notStartedCourses.value;
+        
+        // 更新趋势数据
+        if (data.trendData) {
+          weekTrendData.value = data.trendData.week || weekTrendData.value;
+          monthTrendData.value = data.trendData.month || monthTrendData.value;
+          yearTrendData.value = data.trendData.year || yearTrendData.value;
+        }
+        
+        // 更新课程详情
+        if (data.courseDetails) {
+          courseDetails.value = data.courseDetails;
+        }
+        
+        // 更新知识点数据
+        if (data.knowledgePoints) {
+          knowledgePointsData.value = data.knowledgePoints;
+        }
+      } catch (error) {
+        console.error('API请求失败:', error);
+        // 保留模拟数据
+      }
+    }
   } catch (error) {
     console.error('获取学习分析数据失败:', error);
+  } finally {
+    loading.value = false;
   }
 }
 </script> 

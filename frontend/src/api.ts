@@ -460,6 +460,21 @@ export const ragAiAPI = {
   recommendResources: (data: any) => api.post('/ai/recommend-resources', data),
 }
 
+// 学习分析API
+export const analyticsAPI = {
+  // 获取学生学习分析数据
+  getStudentAnalytics: (studentId: number | string) => 
+    api.get(`/analytics/student/${studentId}`),
+  
+  // 获取课程学习分析数据
+  getCourseAnalytics: (courseId: number | string) => 
+    api.get(`/analytics/course/${courseId}`),
+  
+  // 获取AI分析建议
+  getAIAnalysis: (data: { studentId?: number | string, courseId?: number | string }) => 
+    api.post('/ai/learning-analysis', data)
+}
+
 // 健康检查API
 export const healthAPI = {
   check: () => api.get('/health'),

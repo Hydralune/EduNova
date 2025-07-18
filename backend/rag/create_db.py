@@ -35,6 +35,7 @@ from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.embeddings import Embeddings  # 添加Embeddings导入
 from backend.rag.embedding_util import get_embedding
 from backend.rag.knowledge_graph import build_knowledge_graph
 
@@ -64,9 +65,9 @@ def get_llm():
     if not model_name:
         raise ValueError("LLM_MODEL not found in .env file.")
     return ChatOpenAI(
-        openai_api_key=api_key,
-        openai_api_base=base_url,
-        model_name=model_name,
+        api_key=api_key,
+        base_url=base_url,
+        model=model_name,
         temperature=0,
         max_retries=3
     )
@@ -87,8 +88,61 @@ Text:
     """)
     return prompt | llm | JsonOutputParser()
 
+# --- 自定义文本分割器类 ---
+class CustomTextSplitter:
+    """使用自定义segmentor实现的文本分割器，兼容LangChain接口"""
+    
+    def __init__(self, chunk_size=300, chunk_overlap=50):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        # 延迟导入segment_text，避免循环导入
+        self._segment_text = None
+    
+    @property
+    def segment_text(self):
+        """延迟加载segment_text函数"""
+        if self._segment_text is None:
+            # 在需要时才导入，避免循环导入
+            from backend.rag.segmentor import segment_text
+            self._segment_text = segment_text
+        return self._segment_text
+    
+    def split_text(self, text):
+        """使用自定义分割器分割文本"""
+        try:
+            # 使用自定义分割器
+            chunks = self.segment_text(text, self.chunk_size)
+            logging.info(f"使用分割器成功分割文本为 {len(chunks)} 个块")
+            return chunks
+        except Exception as e:
+            logging.error(f"自定义分割器失败: {e}，回退到简单分割")
+            # 简单的回退分割方法
+            return self._simple_split(text)
+    
+    def _simple_split(self, text):
+        """简单的分割方法，作为回退"""
+        chunks = []
+        for i in range(0, len(text), self.chunk_size - self.chunk_overlap):
+            chunk = text[i:i + self.chunk_size]
+            if chunk:
+                chunks.append(chunk)
+        return chunks
+    
+    def split_documents(self, documents):
+        """分割文档列表，兼容LangChain接口"""
+        texts = []
+        for doc in documents:
+            doc_texts = self.split_text(doc.page_content)
+            for text in doc_texts:
+                new_doc = Document(
+                    page_content=text,
+                    metadata=doc.metadata.copy()
+                )
+                texts.append(new_doc)
+        return texts
+
 # --- Embedding Function Definition ---
-class EmbeddingFunction:
+class EmbeddingFunction(Embeddings):  # 继承自Embeddings接口
     def __init__(self, progress_callback=None):
         self.progress_callback = progress_callback
         self.batch_size = 5  # 进一步减小批处理大小，避免API限制
@@ -358,7 +412,7 @@ async def process_documents(course_id: str, force_rebuild: bool = False):
 
     # 分割文档
     logging.info(f"Splitting documents into chunks (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})...")
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+    text_splitter = CustomTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     splits = text_splitter.split_documents(all_docs)
     
     # 添加唯一ID
@@ -473,8 +527,15 @@ def transcribe_audio(audio_path: str) -> str:
             return data.get("text", "")
         return data
 
-def process_document_with_progress(course_id: str, file_path: str, progress_callback: Optional[Callable[[float], None]] = None):
-    """Process a single document and report progress - 简化版本，暂时关闭知识图谱构建"""
+def process_document_with_progress(course_id: str, file_path: str, progress_callback: Optional[Callable[[float], None]] = None, purpose: str = 'general'):
+    """Process a single document and report progress - 简化版本，暂时关闭知识图谱构建
+    
+    Args:
+        course_id: 课程ID
+        file_path: 文件路径
+        progress_callback: 进度回调函数
+        purpose: 文件用途，如'general'(一般),'lesson_plan'(备课),'assessment'(考核)等
+    """
     
     def report_progress(stage: str, current: int, total: int):
         """Report progress for a specific stage"""
@@ -502,12 +563,16 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
             message = stage_messages.get(stage, f'处理阶段: {stage}')
             
             # Call progress callback with stage and message
-            if hasattr(progress_callback, '__code__') and progress_callback.__code__.co_argcount >= 3:
-                # Progress callback supports stage and message parameters
+            try:
+                # First try with all parameters
                 progress_callback(min(total_progress, 99.9), stage, message)
-            else:
-                # Progress callback only supports progress parameter
-                progress_callback(min(total_progress, 99.9))
+            except TypeError:
+                try:
+                    # Then try with just progress
+                    progress_callback(min(total_progress, 99.9))
+                except Exception as e:
+                    # If all fails, log the error but continue
+                    logging.error(f"Error calling progress_callback: {e}")
     
     try:
         print(f"=== 开始处理文档: {os.path.basename(file_path)} ===")
@@ -551,6 +616,8 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
             docs = loader.load()
         for doc in docs:
             doc.metadata['source'] = filename
+            # 添加文件用途标记
+            doc.metadata['purpose'] = purpose
         
         print(f"✓ 文档加载完成，共 {len(docs)} 个文档")
         report_progress('loading', 1, 1)
@@ -558,12 +625,15 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         # Stage 2: Splitting document
         print("阶段2: 分割文档...")
         report_progress('splitting', 0, 1)
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+        text_splitter = CustomTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
         splits = text_splitter.split_documents(docs)
         
         # Add a unique ID to each split
         for i, doc in enumerate(splits):
             doc.metadata['chunk_id'] = f"chunk_{i}"
+            # 确保每个分割后的文档也有用途标记
+            if 'purpose' not in doc.metadata:
+                doc.metadata['purpose'] = purpose
         
         print(f"✓ 文档分割完成，共 {len(splits)} 个文本块")
         report_progress('splitting', 1, 1)
@@ -611,7 +681,8 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         processed_files[filename] = {
             'hash': file_hash,
             'processed_at': int(time.time()),
-            'chunks': len(splits)
+            'chunks': len(splits),
+            'purpose': purpose  # 添加文件用途
         }
         
         with open(metadata_path, 'w') as f:
@@ -623,6 +694,7 @@ def process_document_with_progress(course_id: str, file_path: str, progress_call
         print(f"=== 文档处理完成: {filename} ===")
         print(f"✓ 文本块数量: {len(splits)}")
         print(f"✓ 向量数据库位置: {persist_dir}")
+        print(f"✓ 文件用途: {purpose}")
         
         return True
         
