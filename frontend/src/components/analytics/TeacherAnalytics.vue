@@ -74,7 +74,7 @@
       <!-- 评估数据 -->
       <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-6">
         <h3 class="text-lg font-semibold mb-4">评估完成情况</h3>
-        <div class="overflow-x-auto">
+        <div v-if="analytics.assessments && analytics.assessments.length > 0" class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
@@ -84,9 +84,6 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-if="!analytics.assessments || analytics.assessments.length === 0">
-                <td colspan="3" class="px-6 py-4 text-center text-gray-500">暂无评估数据</td>
-              </tr>
               <tr v-for="assessment in analytics.assessments" :key="assessment.id">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="text-sm font-medium text-gray-900">{{ assessment.title }}</div>
@@ -105,6 +102,9 @@
               </tr>
             </tbody>
           </table>
+        </div>
+        <div v-else class="text-center py-6 text-gray-500">
+          暂无评估数据
         </div>
       </div>
       
@@ -163,7 +163,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { analyticsAPI, courseAPI } from '@/api';
+import { analyticsAPI, courseAPI, assessmentAPI } from '@/api';
 import KnowledgeRadarChart from './KnowledgeRadarChart.vue';
 
 // 数据类型定义
@@ -246,19 +246,27 @@ async function loadCourses() {
     const response = await courseAPI.getCourses();
     console.log('课程API响应:', response);
     
-    // 检查响应格式
-    if (response && response.courses) {
-      courses.value = response.courses;
+    // 检查响应格式，使用类型断言
+    const responseData = response as any;
+    if (responseData && responseData.courses) {
+      courses.value = responseData.courses;
       console.log('成功加载课程列表:', courses.value);
-    } else if (Array.isArray(response)) {
-      courses.value = response;
+    } else if (Array.isArray(responseData)) {
+      courses.value = responseData;
       console.log('成功加载课程列表(数组格式):', courses.value);
-    } else if (response && response.data && response.data.courses) {
-      courses.value = response.data.courses;
+    } else if (responseData && typeof responseData === 'object' && 'data' in responseData && responseData.data && responseData.data.courses) {
+      courses.value = responseData.data.courses;
       console.log('成功加载课程列表(嵌套格式):', courses.value);
     } else {
-      console.error('API响应格式异常:', response);
+      console.error('API响应格式异常:', responseData);
       courses.value = [];
+    }
+    
+    // 如果有课程且没有选择课程，自动选择第一个课程
+    if (courses.value.length > 0 && !selectedCourseId.value) {
+      console.log('自动选择第一个课程:', courses.value[0].id);
+      selectedCourseId.value = courses.value[0].id;
+      loadCourseAnalytics(); // 加载选中课程的分析数据
     }
   } catch (error) {
     console.error('获取课程列表失败:', error);
@@ -272,8 +280,75 @@ async function loadCourseAnalytics() {
   
   try {
     loading.value = true;
-    const response = await analyticsAPI.getCourseAnalytics(selectedCourseId.value);
-    analytics.value = response.data || {
+    
+    // 获取课程学情分析数据
+    console.log('开始获取课程学情分析数据:', selectedCourseId.value);
+    const analyticsResponse = await analyticsAPI.getCourseAnalytics(Number(selectedCourseId.value));
+    console.log('课程学情分析数据原始响应:', analyticsResponse);
+    
+    // 检查响应格式
+    let responseData;
+    if (analyticsResponse && typeof analyticsResponse === 'object') {
+      // 如果响应有data属性，使用它
+      if ('data' in analyticsResponse) {
+        responseData = analyticsResponse.data;
+        console.log('从analyticsResponse.data获取数据');
+      } else {
+        // 否则直接使用响应
+        responseData = analyticsResponse;
+        console.log('直接使用analyticsResponse作为数据');
+      }
+      
+      console.log('处理后的响应数据:', responseData);
+      
+      // 确保assessments字段存在并且是数组
+      if (!responseData.assessments) {
+        console.warn('响应中缺少assessments字段，设置为空数组');
+        responseData.assessments = [];
+      } else if (!Array.isArray(responseData.assessments)) {
+        console.warn('assessments不是数组，设置为空数组');
+        responseData.assessments = [];
+      }
+      
+      // 调试评估数据
+      console.log('评估数据:', responseData.assessments);
+      
+      // 确保每个评估都有必要的字段
+      responseData.assessments = responseData.assessments.map((assessment: any) => ({
+        id: assessment.id || 0,
+        title: assessment.title || '未命名评估',
+        submissionsCount: assessment.submissionsCount || 0,
+        averageScore: assessment.averageScore || 0
+      }));
+      
+      // 更新分析数据
+      analytics.value = {
+        totalStudents: responseData.totalStudents || 0,
+        completedStudents: responseData.completedStudents || 0,
+        inProgressStudents: responseData.inProgressStudents || 0,
+        notStartedStudents: responseData.notStartedStudents || 0,
+        studentProgress: responseData.studentProgress || [],
+        assessments: responseData.assessments,
+        knowledgePoints: responseData.knowledgePoints || []
+      };
+      
+      console.log('成功加载课程学情分析数据:', analytics.value);
+      console.log('评估数据处理后:', analytics.value.assessments);
+    } else {
+      console.error('API响应格式异常:', analyticsResponse);
+      analytics.value = {
+        totalStudents: 0,
+        completedStudents: 0,
+        inProgressStudents: 0,
+        notStartedStudents: 0,
+        studentProgress: [],
+        assessments: [],
+        knowledgePoints: []
+      };
+    }
+  } catch (error) {
+    console.error('获取课程学情分析数据失败:', error);
+    analytics.value = {
       totalStudents: 0,
       completedStudents: 0,
       inProgressStudents: 0,
@@ -282,8 +357,6 @@ async function loadCourseAnalytics() {
       assessments: [],
       knowledgePoints: []
     };
-  } catch (error) {
-    console.error('获取课程学情分析数据失败:', error);
   } finally {
     loading.value = false;
   }
