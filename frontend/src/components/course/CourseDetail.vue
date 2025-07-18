@@ -284,7 +284,7 @@
             <h3 class="text-lg font-semibold">学生列表</h3>
             <button 
               v-if="canEdit" 
-              @click="showAddStudentsModal = true"
+              @click="openAddStudentsModal"
               class="px-4 py-2 bg-blue-600 text-white rounded-md"
             >
               添加学生
@@ -310,9 +310,9 @@
                 <tbody>
                   <tr v-for="student in students" :key="student.id" class="hover:bg-gray-50">
                     <td class="py-2 px-4 border-b">{{ student.id }}</td>
-                    <td class="py-2 px-4 border-b">{{ student.full_name }}</td>
+                    <td class="py-2 px-4 border-b">{{ student.name }}</td>
                     <td class="py-2 px-4 border-b">{{ student.email }}</td>
-                    <td class="py-2 px-4 border-b">{{ formatDate(student.enrollment_date) }}</td>
+                    <td class="py-2 px-4 border-b">{{ student.last_activity || '未记录' }}</td>
                     <td class="py-2 px-4 border-b">
                       <button 
                         v-if="canEdit"
@@ -406,7 +406,7 @@
                   class="mr-3"
                 />
                 <div>
-                  <div class="font-medium">{{ student.full_name }}</div>
+                  <div class="font-medium">{{ student.name }}</div>
                   <div class="text-sm text-gray-500">{{ student.email }}</div>
                 </div>
               </div>
@@ -744,9 +744,10 @@ interface Material {
 
 interface Student {
   id: number;
-  full_name: string;
+  name: string;
   email: string;
-  enrollment_date: string;
+  progress?: number;
+  last_activity?: string;
 }
 
 interface Assessment {
@@ -946,7 +947,7 @@ function openAddStudentsModal() {
 async function confirmRemoveStudent(student: Student) {
   const confirmed = await dialogService.warning({
     title: '移除学生',
-    message: `确定要将学生 ${student.full_name} 从课程中移除吗？`,
+    message: `确定要将学生 ${student.name} 从课程中移除吗？`,
     confirmText: '移除',
     cancelText: '取消'
   });
@@ -955,7 +956,7 @@ async function confirmRemoveStudent(student: Student) {
     try {
       await courseAPI.removeStudentFromCourse(courseId.value, student.id);
       fetchStudents();
-      notificationService.success('移除成功', `学生 ${student.full_name} 已从课程中移除`);
+      notificationService.success('移除成功', `学生 ${student.name} 已从课程中移除`);
     } catch (error) {
       console.error('移除学生失败:', error);
       notificationService.error('移除学生失败', '请稍后重试');

@@ -13,7 +13,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 
 # 数据库路径
-db_path = os.path.join(project_root, 'instance', 'app.db')
+db_path = os.path.join(current_dir, 'eduNova.sqlite')  # 使用eduNova.sqlite文件
 
 def migrate_knowledge_base_queue():
     """为KnowledgeBaseQueue表添加file_hash和purpose字段"""

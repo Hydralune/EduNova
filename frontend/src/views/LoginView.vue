@@ -87,17 +87,6 @@
             {{ authStore.isLoading ? '登录中...' : '登录' }}
           </button>
         </div>
-
-        <div class="text-center">
-          <p class="text-sm text-gray-600">
-            测试账户：
-          </p>
-          <div class="mt-2 space-y-1 text-xs text-gray-500">
-            <p>管理员: admin / admin123</p>
-            <p>教师: teacher1 / teacher123</p>
-            <p>学生: student1 / student123</p>
-          </div>
-        </div>
       </form>
     </div>
   </div>
