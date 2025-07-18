@@ -296,19 +296,94 @@
       <!-- 总体评价 -->
       <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
         <h3 class="text-lg font-semibold mb-4">总体评价</h3>
+        
+        <!-- 评分配置 -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-md">
+          <h4 class="font-medium text-gray-700 mb-3">评分配置</h4>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- 分数上限 -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">分数上限</label>
+              <div class="flex items-center">
+                <input 
+                  type="number" 
+                  v-model="scoreLimit" 
+                  class="w-24 px-3 py-2 border rounded-md"
+                  :min="0"
+                  step="1"
+                  :disabled="isReadOnly || !enableScoreLimit"
+                  :class="{'bg-gray-100': isReadOnly || !enableScoreLimit}"
+                />
+                <span class="ml-2 text-gray-500">分</span>
+                <div class="ml-4 flex items-center">
+                  <input 
+                    type="checkbox" 
+                    id="enable-score-limit" 
+                    v-model="enableScoreLimit"
+                    class="h-4 w-4 text-blue-600 rounded border-gray-300"
+                    :disabled="isReadOnly"
+                  />
+                  <label for="enable-score-limit" class="ml-2 text-sm text-gray-700">启用上限</label>
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">默认为100分</p>
+            </div>
+            
+            <!-- 分数精度 -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">分数精度</label>
+              <select 
+                v-model="scorePrecision" 
+                class="w-full px-3 py-2 border rounded-md"
+                :disabled="isReadOnly"
+                :class="{'bg-gray-100': isReadOnly}"
+              >
+                <option value="1">整数 (1分)</option>
+                <option value="0.5">半分 (0.5分)</option>
+                <option value="0.1">小数 (0.1分)</option>
+                <option value="0.01">精确小数 (0.01分)</option>
+              </select>
+            </div>
+            
+            <!-- 自动按比例计算 -->
+            <div class="flex flex-col">
+              <label class="block text-sm font-medium text-gray-700 mb-1">自动按比例计算总分</label>
+              <div class="flex items-center h-10">
+                <button 
+                  @click="autoScaleScore" 
+                  class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300"
+                  :disabled="isReadOnly || autoScaling || !enableScoreLimit"
+                >
+                  <span v-if="autoScaling" class="mr-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-white"></div>
+                  </span>
+                  <span>应用</span>
+                </button>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">仅调整最终总分，不修改各题分数</p>
+            </div>
+          </div>
+        </div>
+        
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">总分</label>
-          <input 
-            type="number" 
-            v-model="totalScore" 
-            class="w-24 px-3 py-2 border rounded-md"
-            :min="0" 
-            :max="assessment.total_score" 
-            step="0.5"
-            :disabled="isReadOnly"
-            :class="{'bg-gray-100': isReadOnly}"
-          />
-          <span class="ml-2 text-gray-500">/ {{ assessment.total_score }}</span>
+          <div class="flex items-center">
+            <input 
+              type="number" 
+              v-model="totalScore" 
+              class="w-24 px-3 py-2 border rounded-md"
+              :min="0" 
+              :max="enableScoreLimit ? scoreLimit : undefined" 
+              :step="scorePrecision"
+              :disabled="isReadOnly"
+              :class="{'bg-gray-100': isReadOnly}"
+            />
+            <span class="ml-2 text-gray-500">
+              <template v-if="enableScoreLimit">/ {{ scoreLimit }}</template>
+              <template v-else>(原始总分: {{ rawTotalScore }} / {{ assessment.total_score }})</template>
+            </span>
+          </div>
         </div>
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">总体反馈</label>
@@ -381,6 +456,13 @@ const questionScores = ref([]);
 const questionFeedback = ref([]);
 const overallFeedback = ref('');
 const totalScore = ref(0);
+
+// 评分配置
+const scoreLimit = ref(100); // 默认100分
+const scorePrecision = ref('0.5');
+const autoScaling = ref(false);
+const enableScoreLimit = ref(false); // 默认不启用上限
+const rawTotalScore = ref(0); // 原始总分（未调整）
 
 // AI评分状态
 const aiGradingAll = ref(false);
@@ -633,11 +715,17 @@ const fetchSubmission = async () => {
       // 设置评估数据
       if (response.assessment) {
         assessment.value = response.assessment;
+        // 设置默认分数上限为100分，但不启用
+        scoreLimit.value = 100;
+        enableScoreLimit.value = false;
       } else {
         // 如果提交中没有包含评估数据，则需要单独获取
         try {
           const assessmentResponse = await assessmentAPI.getAssessment(response.assessment_id);
           assessment.value = assessmentResponse;
+          // 设置默认分数上限为100分，但不启用
+          scoreLimit.value = 100;
+          enableScoreLimit.value = false;
         } catch (assessmentError) {
           console.error('获取评估数据失败:', assessmentError);
         }
@@ -648,6 +736,8 @@ const fetchSubmission = async () => {
       
       // 设置总分
       totalScore.value = response.score !== null ? response.score : 0;
+      // 设置原始总分
+      rawTotalScore.value = questionScores.value.reduce((sum, score) => sum + (score || 0), 0);
       
       // 设置整体评价
       overallFeedback.value = response.feedback || '';
@@ -1024,18 +1114,65 @@ const aiGradeQuestion = async (index) => {
   }
 };
 
+// 自动按比例计算总分（仅调整最终总分，不修改各题分数）
+const autoScaleScore = async () => {
+  if (autoScaling.value || !enableScoreLimit.value) return;
+  autoScaling.value = true;
+  
+  try {
+    // 获取当前原始总分
+    const currentTotalRaw = questionScores.value.reduce((sum, score) => sum + (score || 0), 0);
+    rawTotalScore.value = currentTotalRaw;
+    
+    if (currentTotalRaw <= 0) {
+      notificationService.warning('无法计算', '当前没有任何评分，无法按比例计算');
+      return;
+    }
+    
+    // 目标总分
+    const targetTotal = parseFloat(scoreLimit.value);
+    if (!targetTotal) {
+      notificationService.warning('无法计算', '请设置有效的分数上限');
+      return;
+    }
+    
+    // 计算比例并应用到总分
+    const ratio = targetTotal / currentTotalRaw;
+    const precision = parseFloat(scorePrecision.value);
+    
+    // 仅调整最终总分
+    const scaledTotal = currentTotalRaw * ratio;
+    totalScore.value = Math.round(scaledTotal / precision) * precision;
+    
+    notificationService.success('总分已调整', `总分已按比例调整至 ${totalScore.value} 分`);
+  } catch (error) {
+    console.error('按比例计算总分失败:', error);
+    notificationService.error('计算失败', '按比例计算总分失败，请重试');
+  } finally {
+    autoScaling.value = false;
+  }
+};
+
+// 根据精度四舍五入分数
+const roundScoreByPrecision = (score) => {
+  if (!score) return 0;
+  const precision = parseFloat(scorePrecision.value);
+  return Math.round(score / precision) * precision;
+};
+
 // 保存评分
 const saveGrading = async () => {
   try {
     // 准备提交数据
+    const precision = parseFloat(scorePrecision.value);
     const roundedScores = questionScores.value.map(score => {
       if (!score) return 0;
-      // 将每个分数四舍五入到最近的0.5
-      return Math.round(score * 2) / 2;
+      // 根据设置的精度四舍五入
+      return Math.round(score / precision) * precision;
     });
     
-    // 将总分四舍五入到最近的0.5
-    const roundedTotalScore = Math.round(totalScore.value * 2) / 2;
+    // 根据设置的精度四舍五入总分
+    const roundedTotalScore = Math.round(totalScore.value / precision) * precision;
     
     const gradingData = {
       score: roundedTotalScore,
@@ -1065,10 +1202,37 @@ const saveGrading = async () => {
 
 // 监听题目评分变化，自动更新总分
 watch(questionScores, (newScores) => {
-  // 计算总分并四舍五入到最近的0.5
+  // 计算总分并根据精度四舍五入
   const sum = newScores.reduce((sum, score) => sum + (score || 0), 0);
-  totalScore.value = Math.round(sum * 2) / 2;
+  rawTotalScore.value = sum; // 保存原始总分
+  
+  // 如果启用了分数上限，则应用比例调整
+  if (enableScoreLimit.value && scoreLimit.value > 0) {
+    const ratio = scoreLimit.value / assessment.value.total_score;
+    const adjustedSum = sum * ratio;
+    const precision = parseFloat(scorePrecision.value);
+    totalScore.value = Math.round(adjustedSum / precision) * precision;
+  } else {
+    // 否则使用原始总分
+    const precision = parseFloat(scorePrecision.value);
+    totalScore.value = Math.round(sum / precision) * precision;
+  }
 }, { deep: true });
+
+// 监听精度变化，重新计算所有分数
+watch(scorePrecision, (newPrecision) => {
+  const precision = parseFloat(newPrecision);
+  
+  // 重新计算每个题目的分数
+  questionScores.value = questionScores.value.map(score => {
+    if (!score) return 0;
+    return Math.round(score / precision) * precision;
+  });
+  
+  // 重新计算总分
+  const sum = questionScores.value.reduce((sum, score) => sum + (score || 0), 0);
+  totalScore.value = Math.round(sum / precision) * precision;
+});
 
 // 组件挂载时获取数据
 onMounted(() => {

@@ -3,7 +3,7 @@
     <h2 class="text-2xl font-bold mb-6">学习分析</h2>
     
     <!-- 加载状态 -->
-    <div v-if="loading" class="flex justify-center items-center py-20">
+    <div v-if="loading || coursesLoading" class="flex justify-center items-center py-20">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       <span class="ml-3 text-gray-600">加载中...</span>
     </div>
@@ -83,7 +83,7 @@
               class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">所有课程</option>
-              <option v-for="course in courseDetails" :key="course.id" :value="course.id">
+              <option v-for="course in realCourses" :key="course.id" :value="course.id">
                 {{ course.name }}
               </option>
             </select>
@@ -104,30 +104,33 @@
           <h3 class="text-lg font-semibold">课程学习详情</h3>
         </div>
         
-        <div class="overflow-x-auto">
+        <div v-if="courseDetails.length === 0" class="p-6 text-center text-gray-500">
+          暂无课程数据
+        </div>
+        
+        <div v-else class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">课程名称</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">进度</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学习时间</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最后学习</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">评分</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">课程名称</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">进度</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">学习时间</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">最后学习</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-for="course in courseDetails" :key="course.id">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center">
-                    <div class="flex-shrink-0 h-8 w-8 rounded bg-gray-200"></div>
-                    <div class="ml-4">
+                    <!-- 删除不能正常加载的图标 -->
+                    <div class="ml-0">
                       <div class="text-sm font-medium text-gray-900">{{ course.name }}</div>
                       <div class="text-xs text-gray-500">{{ course.category }}</div>
                     </div>
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="w-full bg-gray-200 rounded-full h-2.5 max-w-[150px]">
+                  <div class="w-full bg-gray-200 rounded-full h-2.5 max-w-[120px]">
                     <div class="bg-blue-600 h-2.5 rounded-full" :style="`width: ${course.progress}%`"></div>
                   </div>
                   <div class="text-xs text-gray-500 mt-1">{{ course.progress }}%</div>
@@ -137,16 +140,6 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {{ course.lastActivity }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="flex items-center">
-                    <span class="text-sm font-medium text-gray-900 mr-2">{{ course.score }}</span>
-                    <div class="flex">
-                      <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="i <= Math.round(course.score / 20) ? 'text-yellow-400' : 'text-gray-300'" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-                      </svg>
-                    </div>
-                  </div>
                 </td>
               </tr>
             </tbody>
@@ -158,12 +151,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import LearningTrendChart from './LearningTrendChart.vue';
 import CoursePieChart from './CoursePieChart.vue';
 import KnowledgeRadarChart from './KnowledgeRadarChart.vue';
 import AIAnalysisPanel from './AIAnalysisPanel.vue'; // Added import for AIAnalysisPanel
-import { analyticsAPI } from '@/api';
+import { analyticsAPI, courseAPI } from '@/api';
+
+// 定义课程接口
+interface Course {
+  id: number;
+  name: string;
+  description?: string;
+  category?: string;
+  difficulty?: string;
+  teacher_name?: string;
+  student_count?: number;
+  is_public?: boolean;
+  cover_image?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 定义课程详情接口
+interface CourseDetail {
+  id: number;
+  name: string;
+  category: string;
+  progress: number;
+  learningTime: number;
+  lastActivity: string;
+  score: number;
+}
 
 const props = defineProps({
   userId: {
@@ -174,6 +193,7 @@ const props = defineProps({
 
 // 加载状态
 const loading = ref(true);
+const coursesLoading = ref(true);
 
 // 数据
 const overallProgress = ref(68);
@@ -191,6 +211,9 @@ const trendPeriods = [
 
 const selectedTrendPeriod = ref('week');
 const selectedCourseId = ref('');
+
+// 真实课程列表
+const realCourses = ref<Course[]>([]);
 
 // 趋势数据
 const weekTrendData = ref([
@@ -229,6 +252,73 @@ const knowledgePointsData = ref([
   { label: '软件工程', value: 75 }
 ]);
 
+// 根据课程ID生成随机知识点数据
+const generateRandomKnowledgePoints = (courseId: string | number) => {
+  // 不同课程的知识点映射
+  const courseKnowledgePoints: Record<string, { label: string; value: number }[]> = {
+    // 默认/所有课程的知识点
+    'default': [
+      { label: '编程基础', value: Math.floor(Math.random() * 30) + 60 },
+      { label: '数据结构', value: Math.floor(Math.random() * 30) + 60 },
+      { label: '算法设计', value: Math.floor(Math.random() * 30) + 60 },
+      { label: '数据库', value: Math.floor(Math.random() * 30) + 60 },
+      { label: '网络原理', value: Math.floor(Math.random() * 30) + 60 },
+      { label: '软件工程', value: Math.floor(Math.random() * 30) + 60 }
+    ]
+  };
+  
+  // 为真实课程生成随机知识点
+  realCourses.value.forEach(course => {
+    // 为每个课程生成5-7个随机知识点
+    const knowledgePointCount = Math.floor(Math.random() * 3) + 5; // 5-7个知识点
+    const knowledgePoints: { label: string; value: number }[] = [];
+    
+    // 根据课程类别生成不同的知识点名称
+    const category = course.category?.toLowerCase() || '';
+    let baseKnowledgePoints: string[] = [];
+    
+    if (category.includes('计算机') || category.includes('编程')) {
+      baseKnowledgePoints = ['编程基础', '数据结构', '算法设计', '数据库', '网络原理', '软件工程', '操作系统', '编译原理', '人工智能', '机器学习'];
+    } else if (category.includes('数学')) {
+      baseKnowledgePoints = ['微积分', '线性代数', '概率论', '离散数学', '数学分析', '复变函数', '微分方程', '数值计算', '统计学', '优化理论'];
+    } else if (category.includes('物理')) {
+      baseKnowledgePoints = ['力学', '热学', '光学', '电磁学', '原子物理', '量子力学', '相对论', '固体物理', '流体力学', '热力学'];
+    } else if (category.includes('语言')) {
+      baseKnowledgePoints = ['语法结构', '词汇运用', '阅读理解', '写作技巧', '口语表达', '听力理解', '文学赏析', '修辞手法', '翻译技巧', '学术写作'];
+    } else {
+      // 通用知识点
+      baseKnowledgePoints = ['基础理论', '实践应用', '分析能力', '解决问题', '创新思维', '团队协作', '专业素养', '研究方法', '技术应用', '学科前沿'];
+    }
+    
+    // 随机选择知识点
+    const selectedPoints = new Set<string>();
+    while (selectedPoints.size < knowledgePointCount && baseKnowledgePoints.length > 0) {
+      const randomIndex = Math.floor(Math.random() * baseKnowledgePoints.length);
+      selectedPoints.add(baseKnowledgePoints[randomIndex]);
+      baseKnowledgePoints.splice(randomIndex, 1); // 避免重复
+    }
+    
+    // 为每个知识点生成随机掌握度
+    Array.from(selectedPoints).forEach(point => {
+      knowledgePoints.push({
+        label: point,
+        value: Math.floor(Math.random() * 30) + 60 // 60-90之间的随机值
+      });
+    });
+    
+    // 添加到映射中
+    courseKnowledgePoints[course.id.toString()] = knowledgePoints;
+  });
+  
+  // 根据课程ID返回对应知识点，如果没有对应ID则返回默认知识点
+  return courseKnowledgePoints[courseId.toString()] || courseKnowledgePoints['default'];
+};
+
+// 监听selectedCourseId变化，更新知识点数据
+watch(selectedCourseId, (newCourseId) => {
+  knowledgePointsData.value = generateRandomKnowledgePoints(newCourseId);
+});
+
 // 计算当前趋势数据
 const trendData = computed(() => {
   switch (selectedTrendPeriod.value) {
@@ -244,57 +334,82 @@ const trendData = computed(() => {
 });
 
 // 课程详情数据
-const courseDetails = ref([
-  {
-    id: 1,
-    name: '人工智能基础',
-    category: '计算机科学',
-    progress: 85,
-    learningTime: 12.5,
-    lastActivity: '2025-06-23',
-    score: 90
-  },
-  {
-    id: 2,
-    name: '高等数学',
-    category: '数学',
-    progress: 60,
-    learningTime: 8.2,
-    lastActivity: '2025-06-22',
-    score: 75
-  },
-  {
-    id: 3,
-    name: '英语写作',
-    category: '语言',
-    progress: 100,
-    learningTime: 15.0,
-    lastActivity: '2025-06-20',
-    score: 95
-  },
-  {
-    id: 4,
-    name: '数据结构与算法',
-    category: '计算机科学',
-    progress: 45,
-    learningTime: 6.8,
-    lastActivity: '2025-06-24',
-    score: 80
-  },
-  {
-    id: 5,
-    name: '物理学基础',
-    category: '自然科学',
-    progress: 100,
-    learningTime: 10.5,
-    lastActivity: '2025-06-15',
-    score: 88
+const courseDetails = ref<CourseDetail[]>([]);
+
+// 根据真实课程生成虚拟的课程详情数据
+const generateCourseDetails = (courses: Course[]): CourseDetail[] => {
+  return courses.map(course => ({
+    id: course.id,
+    name: course.name,
+    category: course.category || '未分类',
+    progress: Math.floor(Math.random() * 100),
+    learningTime: parseFloat((Math.random() * 20).toFixed(1)),
+    lastActivity: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    score: Math.floor(Math.random() * 40) + 60
+  }));
+};
+
+// 获取真实课程列表
+async function fetchCourses() {
+  coursesLoading.value = true;
+  try {
+    console.log('开始获取课程列表...');
+    const response = await courseAPI.getCourses();
+    console.log('课程API响应:', response);
+    
+    // 处理API响应数据
+    if (response && typeof response === 'object' && 'courses' in response) {
+      realCourses.value = (response as any).courses || [];
+    } else if (Array.isArray(response)) {
+      realCourses.value = response;
+    } else if (response && typeof response === 'object' && 'data' in response && response.data && response.data.courses) {
+      realCourses.value = response.data.courses;
+    } else {
+      console.warn('API返回格式不符合预期:', response);
+      realCourses.value = [];
+    }
+    
+    console.log('获取到课程列表:', realCourses.value);
+    
+    // 根据真实课程生成课程详情数据
+    if (realCourses.value.length > 0) {
+      courseDetails.value = generateCourseDetails(realCourses.value);
+    } else {
+      courseDetails.value = [];
+    }
+    
+  } catch (error) {
+    console.error('获取课程列表失败:', error);
+    realCourses.value = [];
+    courseDetails.value = [];
+  } finally {
+    coursesLoading.value = false;
   }
-]);
+}
 
 onMounted(async () => {
-  // 获取学习分析数据
-  await fetchAnalyticsData();
+  try {
+    loading.value = true;
+    
+    // 获取课程列表
+    await fetchCourses();
+    
+    // 获取学习分析数据
+    await fetchAnalyticsData();
+    
+    // 初始化知识点数据 - 在课程数据加载后执行
+    if (realCourses.value.length > 0) {
+      // 如果有课程，默认选择第一个课程
+      if (!selectedCourseId.value && realCourses.value.length > 0) {
+        selectedCourseId.value = realCourses.value[0].id.toString();
+      }
+      knowledgePointsData.value = generateRandomKnowledgePoints(selectedCourseId.value);
+    }
+  } catch (error) {
+    console.error('初始化学习分析数据失败:', error);
+  } finally {
+    loading.value = false;
+  }
 });
 
 async function fetchAnalyticsData() {
