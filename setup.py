@@ -5,75 +5,56 @@ This script helps set up the EduNova project by installing dependencies and init
 """
 
 import os
-import subprocess
 import sys
+from setuptools import setup, find_packages
 
-def print_header(message):
-    print("\n" + "=" * 80)
-    print(f" {message}")
-    print("=" * 80)
+# 确保PyInstaller在路径中
+try:
+    import PyInstaller
+except ImportError:
+    print("PyInstaller未安装，请先运行: pip install pyinstaller")
+    sys.exit(1)
 
-def run_command(command, cwd=None):
-    print(f"> Running: {command}")
-    try:
-        subprocess.run(command, shell=True, check=True, cwd=cwd)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {e}")
-        return False
+# 项目元数据
+setup(
+    name="EduNova",
+    version="1.0.0",
+    description="智能教学系统",
+    author="EduNova Team",
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
+        "flask",
+        "flask-cors",
+        "pyinstaller"
+    ],
+)
 
-def install_python_deps():
-    print_header("Installing Python dependencies")
-    if not run_command("pip install -r requirements.txt"):
-        print("Failed to install Python dependencies")
-        return False
-    return True
-
-def install_node_deps():
-    print_header("Installing Node.js dependencies")
-    if not run_command("npm install"):
-        print("Failed to install Node.js dependencies")
-        return False
-    return True
-
-def init_database():
-    print_header("Initializing database")
-    if not run_command("python init_db.py", cwd="backend"):
-        print("Failed to initialize database")
-        return False
-    return True
-
-def main():
-    print_header("EduNova Setup")
+# PyInstaller配置
+if "build_exe" in sys.argv:
+    import PyInstaller.__main__
     
-    # Check if Python is installed
-    if not run_command("python --version"):
-        print("Python is not installed or not in PATH")
-        return False
+    # 前端构建目录
+    frontend_dist = os.path.join("frontend", "dist")
     
-    # Check if Node.js is installed
-    if not run_command("node --version"):
-        print("Node.js is not installed or not in PATH")
-        return False
+    # 确保前端已构建
+    if not os.path.exists(frontend_dist):
+        print("错误: 前端尚未构建。请先运行: cd frontend && npm run build")
+        sys.exit(1)
     
-    # Install dependencies
-    if not install_python_deps():
-        return False
-    
-    if not install_node_deps():
-        return False
-    
-    # Initialize database
-    if not init_database():
-        return False
-    
-    print_header("Setup completed successfully!")
-    print("\nYou can now run the application with:")
-    print("  - Backend: npm run start:backend")
-    print("  - Frontend: npm run start:frontend")
-    
-    return True
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1) 
+    # PyInstaller参数
+    PyInstaller.__main__.run([
+        "backend/main.py",  # 入口文件
+        "--name=EduNova",   # 可执行文件名称
+        "--onefile",        # 单文件模式
+        "--windowed",       # 无控制台窗口
+        "--icon=frontend/public/favicon.ico",  # 应用图标
+        # 添加数据文件
+        "--add-data=frontend/dist;frontend/dist",  # 前端构建文件
+        "--add-data=backend/templates;backend/templates",  # 后端模板
+        "--add-data=backend/instance;backend/instance",  # 实例文件夹
+        # 排除不需要的模块
+        "--exclude-module=matplotlib",
+        "--exclude-module=notebook",
+        "--exclude-module=jupyter",
+    ]) 
