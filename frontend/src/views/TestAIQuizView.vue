@@ -522,12 +522,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, inject } from 'vue';
 import { courseAPI } from '@/api';
 import studentQuizAPI from '@/api/studentQuizAPI';
-
-// 导入通知服务（如果项目中有）
-// 如果项目中没有，可以使用简单的提示功能
+import notificationService from '@/services/notificationService';
+import dialogService from '@/services/dialogService';
 
 // 状态变量
 const courses = ref([]);
@@ -539,6 +538,9 @@ const showQuizModal = ref(false);
 const quizHistory = ref([]);
 const currentQuiz = ref(null);
 const currentQuestionIndex = ref(0); // 当前题目索引
+
+// 获取全局通知方法
+const showNotification = inject('showNotification') || notificationService.show;
 
 // 问题类型定义
 const questionTypes = [
@@ -600,6 +602,7 @@ async function fetchCourses() {
     }
   } catch (error) {
     console.error('获取课程失败:', error);
+    notificationService.error('获取课程失败', '无法加载课程列表');
   }
 }
 
@@ -634,6 +637,7 @@ async function fetchQuizHistory() {
     }
   } catch (error) {
     console.error('获取测验历史记录失败:', error);
+    notificationService.warning('获取历史记录失败', '正在尝试从本地缓存加载');
     // 如果API调用失败，尝试从localStorage加载
     loadQuizHistory();
   }
@@ -646,14 +650,22 @@ function openQuizConfigModal() {
 function closeQuizModal() {
   // 如果测验正在生成中，提示用户
   if (currentQuiz.value && currentQuiz.value.status === 'generating') {
-    if (!confirm('测验正在生成中，关闭后可以在历史记录中继续。确定要关闭吗？')) {
-      return;
-    }
+    dialogService.confirm({
+      title: '关闭确认',
+      message: '测验正在生成中，关闭后可以在历史记录中继续。确定要关闭吗？',
+      type: 'warning'
+    }).then(result => {
+      if (result) {
+        showQuizModal.value = false;
+        currentQuiz.value = null;
+        currentQuestionIndex.value = 0; // 关闭时重置题目索引
+      }
+    });
+  } else {
+    showQuizModal.value = false;
+    currentQuiz.value = null;
+    currentQuestionIndex.value = 0; // 关闭时重置题目索引
   }
-  
-  showQuizModal.value = false;
-  currentQuiz.value = null;
-  currentQuestionIndex.value = 0; // 关闭时重置题目索引
 }
 
 function formatDate(dateString) {
@@ -774,16 +786,19 @@ async function generateQuiz() {
       
       // 立即执行一次状态检查
       await checkQuizStatus(response.quiz_id);
+      
+      // 显示成功通知
+      notificationService.success('测验生成已开始', '题目将逐个生成，您可以开始作答已生成的题目');
     } else {
       console.error('生成测验失败: 无效的响应');
-      alert('生成测验失败，请重试');
+      notificationService.error('生成测验失败', '请重试');
       // 关闭测验窗口
       showQuizModal.value = false;
       currentQuiz.value = null;
     }
   } catch (error) {
     console.error('生成测验失败:', error);
-    alert('生成测验失败，请重试');
+    notificationService.error('生成测验失败', error.message || '请重试');
     // 关闭测验窗口
     showQuizModal.value = false;
     currentQuiz.value = null;
@@ -908,13 +923,21 @@ async function checkQuizStatus(quizId) {
           if (previousQuestionCount === 0 && newQuestionCount > 0) {
             console.log('首次显示题目 - 自动切换到第一题');
             currentQuestionIndex.value = 0;
+            
+            // 显示通知
+            notificationService.info('首道题目已生成', '您可以开始作答了');
           }
           
           // 检测到新题目
           if (newQuestionCount > previousQuestionCount && previousQuestionCount > 0) {
             console.log(`新增了 ${newQuestionCount - previousQuestionCount} 道题目`);
             
-            // 可以在这里添加其他处理逻辑，但不显示通知
+            // 显示通知
+            if (newQuestionCount - previousQuestionCount === 1) {
+              notificationService.info('新题目已生成', '已添加1道新题目');
+            } else {
+              notificationService.info('新题目已生成', `已添加${newQuestionCount - previousQuestionCount}道新题目`);
+            }
           }
         }
       }
@@ -937,25 +960,48 @@ async function checkQuizStatus(quizId) {
           adjustPollingInterval(quizId, 'graded');
           // 保持提交状态为true，直到学习建议生成完成
           isSubmitting.value = true;
+          
+          // 显示通知
+          notificationService.info('评分已完成', '正在生成学习建议...');
         } else if (response.status === 'grading') {
           console.log('测验正在评分中...');
           // 继续轮询，使用评分中的轮询间隔
           adjustPollingInterval(quizId, 'grading');
           // 保持提交状态为true
           isSubmitting.value = true;
-        } else {
+        } else if (response.status === 'completed' && previousStatus !== 'completed') {
+          // 测验已完成，重置提交状态
+          isSubmitting.value = false;
+          
+          // 显示通知
+          notificationService.success('测验已完成', `您的得分: ${response.score || 0}分`);
+          
           // 测验已完成或出错，停止轮询
           if (statusPollingInterval) {
             clearInterval(statusPollingInterval);
             statusPollingInterval = null;
-            console.log('测验已完成或出错，停止轮询');
+            console.log('测验已完成，停止轮询');
           }
-          // 测验已完成，重置提交状态
+        } else if (response.status === 'error') {
+          // 显示错误通知
+          notificationService.error('测验出错', '生成或评分过程中出现错误');
+          
+          // 测验已完成或出错，停止轮询
+          if (statusPollingInterval) {
+            clearInterval(statusPollingInterval);
+            statusPollingInterval = null;
+            console.log('测验出错，停止轮询');
+          }
+          
+          // 重置提交状态
           isSubmitting.value = false;
         }
       } else if (response.status === 'in_progress' && previousStatus === 'generating') {
         // 如果状态从 generating 变为 in_progress，说明题目生成已完成
         console.log('题目生成已完成，状态更新为进行中');
+        
+        // 显示通知
+        notificationService.success('题目生成已完成', '所有题目已生成完毕，您可以开始作答');
         
         // 额外执行一次状态检查，确保获取到所有题目
         setTimeout(async () => {
@@ -1011,9 +1057,13 @@ async function submitQuiz() {
   // 检查是否有未回答的题目
   const unansweredCount = currentQuiz.value.answers.filter(a => !a).length;
   if (unansweredCount > 0) {
-    if (!confirm(`您有 ${unansweredCount} 道题目尚未回答。确定要提交吗？`)) {
-      return;
-    }
+    const result = await dialogService.confirm({
+      title: '提交确认',
+      message: `您有 ${unansweredCount} 道题目尚未回答。确定要提交吗？`,
+      type: 'warning'
+    });
+    
+    if (!result) return;
   }
   
   // 设置提交中状态 - 这个标志将保持为true直到评分完成
@@ -1032,6 +1082,9 @@ async function submitQuiz() {
     // 保存状态到本地存储
     saveQuizHistory();
     
+    // 显示提交通知
+    notificationService.info('测验已提交', 'AI正在评分中，请稍候...');
+    
     // 调用API提交答案
     const response = await studentQuizAPI.submitQuizAnswers(currentQuiz.value.id, currentQuiz.value.answers);
     console.log('提交测验响应:', response);
@@ -1047,7 +1100,7 @@ async function submitQuiz() {
     
   } catch (error) {
     console.error('提交测验失败:', error);
-    alert('提交测验失败，请重试');
+    notificationService.error('提交失败', error.message || '请重试');
     // 恢复状态
     currentQuiz.value.status = 'in_progress';
     
@@ -1088,7 +1141,13 @@ function continueQuiz(quiz) {
 
 // 删除测验
 async function deleteQuiz(quizId) {
-  if (confirm('确定要删除这个测验记录吗？')) {
+  const result = await dialogService.confirm({
+    title: '删除确认',
+    message: '确定要删除这个测验记录吗？此操作不可撤销。',
+    type: 'warning'
+  });
+  
+  if (result) {
     try {
       // 调用API删除测验
       await studentQuizAPI.deleteQuiz(quizId);
@@ -1096,9 +1155,12 @@ async function deleteQuiz(quizId) {
       // 从历史记录中移除
       quizHistory.value = quizHistory.value.filter(q => q.id !== quizId);
       saveQuizHistory();
+      
+      // 显示成功通知
+      notificationService.success('删除成功', '测验记录已删除');
     } catch (error) {
       console.error('删除测验失败:', error);
-      alert('删除测验失败，请重试');
+      notificationService.error('删除失败', error.message || '请重试');
     }
   }
 }
@@ -1128,6 +1190,18 @@ function checkActiveQuiz() {
     currentQuiz.value = activeQuiz;
     showQuizModal.value = true;
     currentQuestionIndex.value = 0; // 检查时重置题目索引
+    
+    // 显示通知
+    if (activeQuiz.status === 'generating') {
+      notificationService.info('继续测验', '您有一个正在生成的测验，已自动恢复');
+    } else {
+      notificationService.info('继续测验', '您有一个未完成的测验，已自动恢复');
+    }
+    
+    // 如果测验仍在生成中，继续轮询
+    if (activeQuiz.status === 'generating') {
+      adjustPollingInterval(activeQuiz.id, 'generating');
+    }
   }
 }
 

@@ -188,6 +188,34 @@ EduNova 的核心功能之一是基于 RAG (Retrieval-Augmented Generation) 的�
 
 详细的队列管理系统文档请参阅 [RAG_Queue_Management.md](docs/RAG_Queue_Management.md)。
 
+## 打包为可执行文件
+
+本项目支持打包为单个可执行文件(.exe)，方便在没有Python和Node.js环境的电脑上运行。
+
+### 打包步骤
+
+1. 确保已安装Python 3.8+和Node.js 14+
+2. 安装所需依赖：`pip install -r requirements.txt`
+3. 运行打包脚本：`build_exe.bat`
+4. 打包完成后，可执行文件将位于`dist`目录中
+
+### 注意事项
+
+- 打包过程可能需要几分钟时间，请耐心等待
+- 打包后的文件较大（约100-200MB），这是正常的
+- 首次运行可能需要稍长时间启动
+- 默认端口为5001，可通过浏览器访问 http://localhost:5001
+
+### 打包原理
+
+打包使用PyInstaller将Python后端和Vue前端打包为单个可执行文件。打包过程包括：
+
+1. 构建前端（npm build）
+2. 使用PyInstaller打包后端和前端静态文件
+3. 配置资源路径，确保打包后能正确访问文件
+
+如需自定义打包配置，请修改`setup.py`文件中的PyInstaller参数。
+
 ## 📝 许可证
 
 本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。

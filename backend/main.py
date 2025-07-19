@@ -11,6 +11,19 @@ from flask import Flask, jsonify, request, make_response, send_from_directory
 from backend.extensions import db, jwt, cors, migrate
 from flask_cors import CORS
 
+# 检测是否在PyInstaller环境中运行
+def resource_path(relative_path):
+    """ 获取资源的绝对路径，兼容开发环境和PyInstaller打包后的环境 """
+    try:
+        # PyInstaller创建临时文件夹，将路径存储在_MEIPASS中
+        # 这是PyInstaller特有的属性，不是标准sys模块的一部分
+        base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
+    except Exception:
+        # 不在PyInstaller环境中，使用正常的路径
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -96,6 +109,24 @@ app.register_blueprint(learning_bp, url_prefix='/api')
 app.register_blueprint(rag_api, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(student_quiz_bp, url_prefix='/api')
+
+# 配置前端静态文件路由
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    # 检查是否在PyInstaller环境中
+    frontend_path = resource_path('frontend/dist')
+    
+    # 如果请求的是API路由，不处理
+    if path.startswith('api/'):
+        return jsonify({"error": "Not Found"}), 404
+    
+    # 如果路径为空或不存在，返回index.html
+    if path == '' or not os.path.exists(os.path.join(frontend_path, path)):
+        return send_from_directory(frontend_path, 'index.html')
+    
+    # 返回请求的静态文件
+    return send_from_directory(frontend_path, path)
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])
@@ -227,5 +258,5 @@ if __name__ == '__main__':
     for rule in app.url_map.iter_rules():
         print(rule)
     print('=======================')
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=False)
 

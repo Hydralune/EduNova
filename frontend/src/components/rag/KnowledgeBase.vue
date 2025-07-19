@@ -443,6 +443,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ragAiAPI, materialAPI, courseAPI, knowledgeBaseAPI } from '../../api';
+import notificationService from '../../services/notificationService';
+import dialogService from '../../services/dialogService';
 
 // 类型定义
 interface Course {
@@ -738,7 +740,7 @@ function updateStats() {
 // 直接上传到知识库
 async function uploadToKnowledgeBase() {
   if (!uploadForm.courseId || !uploadForm.file) {
-    alert('请选择课程和文件');
+    notificationService.warning('操作提示', '请选择课程和文件');
     return;
   }
 
@@ -790,7 +792,11 @@ async function uploadToKnowledgeBase() {
     if (isDuplicate) {
       console.log('检测到重复文件:', duplicateMessage);
       // 可以选择继续处理或停止
-      const continueProcessing = confirm(`${duplicateMessage}\n\n是否继续将该文件添加到知识库？`);
+      const continueProcessing = await dialogService.confirm({
+        title: '重复文件提示',
+        message: `${duplicateMessage}\n\n是否继续将该文件添加到知识库？`,
+        type: 'info'
+      });
       if (!continueProcessing) {
         uploadProgress.value = 0;
         return;
@@ -849,7 +855,7 @@ async function uploadToKnowledgeBase() {
       const successMessage = isDuplicate 
         ? '重复文件已添加到知识库处理队列' 
         : '文件已成功上传并添加到知识库处理队列';
-      alert(successMessage);
+      notificationService.success('上传成功', successMessage);
     } else {
       throw new Error(message || '添加到知识库失败');
     }
@@ -898,7 +904,7 @@ async function fetchCourseMaterials() {
 // 从课件导入到知识库
 async function importToKnowledgeBase(material: Material) {
   if (!material.file_path) {
-    alert('该材料没有文件路径，无法导入到知识库');
+    notificationService.warning('操作提示', '该材料没有文件路径，无法导入到知识库');
     return;
   }
   // 修正 file_path 路径，去掉 /uploads/ 前缀
@@ -922,13 +928,13 @@ async function importToKnowledgeBase(material: Material) {
     
     if (success) {
       await fetchKnowledgeBaseStatus();
-      alert('文件已添加到知识库处理队列');
+      notificationService.success('导入成功', '文件已添加到知识库处理队列');
     } else {
       throw new Error(message || '添加到知识库失败');
     }
   } catch (error) {
     console.error('导入到知识库失败:', error);
-    alert(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('导入失败', error instanceof Error ? error.message : '未知错误');
   }
 }
 
@@ -977,6 +983,14 @@ function getImportButtonText(material: Material) {
 // 重试处理
 async function retryProcessing(item: KnowledgeItem) {
   try {
+    const result = await dialogService.confirm({
+      title: '重试处理',
+      message: `确定要重新处理文件 "${getFileName(item.file_path)}" 吗？`,
+      type: 'info'
+    });
+    
+    if (!result) return;
+    
     const response = await knowledgeBaseAPI.addToKnowledgeBase(item.course_id, item.file_path);
     
     // 检查响应格式
@@ -995,23 +1009,27 @@ async function retryProcessing(item: KnowledgeItem) {
     
     if (success) {
       await fetchKnowledgeBaseStatus();
-      alert('已重新添加到处理队列');
+      notificationService.success('重试成功', '文件已重新加入处理队列');
     } else {
       throw new Error(message || '重试失败');
     }
   } catch (error) {
     console.error('重试处理失败:', error);
-    alert(`重试失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('重试失败', error instanceof Error ? error.message : '未知错误');
   }
 }
 
 // 从知识库删除
 async function removeFromKnowledgeBase(item: KnowledgeItem) {
-  if (!confirm(`确定要从知识库中删除文件 "${getFileName(item.file_path)}" 吗？此操作不可恢复。`)) {
-    return;
-  }
-  
   try {
+    const result = await dialogService.confirm({
+      title: '删除确认',
+      message: `确定要从知识库中删除文件 "${getFileName(item.file_path)}" 吗？此操作不可恢复。`,
+      type: 'info'
+    });
+    
+    if (!result) return;
+    
     const response = await knowledgeBaseAPI.removeFromKnowledgeBase(item.id);
     
     // 检查响应格式
@@ -1030,20 +1048,20 @@ async function removeFromKnowledgeBase(item: KnowledgeItem) {
     
     if (success) {
       await fetchKnowledgeBaseStatus();
-      alert('文件已从知识库中删除');
+      notificationService.success('删除成功', '文件已从知识库中删除');
     } else {
       throw new Error(message || '删除失败');
     }
   } catch (error) {
     console.error('删除失败:', error);
-    alert(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('删除失败', error instanceof Error ? error.message : '未知错误');
   }
 }
 
 // 在文件中搜索
 function searchInFile(item: KnowledgeItem) {
   // 这里可以跳转到搜索页面或打开搜索对话框
-  alert(`搜索功能开发中，文件: ${getFileName(item.file_path)}`);
+  notificationService.info('功能开发中', `搜索功能开发中，文件: ${getFileName(item.file_path)}`);
 }
 
 // 工具函数
@@ -1171,15 +1189,19 @@ function toggleSelectAll() {
 
 async function batchDelete() {
   if (selectedItemIds.value.length === 0) {
-    alert('请选择要删除的文件');
-    return;
-  }
-  
-  if (!confirm(`确定要删除选中的 ${selectedItemIds.value.length} 个文件吗？此操作不可恢复。`)) {
+    notificationService.warning('操作提示', '请选择要删除的文件');
     return;
   }
   
   try {
+    const result = await dialogService.confirm({
+      title: '批量删除确认',
+      message: `确定要删除选中的 ${selectedItemIds.value.length} 个文件吗？此操作不可恢复。`,
+      type: 'info'
+    });
+    
+    if (!result) return;
+    
     batchDeleting.value = true;
     const response = await knowledgeBaseAPI.batchRemove(selectedItemIds.value);
     
@@ -1201,13 +1223,13 @@ async function batchDelete() {
       selectedItemIds.value = [];
       selectAll.value = false;
       await fetchKnowledgeBaseStatus();
-      alert(message);
+      notificationService.success('批量删除成功', message || '所选文件已删除');
     } else {
       throw new Error(message || '批量删除失败');
     }
   } catch (error) {
     console.error('批量删除失败:', error);
-    alert(`批量删除失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('批量删除失败', error instanceof Error ? error.message : '未知错误');
   } finally {
     batchDeleting.value = false;
   }
@@ -1215,15 +1237,19 @@ async function batchDelete() {
 
 async function clearQueue() {
   if (!filterCourseId.value) {
-    alert('请先选择课程');
-    return;
-  }
-  
-  if (!confirm('确定要清空当前课程的所有待处理和处理中的队列吗？此操作不可恢复。')) {
+    notificationService.warning('操作提示', '请先选择课程');
     return;
   }
   
   try {
+    const result = await dialogService.confirm({
+      title: '清空队列确认',
+      message: '确定要清空当前课程的所有待处理和处理中的队列吗？此操作不可恢复。',
+      type: 'info'
+    });
+    
+    if (!result) return;
+    
     clearingQueue.value = true;
     const response = await knowledgeBaseAPI.clearQueue(Number(filterCourseId.value));
     
@@ -1243,13 +1269,13 @@ async function clearQueue() {
     
     if (success) {
       await fetchKnowledgeBaseStatus();
-      alert(message);
+      notificationService.success('清空队列成功', message || '队列已清空');
     } else {
       throw new Error(message || '清空队列失败');
     }
   } catch (error) {
     console.error('清空队列失败:', error);
-    alert(`清空队列失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    notificationService.error('清空队列失败', error instanceof Error ? error.message : '未知错误');
   } finally {
     clearingQueue.value = false;
   }
