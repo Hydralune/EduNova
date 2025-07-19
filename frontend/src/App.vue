@@ -24,7 +24,7 @@
               
               <!-- 导航链接 -->
               <div v-if="authStore.user" class="ml-6 flex space-x-4">
-                <!-- 智能助手链接已移除 -->
+                <!-- 导航链接可以根据需要添加 -->
               </div>
             </div>
 

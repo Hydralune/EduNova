@@ -2,8 +2,8 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api', // 直接访问后端，不通过CORS代理
-  timeout: 60000, // 增加超时时间到60秒
+  baseURL: 'http://localhost:5001/api',
+  timeout: 120000, // 增加超时时间到120秒
   headers: {
     'Content-Type': 'application/json',
   },

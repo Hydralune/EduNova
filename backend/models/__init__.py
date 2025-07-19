@@ -9,4 +9,6 @@ from backend.models.course import Course
 from backend.models.material import Material
 from backend.models.learning import LearningRecord, ChatHistory
 from backend.models.assessment import Assessment, StudentAnswer, AssessmentSubmission
-from backend.models.config import Config 
+from backend.models.config import Config
+# 确保在Course之后导入依赖Course的模型
+from backend.models.student_quiz import StudentAIQuiz 
