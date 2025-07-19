@@ -87,6 +87,7 @@ from backend.api.admin import admin_bp
 from backend.api.learning import learning_bp
 from backend.api.rag_ai import rag_api
 from backend.api.auth import auth_bp
+from backend.api.student_quiz import student_quiz_bp
 
 # Register blueprints
 app.register_blueprint(user_bp, url_prefix='/api/users')
@@ -94,6 +95,7 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(learning_bp, url_prefix='/api')
 app.register_blueprint(rag_api, url_prefix='/api/rag')
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(student_quiz_bp, url_prefix='/api')
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])

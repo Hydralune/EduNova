@@ -13,6 +13,7 @@ import TeacherView from '../views/TeacherView.vue'
 import CourseDetailView from '../views/CourseDetailView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import AssessmentPlayerView from '../views/AssessmentPlayerView.vue'
+import TestAIQuizView from '../views/TestAIQuizView.vue'
 
 // 导入评估相关视图
 import AssessmentList from '../components/assessment/AssessmentList.vue'
@@ -164,6 +165,13 @@ const router = createRouter({
       name: 'learning',
       component: LearningView,
       meta: { requiresAuth: true }
+    },
+    // Add the test AI quiz route
+    {
+      path: '/test-ai-quiz',
+      name: 'testAIQuiz',
+      component: TestAIQuizView,
+      meta: { requiresAuth: true, requiresStudent: true } // Update to require authentication and student role
     },
     {
       path: '/:pathMatch(.*)*',

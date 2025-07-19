@@ -48,6 +48,11 @@
         <div v-if="activeTab === 'knowledge-base'">
           <KnowledgeBase />
         </div>
+
+        <!-- AI自测测验 -->
+        <div v-if="activeTab === 'ai-quiz'">
+          <TestAIQuizView />
+        </div>
       </div>
     </div>
   </div>
@@ -62,6 +67,7 @@ import AIAssistant from '@/components/ai/AIAssistant.vue';
 import LearningAnalytics from '@/components/analytics/LearningAnalytics.vue';
 import KnowledgeBase from '@/components/rag/KnowledgeBase.vue';
 import WelcomeMessage from '@/components/WelcomeMessage.vue';
+import TestAIQuizView from '@/views/TestAIQuizView.vue';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -73,6 +79,7 @@ const tabs = [
   { id: 'courses', name: '课程目录' },
   { id: 'analytics', name: '学习分析' },
   { id: 'ai-assistant', name: '智能助手' },
+  { id: 'ai-quiz', name: 'AI自测测验' },
   { id: 'knowledge-base', name: '知识库' }
 ];
 const activeTab = ref('dashboard');
